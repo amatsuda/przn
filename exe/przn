@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative '../lib/przn'
+
+file = ARGV[0]
+unless file
+  $stderr.puts "Usage: przn <presentation.md>"
+  exit 1
+end
+
+Przn.start(file).run
