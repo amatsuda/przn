@@ -13,6 +13,8 @@ module Przn
       reset:         "\e[0m",
     }.freeze
 
+    DEFAULT_SCALE = 2
+
     def initialize(terminal)
       @terminal = terminal
     end
@@ -59,7 +61,7 @@ module Przn
       when :definition_list then render_definition_list(block, width, row)
       when :blockquote      then render_blockquote(block, width, row)
       when :table           then render_table(block, width, row)
-      when :blank           then row + 1
+      when :blank           then row + DEFAULT_SCALE
       else row + 1
       end
     end
@@ -77,34 +79,29 @@ module Przn
       else
         left = content_left(width)
         @terminal.move_to(row, left)
-        @terminal.write "・#{render_inline(text)}"
-        row + 1
+        @terminal.write "#{KittyText.sized("・", s: DEFAULT_SCALE)}#{render_inline_scaled(text, DEFAULT_SCALE)}"
+        row + DEFAULT_SCALE
       end
     end
 
     def render_paragraph(block, width, row, align: nil)
       text = block[:content]
-      scale = max_inline_scale(text)
+      scale = max_inline_scale(text) || DEFAULT_SCALE
       left = content_left(width)
 
       if align
-        vis = scale ? visible_width_scaled(text, scale) : visible_length(text)
+        vis = visible_width_scaled(text, scale)
         left = compute_pad(width, vis, align)
       end
 
       @terminal.move_to(row, left + 1)
-      if scale
-        @terminal.write render_inline_scaled(text, scale)
-        row + scale
-      else
-        @terminal.write render_inline(text)
-        row + 1
-      end
+      @terminal.write render_inline_scaled(text, scale)
+      row + scale
     end
 
     def render_code_block(block, width, row)
       code_lines = block[:content].lines.map(&:chomp)
-      return row + 1 if code_lines.empty?
+      return row + DEFAULT_SCALE if code_lines.empty?
 
       left = content_left(width)
       max_len = code_lines.map(&:size).max
@@ -113,8 +110,8 @@ module Przn
       code_lines.each do |code_line|
         padded = code_line.ljust(box_width - 4)
         @terminal.move_to(row, left + 1)
-        @terminal.write "#{ANSI[:gray_bg]}  #{padded}  #{ANSI[:reset]}"
-        row += 1
+        @terminal.write "#{ANSI[:gray_bg]}#{KittyText.sized("  #{padded}  ", s: DEFAULT_SCALE)}#{ANSI[:reset]}"
+        row += DEFAULT_SCALE
       end
 
       row
@@ -125,8 +122,8 @@ module Przn
       block[:items].each do |item|
         indent = "  " * (item[:depth] || 0)
         @terminal.move_to(row, left)
-        @terminal.write "#{indent}・#{render_inline(item[:text])}"
-        row += 1
+        @terminal.write "#{KittyText.sized("#{indent}・", s: DEFAULT_SCALE)}#{render_inline_scaled(item[:text], DEFAULT_SCALE)}"
+        row += DEFAULT_SCALE
       end
       row
     end
@@ -136,8 +133,8 @@ module Przn
       block[:items].each_with_index do |item, i|
         indent = "  " * (item[:depth] || 0)
         @terminal.move_to(row, left)
-        @terminal.write "#{indent}#{i + 1}. #{render_inline(item[:text])}"
-        row += 1
+        @terminal.write "#{KittyText.sized("#{indent}#{i + 1}. ", s: DEFAULT_SCALE)}#{render_inline_scaled(item[:text], DEFAULT_SCALE)}"
+        row += DEFAULT_SCALE
       end
       row
     end
@@ -145,12 +142,12 @@ module Przn
     def render_definition_list(block, width, row)
       left = content_left(width)
       @terminal.move_to(row, left)
-      @terminal.write "#{ANSI[:bold]}#{render_inline(block[:term])}#{ANSI[:reset]}"
-      row += 1
+      @terminal.write "#{ANSI[:bold]}#{render_inline_scaled(block[:term], DEFAULT_SCALE)}#{ANSI[:reset]}"
+      row += DEFAULT_SCALE
       block[:definition].each_line do |line|
         @terminal.move_to(row, left + 4)
-        @terminal.write render_inline(line.chomp)
-        row += 1
+        @terminal.write render_inline_scaled(line.chomp, DEFAULT_SCALE)
+        row += DEFAULT_SCALE
       end
       row
     end
@@ -160,8 +157,8 @@ module Przn
       block[:content].each_line do |line|
         text = line.chomp
         @terminal.move_to(row, left + 1)
-        @terminal.write "#{ANSI[:dim]}| #{text}#{ANSI[:reset]}"
-        row += 1
+        @terminal.write "#{ANSI[:dim]}#{KittyText.sized("| #{text}", s: DEFAULT_SCALE)}#{ANSI[:reset]}"
+        row += DEFAULT_SCALE
       end
       row
     end
@@ -184,16 +181,16 @@ module Przn
           cell.ljust(col_widths[ci] || 0)
         }.join("  |  ")
         if ri == 0
-          @terminal.write "#{ANSI[:bold]}#{line}#{ANSI[:reset]}"
+          @terminal.write "#{ANSI[:bold]}#{KittyText.sized(line, s: DEFAULT_SCALE)}#{ANSI[:reset]}"
         else
-          @terminal.write line
+          @terminal.write KittyText.sized(line, s: DEFAULT_SCALE)
         end
-        row += 1
+        row += DEFAULT_SCALE
 
         if ri == 0
           @terminal.move_to(row, left)
-          @terminal.write col_widths.map { |w| "-" * w }.join("--+--")
-          row += 1
+          @terminal.write KittyText.sized(col_widths.map { |w| "-" * w }.join("--+--"), s: DEFAULT_SCALE)
+          row += DEFAULT_SCALE
         end
       end
       row
@@ -340,28 +337,31 @@ module Przn
     end
 
     def block_height(block)
+      s = DEFAULT_SCALE
       case block[:type]
       when :heading
-        scale = KittyText::HEADING_SCALES[block[:level]] || 1
+        scale = KittyText::HEADING_SCALES[block[:level]] || s
         block[:level] == 1 ? scale + 1 : scale
       when :paragraph
-        max_inline_scale(block[:content]) || 1
+        max_inline_scale(block[:content]) || s
       when :code_block
-        [block[:content].lines.size, 1].max
+        [block[:content].lines.size * s, s].max
       when :unordered_list
-        block[:items].size
+        block[:items].size * s
       when :ordered_list
-        block[:items].size
+        block[:items].size * s
       when :definition_list
-        1 + block[:definition].lines.size
+        (1 + block[:definition].lines.size) * s
       when :blockquote
-        block[:content].lines.size
+        block[:content].lines.size * s
       when :table
-        (block[:header] ? 2 : 0) + block[:rows].size
-      when :align, :blank
+        ((block[:header] ? 2 : 0) + block[:rows].size) * s
+      when :align
         0
+      when :blank
+        s
       else
-        1
+        s
       end
     end
   end
