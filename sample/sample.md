@@ -42,14 +42,13 @@ This is **bold**, this is *italic*, and this is `inline code`.
 
 ## Custom Styling
 
-<!-- s=5 b -->
-BIG bold text!
+{::tag name="xx-large"}BIG text{:/tag}
 
-<!-- s=2 i -->
-smaller italic
+{::tag name="x-large"}large text{:/tag}
 
-<!-- b -->
-just bold
+{::tag name="large"}large text{:/tag}
+
+normal and {::tag name="red"}red text{:/tag} mixed
 
 ---
 

@@ -4,6 +4,24 @@ require 'strscan'
 
 module Przn
   module Parser
+    # Rabbit-compatible size names → Kitty text sizing scale
+    SIZE_SCALES = {
+      'xx-large' => 5,
+      'x-large'  => 4,
+      'large'    => 3,
+      'small'    => 1,
+      'x-small'  => 1,
+      'xx-small' => 1,
+    }.freeze
+
+    NAMED_COLORS = {
+      'red' => 31, 'green' => 32, 'yellow' => 33, 'blue' => 34,
+      'magenta' => 35, 'cyan' => 36, 'white' => 37,
+      'bright_red' => 91, 'bright_green' => 92, 'bright_yellow' => 93,
+      'bright_blue' => 94, 'bright_magenta' => 95, 'bright_cyan' => 96,
+      'bright_white' => 97,
+    }.freeze
+
     module_function
 
     def parse(markdown)
@@ -106,27 +124,24 @@ module Przn
       attrs
     end
 
-    NAMED_COLORS = {
-      'red' => 31, 'green' => 32, 'yellow' => 33, 'blue' => 34,
-      'magenta' => 35, 'cyan' => 36, 'white' => 37,
-      'bright_red' => 91, 'bright_green' => 92, 'bright_yellow' => 93,
-      'bright_blue' => 94, 'bright_magenta' => 95, 'bright_cyan' => 96,
-      'bright_white' => 97,
-    }.freeze
-
+    # Parse inline text, including Rabbit-style {::tag name="..."}...{:/tag}
     def parse_inline(text)
       segments = []
       scanner = StringScanner.new(text)
 
       until scanner.eos?
-        if scanner.scan(/`([^`]+)`/)
+        if scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
+          segments << [:tag, scanner[2], scanner[1]]
+        elsif scanner.scan(/`([^`]+)`/)
           segments << [:code, scanner[1]]
         elsif scanner.scan(/\*\*(.+?)\*\*/)
           segments << [:bold, scanner[1]]
         elsif scanner.scan(/\*(.+?)\*/)
           segments << [:italic, scanner[1]]
+        elsif scanner.scan(/~~(.+?)~~/)
+          segments << [:strikethrough, scanner[1]]
         else
-          segments << [:text, scanner.scan(/[^`*]+|./)]
+          segments << [:text, scanner.scan(/[^`*~{]+|./)]
         end
       end
 
