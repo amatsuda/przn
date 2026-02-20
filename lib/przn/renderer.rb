@@ -73,7 +73,7 @@ module Przn
         pad = [(width - visible_width) / 2, 0].max
         @terminal.move_to(row, pad + 1)
         @terminal.write "#{ANSI[:bold]}#{KittyText.sized(text, s: scale)}#{ANSI[:reset]}"
-        row + scale
+        row + scale + 1
       else
         left = content_left(width)
         @terminal.move_to(row, left)
@@ -342,7 +342,8 @@ module Przn
     def block_height(block)
       case block[:type]
       when :heading
-        KittyText::HEADING_SCALES[block[:level]] || 1
+        scale = KittyText::HEADING_SCALES[block[:level]] || 1
+        block[:level] == 1 ? scale + 1 : scale
       when :paragraph
         max_inline_scale(block[:content]) || 1
       when :code_block
