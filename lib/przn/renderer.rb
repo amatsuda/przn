@@ -22,9 +22,13 @@ module Przn
       w = @terminal.width
       h = @terminal.height
 
-      content_height = calculate_height(slide.blocks)
-      usable_height = h - 1
-      row = [(usable_height - content_height) / 2 + 1, 1].max
+      row = if current == 0
+        content_height = calculate_height(slide.blocks)
+        usable_height = h - 1
+        [(usable_height - content_height) / 2 + 1, 1].max
+      else
+        2
+      end
 
       pending_align = nil
       slide.blocks.each do |block|
@@ -65,13 +69,13 @@ module Przn
       scale = KittyText::HEADING_SCALES[block[:level]]
 
       if scale
-        visible_width = text.size * scale
+        visible_width = display_width(text) * scale
         pad = [(width - visible_width) / 2, 0].max
         @terminal.move_to(row, pad + 1)
         @terminal.write "#{ANSI[:bold]}#{KittyText.sized(text, s: scale)}#{ANSI[:reset]}"
         row + scale
       else
-        pad = [(width - text.size) / 2, 0].max
+        pad = [(width - display_width(text)) / 2, 0].max
         @terminal.move_to(row, pad + 1)
         @terminal.write "#{ANSI[:bold]}#{text}#{ANSI[:reset]}"
         row + 1
@@ -269,9 +273,9 @@ module Przn
         case type
         when :tag
           scale = Parser::SIZE_SCALES[segment[2]] || default_scale
-          content.size * scale
+          display_width(content) * scale
         else
-          content.size * default_scale
+          display_width(content) * default_scale
         end
       }
     end
@@ -288,7 +292,32 @@ module Przn
     end
 
     def visible_length(text)
-      strip_markup(text).size
+      display_width(strip_markup(text))
+    end
+
+    # Calculate display width accounting for double-width CJK characters
+    def display_width(str)
+      str.each_char.sum { |c|
+        o = c.ord
+        if o >= 0x1100 &&
+            (o <= 0x115f || # Hangul Jamo
+             o == 0x2329 || o == 0x232a ||
+             (o >= 0x2e80 && o <= 0x303e) || # CJK Radicals..CJK Symbols
+             (o >= 0x3040 && o <= 0x33bf) || # Hiragana..CJK Compatibility
+             (o >= 0x3400 && o <= 0x4dbf) || # CJK Unified Ext A
+             (o >= 0x4e00 && o <= 0xa4cf) || # CJK Unified..Yi Radicals
+             (o >= 0xac00 && o <= 0xd7a3) || # Hangul Syllables
+             (o >= 0xf900 && o <= 0xfaff) || # CJK Compatibility Ideographs
+             (o >= 0xfe30 && o <= 0xfe6f) || # CJK Compatibility Forms
+             (o >= 0xff00 && o <= 0xff60) || # Fullwidth Forms
+             (o >= 0xffe0 && o <= 0xffe6) ||
+             (o >= 0x20000 && o <= 0x2fffd) ||
+             (o >= 0x30000 && o <= 0x3fffd))
+          2
+        else
+          1
+        end
+      }
     end
 
     def strip_markup(text)
