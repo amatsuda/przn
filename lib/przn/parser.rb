@@ -40,6 +40,9 @@ module Przn
         line = lines[i]
 
         case line
+        when /\A\s*<!--\s*([\w\s=]+?)\s*-->\s*\z/
+          attrs = parse_attrs(Regexp.last_match(1))
+          blocks << {type: :style, **attrs} unless attrs.empty?
         when /\A\s*```(\w*)\s*\z/
           lang = Regexp.last_match(1)
           lang = nil if lang.empty?
@@ -81,6 +84,35 @@ module Przn
 
       Slide.new(blocks)
     end
+
+    def parse_attrs(str)
+      attrs = {}
+      str.scan(/\S+/).each do |token|
+        case token
+        when /\As=(\d+)\z/
+          attrs[:scale] = $1.to_i
+        when 'b', 'bold'
+          attrs[:bold] = true
+        when 'i', 'italic'
+          attrs[:italic] = true
+        when /\A#([0-9a-fA-F]{6})\z/
+          attrs[:color] = $1
+        when /\Afg=(.+)\z/
+          attrs[:color] = $1
+        else
+          attrs[:color] = token if NAMED_COLORS.key?(token)
+        end
+      end
+      attrs
+    end
+
+    NAMED_COLORS = {
+      'red' => 31, 'green' => 32, 'yellow' => 33, 'blue' => 34,
+      'magenta' => 35, 'cyan' => 36, 'white' => 37,
+      'bright_red' => 91, 'bright_green' => 92, 'bright_yellow' => 93,
+      'bright_blue' => 94, 'bright_magenta' => 95, 'bright_cyan' => 96,
+      'bright_white' => 97,
+    }.freeze
 
     def parse_inline(text)
       segments = []

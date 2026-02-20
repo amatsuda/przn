@@ -25,8 +25,14 @@ module Przn
       usable_height = h - 1
       row = [(usable_height - content_height) / 2 + 1, 1].max
 
+      pending_style = nil
       slide.blocks.each do |block|
-        row = render_block(block, w, row)
+        if block[:type] == :style
+          pending_style = block
+        else
+          row = render_block(block, w, row, style: pending_style)
+          pending_style = nil
+        end
       end
 
       status = " #{current + 1} / #{total} "
@@ -38,10 +44,10 @@ module Przn
 
     private
 
-    def render_block(block, width, row)
+    def render_block(block, width, row, style: nil)
       case block[:type]
       when :heading        then render_heading(block, width, row)
-      when :paragraph      then render_paragraph(block, width, row)
+      when :paragraph      then render_paragraph(block, width, row, style: style)
       when :code_block     then render_code_block(block, width, row)
       when :unordered_list then render_unordered_list(block, width, row)
       when :ordered_list   then render_ordered_list(block, width, row)
@@ -68,12 +74,34 @@ module Przn
       end
     end
 
-    def render_paragraph(block, width, row)
+    def render_paragraph(block, width, row, style: nil)
       text = block[:content]
-      pad = [(width - visible_length(text)) / 2, 0].max
-      @terminal.move_to(row, pad + 1)
-      @terminal.write render_inline(text)
-      row + 1
+      scale = style&.[](:scale)
+      bold = style&.[](:bold)
+      italic = style&.[](:italic)
+
+      color = style&.[](:color)
+
+      # Build ANSI prefix/suffix to wrap OUTSIDE any OSC 66 sequence
+      ansi_pre = +""
+      ansi_pre << ANSI[:bold] if bold
+      ansi_pre << ANSI[:italic] if italic
+      ansi_pre << color_code(color) if color
+      ansi_post = (bold || italic || color) ? ANSI[:reset] : ""
+
+      if scale
+        # Plain text inside OSC 66, ANSI codes outside
+        visible_width = visible_length(text) * scale
+        pad = [(width - visible_width) / 2, 0].max
+        @terminal.move_to(row, pad + 1)
+        @terminal.write "#{ansi_pre}#{KittyText.sized(strip_markup(text), s: scale)}#{ansi_post}"
+        row + scale
+      else
+        pad = [(width - visible_length(text)) / 2, 0].max
+        @terminal.move_to(row, pad + 1)
+        @terminal.write "#{ansi_pre}#{render_inline(text)}#{ansi_post}"
+        row + 1
+      end
     end
 
     def render_code_block(block, width, row)
@@ -134,6 +162,17 @@ module Przn
       }.join
     end
 
+    def color_code(color)
+      if (code = Parser::NAMED_COLORS[color])
+        "\e[#{code}m"
+      elsif color.match?(/\A[0-9a-fA-F]{6}\z/)
+        r, g, b = color.scan(/../).map { |h| h.to_i(16) }
+        "\e[38;2;#{r};#{g};#{b}m"
+      else
+        ""
+      end
+    end
+
     def visible_length(text)
       strip_markup(text).size
     end
@@ -143,13 +182,25 @@ module Przn
     end
 
     def calculate_height(blocks)
-      blocks.sum { |b| block_height(b) }
+      height = 0
+      pending_style = nil
+      blocks.each do |block|
+        if block[:type] == :style
+          pending_style = block
+        else
+          height += block_height(block, style: pending_style)
+          pending_style = nil
+        end
+      end
+      height
     end
 
-    def block_height(block)
+    def block_height(block, style: nil)
       case block[:type]
       when :heading
         KittyText::HEADING_SCALES[block[:level]] || 1
+      when :paragraph
+        style&.[](:scale) || 1
       when :code_block
         [block[:content].lines.size, 1].max
       when :unordered_list

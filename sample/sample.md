@@ -40,6 +40,19 @@ This is **bold**, this is *italic*, and this is `inline code`.
 
 ---
 
+## Custom Styling
+
+<!-- s=5 b -->
+BIG bold text!
+
+<!-- s=2 i -->
+smaller italic
+
+<!-- b -->
+just bold
+
+---
+
 # Thank You!
 
 That's all folks
