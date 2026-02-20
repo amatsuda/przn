@@ -3,7 +3,12 @@
 require "test_helper"
 
 class ParserTest < Test::Unit::TestCase
-  sub_test_case "split_slides" do
+  # ============================================================
+  # Rabbit Markdown compatible features
+  # https://rabbit-shocker.org/ja/sample/markdown/rabbit.html
+  # ============================================================
+
+  sub_test_case "Rabbit: slide splitting" do
     test "splits on h1 headings" do
       md = <<~MD
         # Slide 1
@@ -65,15 +70,15 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - headings" do
-    test "parses h1" do
+  sub_test_case "Rabbit: headings" do
+    test "parses h1 as slide title" do
       slide = Przn::Parser.parse_slide("# Title\n")
       heading = slide.blocks.find { |b| b[:type] == :heading }
       assert_equal 1, heading[:level]
       assert_equal "Title", heading[:content]
     end
 
-    test "parses h2-h6" do
+    test "parses h2-h6 within a slide" do
       slide = Przn::Parser.parse_slide("## Sub\n### Deep\n")
       headings = slide.blocks.select { |b| b[:type] == :heading }
       assert_equal 2, headings[0][:level]
@@ -83,7 +88,7 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - unordered lists" do
+  sub_test_case "Rabbit: unordered lists (*)" do
     test "parses * items" do
       slide = Przn::Parser.parse_slide("* foo\n* bar\n* baz\n")
       list = slide.blocks.find { |b| b[:type] == :unordered_list }
@@ -94,7 +99,7 @@ class ParserTest < Test::Unit::TestCase
       assert_equal "baz", list[:items][2][:text]
     end
 
-    test "parses nested lists" do
+    test "parses nested lists with indentation" do
       slide = Przn::Parser.parse_slide("* top\n  * nested\n    * deep\n")
       list = slide.blocks.find { |b| b[:type] == :unordered_list }
       assert_equal 3, list[:items].size
@@ -111,7 +116,7 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - ordered lists" do
+  sub_test_case "Rabbit: ordered lists" do
     test "parses numbered items" do
       slide = Przn::Parser.parse_slide("1. one\n2. two\n3. three\n")
       list = slide.blocks.find { |b| b[:type] == :ordered_list }
@@ -129,7 +134,7 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - definition lists" do
+  sub_test_case "Rabbit: definition lists" do
     test "parses term and definition" do
       slide = Przn::Parser.parse_slide("Rabbit\n:   a presentation tool\n")
       dl = slide.blocks.find { |b| b[:type] == :definition_list }
@@ -138,7 +143,7 @@ class ParserTest < Test::Unit::TestCase
       assert_equal "a presentation tool", dl[:definition]
     end
 
-    test "parses multi-line definition" do
+    test "parses multi-line definition with continuation" do
       md = "term\n:   line 1\n    line 2\n"
       slide = Przn::Parser.parse_slide(md)
       dl = slide.blocks.find { |b| b[:type] == :definition_list }
@@ -154,8 +159,8 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - code blocks" do
-    test "parses fenced code block" do
+  sub_test_case "Rabbit: code blocks" do
+    test "parses fenced code block with language" do
       md = "```ruby\nputs 'hi'\n```\n"
       slide = Przn::Parser.parse_slide(md)
       code = slide.blocks.find { |b| b[:type] == :code_block }
@@ -171,7 +176,7 @@ class ParserTest < Test::Unit::TestCase
       assert_nil code[:language]
     end
 
-    test "parses indented code block" do
+    test "parses indented code block (4 spaces)" do
       md = "    # comment\n    def foo\n      bar\n    end\n"
       slide = Przn::Parser.parse_slide(md)
       code = slide.blocks.find { |b| b[:type] == :code_block }
@@ -180,7 +185,7 @@ class ParserTest < Test::Unit::TestCase
       assert_match(/def foo/, code[:content])
     end
 
-    test "parses indented code block with kramdown IAL lang" do
+    test "parses kramdown IAL {: lang=} on indented code block" do
       md = "    def foo\n      bar\n    end\n{: lang=\"ruby\"}\n"
       slide = Przn::Parser.parse_slide(md)
       code = slide.blocks.find { |b| b[:type] == :code_block }
@@ -188,7 +193,7 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - block quotes" do
+  sub_test_case "Rabbit: block quotes" do
     test "parses single-line blockquote" do
       slide = Przn::Parser.parse_slide("> hello\n")
       bq = slide.blocks.find { |b| b[:type] == :blockquote }
@@ -202,7 +207,7 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - tables" do
+  sub_test_case "Rabbit: tables" do
     test "parses table with header and rows" do
       md = "| H1 | H2 |\n|---|---|\n| a | b |\n| c | d |\n"
       slide = Przn::Parser.parse_slide(md)
@@ -211,11 +216,12 @@ class ParserTest < Test::Unit::TestCase
       assert_equal ["H1", "H2"], table[:header]
       assert_equal 2, table[:rows].size
       assert_equal ["a", "b"], table[:rows][0]
+      assert_equal ["c", "d"], table[:rows][1]
     end
   end
 
-  sub_test_case "parse_slide - comments" do
-    test "skips {::comment} blocks" do
+  sub_test_case "Rabbit: {::comment}" do
+    test "skips {::comment} blocks entirely" do
       md = "before\n{::comment}\nhidden\n{:/comment}\nafter\n"
       slide = Przn::Parser.parse_slide(md)
       texts = slide.blocks.select { |b| b[:type] == :paragraph }.map { |b| b[:content] }
@@ -225,7 +231,7 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_slide - alignment" do
+  sub_test_case "Rabbit: alignment ({:.center}, {:.right})" do
     test "parses {:.center}" do
       md = "{:.center}\ncentered text\n"
       slide = Przn::Parser.parse_slide(md)
@@ -241,43 +247,41 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "parse_inline" do
-    test "parses plain text" do
-      assert_equal [[:text, "hello"]], Przn::Parser.parse_inline("hello")
-    end
-
-    test "parses *emphasis*" do
+  sub_test_case "Rabbit: inline - *emphasis*" do
+    test "parses *emphasis* as italic" do
       assert_equal [[:italic, "word"]], Przn::Parser.parse_inline("*word*")
     end
+  end
 
-    test "parses **bold**" do
-      assert_equal [[:bold, "word"]], Przn::Parser.parse_inline("**word**")
-    end
-
+  sub_test_case "Rabbit: inline - ~~strikethrough~~" do
     test "parses ~~strikethrough~~" do
       assert_equal [[:strikethrough, "word"]], Przn::Parser.parse_inline("~~word~~")
     end
+  end
 
-    test "parses `code`" do
-      assert_equal [[:code, "foo"]], Przn::Parser.parse_inline("`foo`")
-    end
-
+  sub_test_case "Rabbit: inline - {::tag}" do
     test "parses {::tag name=\"x-large\"}text{:/tag}" do
       result = Przn::Parser.parse_inline('{::tag name="x-large"}big{:/tag}')
       assert_equal [[:tag, "big", "x-large"]], result
     end
+  end
 
+  sub_test_case "Rabbit: inline - {::note}" do
     test "parses {::note}text{:/note}" do
       result = Przn::Parser.parse_inline("{::note}note text{:/note}")
       assert_equal [[:note, "note text"]], result
     end
+  end
 
+  sub_test_case "Rabbit: inline - {::wait/}" do
     test "skips {::wait/}" do
       result = Przn::Parser.parse_inline("{::wait/}text")
       assert_equal [[:text, "text"]], result
     end
+  end
 
-    test "parses mixed inline" do
+  sub_test_case "Rabbit: inline - mixed" do
+    test "parses mixed inline formatting" do
       result = Przn::Parser.parse_inline("hello *world* and **bold**")
       assert_equal :text, result[0][0]
       assert_equal "hello ", result[0][1]
@@ -287,15 +291,31 @@ class ParserTest < Test::Unit::TestCase
       assert_equal :bold, result[3][0]
       assert_equal "bold", result[3][1]
     end
+  end
 
-    test "parses tag with numeric size" do
-      result = Przn::Parser.parse_inline('{::tag name="7"}max{:/tag}')
-      assert_equal [[:tag, "max", "7"]], result
+  sub_test_case "Rabbit: title slide with definition list metadata" do
+    test "parses title slide metadata" do
+      md = <<~MD
+        # Title
+
+        subtitle
+        :   My Subtitle
+
+        author
+        :   Author Name
+      MD
+      pres = Przn::Parser.parse(md)
+      dls = pres.slides[0].blocks.select { |b| b[:type] == :definition_list }
+      assert_equal 2, dls.size
+      assert_equal "subtitle", dls[0][:term]
+      assert_equal "My Subtitle", dls[0][:definition]
+      assert_equal "author", dls[1][:term]
+      assert_equal "Author Name", dls[1][:definition]
     end
   end
 
-  sub_test_case "full parse" do
-    test "Rabbit-style slides" do
+  sub_test_case "Rabbit: full presentation" do
+    test "parses multi-slide presentation" do
       md = <<~MD
         # Title
 
@@ -320,24 +340,61 @@ class ParserTest < Test::Unit::TestCase
       assert_equal "Content", pres.slides[1].blocks.find { |b| b[:type] == :heading }[:content]
       assert_equal "End", pres.slides[2].blocks.find { |b| b[:type] == :heading }[:content]
     end
+  end
 
-    test "title slide has definition list metadata" do
-      md = <<~MD
-        # Title
+  # ============================================================
+  # przn extensions (beyond Rabbit Markdown)
+  # ============================================================
 
-        subtitle
-        :   My Subtitle
+  sub_test_case "przn extension: - as unordered list bullet" do
+    test "parses - items" do
+      slide = Przn::Parser.parse_slide("- foo\n- bar\n- baz\n")
+      list = slide.blocks.find { |b| b[:type] == :unordered_list }
+      assert_not_nil list
+      assert_equal 3, list[:items].size
+      assert_equal "foo", list[:items][0][:text]
+      assert_equal "bar", list[:items][1][:text]
+      assert_equal "baz", list[:items][2][:text]
+    end
 
-        author
-        :   Author Name
-      MD
-      pres = Przn::Parser.parse(md)
-      dls = pres.slides[0].blocks.select { |b| b[:type] == :definition_list }
-      assert_equal 2, dls.size
-      assert_equal "subtitle", dls[0][:term]
-      assert_equal "My Subtitle", dls[0][:definition]
-      assert_equal "author", dls[1][:term]
-      assert_equal "Author Name", dls[1][:definition]
+    test "parses nested - lists" do
+      slide = Przn::Parser.parse_slide("- top\n  - nested\n    - deep\n")
+      list = slide.blocks.find { |b| b[:type] == :unordered_list }
+      assert_equal 3, list[:items].size
+      assert_equal 0, list[:items][0][:depth]
+      assert_equal 1, list[:items][1][:depth]
+      assert_equal 2, list[:items][2][:depth]
+    end
+
+    test "can mix * and - in the same list" do
+      slide = Przn::Parser.parse_slide("* first\n- second\n* third\n")
+      list = slide.blocks.find { |b| b[:type] == :unordered_list }
+      assert_equal 3, list[:items].size
+    end
+  end
+
+  sub_test_case "przn extension: {::tag} with numeric size (1-7)" do
+    test "parses numeric size tag" do
+      result = Przn::Parser.parse_inline('{::tag name="7"}max{:/tag}')
+      assert_equal [[:tag, "max", "7"]], result
+    end
+
+    test "SIZE_SCALES maps all 7 levels" do
+      (1..7).each do |n|
+        assert_equal n, Przn::Parser::SIZE_SCALES[n.to_s]
+      end
+    end
+  end
+
+  sub_test_case "przn extension: **bold** inline" do
+    test "parses **bold**" do
+      assert_equal [[:bold, "word"]], Przn::Parser.parse_inline("**word**")
+    end
+  end
+
+  sub_test_case "przn extension: `code` inline" do
+    test "parses `code`" do
+      assert_equal [[:code, "foo"]], Przn::Parser.parse_inline("`foo`")
     end
   end
 end
