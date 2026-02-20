@@ -1,38 +1,145 @@
-# Przn
+# przn
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/przn`. To experiment with that code, run `bin/console` for an interactive prompt.
+A terminal-based presentation tool written in Ruby.
+Renders Markdown slides with [Kitty text sizing protocol](https://sw.kovidgoyal.net/kitty/text-sizing-protocol/) support for beautifully scaled headings.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
 ```
-
-If bundler is not being used to manage dependencies, install the gem by executing:
-
-```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem install przn
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+```
+przn your_slides.md
+```
 
-## Development
+### Key bindings
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+| Key | Action |
+|-----|--------|
+| `→` `↓` `l` `j` `Space` | Next slide |
+| `←` `↑` `h` `k` | Previous slide |
+| `g` | First slide |
+| `G` | Last slide |
+| `q` `Ctrl-C` | Quit |
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+## Markdown format
 
-## Contributing
+przn's Markdown format is compatible with [Rabbit](https://rabbit-shocker.org/)'s Markdown mode.
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/amatsuda/przn.
+### Slide splitting
+
+Slides are separated by `#` (h1) headings.
+
+```markdown
+# Slide 1
+
+content
+
+# Slide 2
+
+more content
+```
+
+### Text formatting
+
+```markdown
+*emphasis*
+**bold**
+~~strikethrough~~
+`inline code`
+```
+
+### Lists
+
+```markdown
+* item 1
+* item 2
+  * nested item
+
+- also works as bullets
+
+1. ordered
+2. list
+```
+
+### Code blocks
+
+Fenced code blocks:
+
+````markdown
+```ruby
+puts "hello"
+```
+````
+
+Indented code blocks (4 spaces) with optional kramdown IAL:
+
+```markdown
+    def hello
+      puts "world"
+    end
+{: lang="ruby"}
+```
+
+### Block quotes
+
+```markdown
+> quoted text
+> continues here
+```
+
+### Tables
+
+```markdown
+| Header 1 | Header 2 |
+|----------|----------|
+| cell 1   | cell 2   |
+```
+
+### Definition lists
+
+```markdown
+term
+:   definition
+```
+
+### Text sizing
+
+Uses Rabbit-compatible `{::tag}` notation. Supported size names: `xx-small`, `x-small`, `small`, `large`, `x-large`, `xx-large`, `xxx-large`, `xxxx-large`, and numeric `1`-`7`.
+
+```markdown
+{::tag name="x-large"}Big text{:/tag}
+{::tag name="7"}Maximum size{:/tag}
+```
+
+On [Kitty](https://sw.kovidgoyal.net/kitty/)-compatible terminals, sized text is rendered using the OSC 66 text sizing protocol. On other terminals, the markup is silently ignored.
+
+### Alignment
+
+```markdown
+{:.center}
+centered text
+
+{:.right}
+right-aligned text
+```
+
+### Comments
+
+```markdown
+{::comment}
+This text is hidden from the presentation.
+{:/comment}
+```
+
+### Notes
+
+```markdown
+Visible text {::note}(speaker note){:/note}
+```
 
 ## License
 
