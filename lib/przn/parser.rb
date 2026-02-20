@@ -135,11 +135,11 @@ module Przn
           end
           blocks << parse_table(table_lines)
 
-        # Unordered list (* item)
-        when /\A\*\s+(.*)/
+        # Unordered list (* or - item)
+        when /\A[*\-]\s+(.*)/
           items = []
-          while i < lines.size && (lines[i].match?(/\A\*\s+/) || lines[i].match?(/\A {2,}\*\s+/) || lines[i].match?(/\A {2,}\S/))
-            if lines[i].match(/\A(\s*)\*\s+(.*)/)
+          while i < lines.size && (lines[i].match?(/\A[*\-]\s+/) || lines[i].match?(/\A {2,}[*\-]\s+/) || lines[i].match?(/\A {2,}\S/))
+            if lines[i].match(/\A(\s*)[*\-]\s+(.*)/)
               depth = Regexp.last_match(1).size / 2
               items << {text: Regexp.last_match(2), depth: depth}
             elsif lines[i].match(/\A {2,}(\S.*)/)
