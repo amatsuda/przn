@@ -4,14 +4,18 @@ require 'strscan'
 
 module Przn
   module Parser
-    # Rabbit-compatible size names → Kitty text sizing scale
+    # Size names → Kitty text sizing scale (1-7)
+    # Rabbit-compatible names + numeric aliases
     SIZE_SCALES = {
-      'xx-large' => 5,
-      'x-large'  => 4,
-      'large'    => 3,
-      'small'    => 1,
-      'x-small'  => 1,
       'xx-small' => 1,
+      'x-small'  => 1,
+      'small'    => 2,
+      'large'    => 3,
+      'x-large'  => 4,
+      'xx-large' => 5,
+      'xxx-large' => 6,
+      'xxxx-large' => 7,
+      '1' => 1, '2' => 2, '3' => 3, '4' => 4, '5' => 5, '6' => 6, '7' => 7,
     }.freeze
 
     NAMED_COLORS = {
