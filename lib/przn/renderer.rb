@@ -25,7 +25,7 @@ module Przn
       h = @terminal.height
 
       row = if current == 0
-        content_height = calculate_height(slide.blocks)
+        content_height = calculate_height(slide.blocks, w)
         usable_height = h - 1
         [(usable_height - content_height) / 2 + 1, 1].max
       else
@@ -78,9 +78,22 @@ module Przn
         row + scale + 1
       else
         left = content_left(width)
-        @terminal.move_to(row, left)
-        @terminal.write "#{KittyText.sized("・", s: DEFAULT_SCALE)}#{render_inline_scaled(text, DEFAULT_SCALE)}"
-        row + DEFAULT_SCALE
+        prefix = "・"
+        prefix_w = display_width(prefix)
+        max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
+        segments = Parser.parse_inline(text)
+        wrapped = wrap_segments(segments, max_w)
+
+        wrapped.each_with_index do |line_segs, li|
+          @terminal.move_to(row, left)
+          if li == 0
+            @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+          else
+            @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+          end
+          row += DEFAULT_SCALE
+        end
+        row
       end
     end
 
@@ -94,9 +107,16 @@ module Przn
         left = compute_pad(width, vis, align)
       end
 
-      @terminal.move_to(row, left + 1)
-      @terminal.write render_inline_scaled(text, scale)
-      row + scale
+      max_w = max_text_width(width, left, scale)
+      segments = Parser.parse_inline(text)
+      wrapped = wrap_segments(segments, max_w)
+
+      wrapped.each do |line_segs|
+        @terminal.move_to(row, left + 1)
+        @terminal.write render_segments_scaled(line_segs, scale)
+        row += scale
+      end
+      row
     end
 
     def render_code_block(block, width, row)
@@ -104,11 +124,13 @@ module Przn
       return row + DEFAULT_SCALE if code_lines.empty?
 
       left = content_left(width)
-      max_len = code_lines.map(&:size).max
-      box_width = [max_len + 4, width - left - 4].min
+      max_content_w = max_text_width(width, left, DEFAULT_SCALE) - 4
+      max_len = code_lines.map { |l| display_width(l) }.max
+      box_content_w = [max_len, max_content_w].min
 
       code_lines.each do |code_line|
-        padded = code_line.ljust(box_width - 4)
+        truncated = truncate_to_width(code_line, box_content_w)
+        padded = pad_to_width(truncated, box_content_w)
         @terminal.move_to(row, left + 1)
         @terminal.write "#{ANSI[:gray_bg]}#{KittyText.sized("  #{padded}  ", s: DEFAULT_SCALE)}#{ANSI[:reset]}"
         row += DEFAULT_SCALE
@@ -120,10 +142,24 @@ module Przn
     def render_unordered_list(block, width, row)
       left = content_left(width)
       block[:items].each do |item|
-        indent = "  " * (item[:depth] || 0)
-        @terminal.move_to(row, left)
-        @terminal.write "#{KittyText.sized("#{indent}・", s: DEFAULT_SCALE)}#{render_inline_scaled(item[:text], DEFAULT_SCALE)}"
-        row += DEFAULT_SCALE
+        depth = item[:depth] || 0
+        indent = "  " * depth
+        prefix = "#{indent}・"
+        prefix_w = display_width(prefix)
+        max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
+
+        segments = Parser.parse_inline(item[:text])
+        wrapped = wrap_segments(segments, max_w)
+
+        wrapped.each_with_index do |line_segs, li|
+          @terminal.move_to(row, left)
+          if li == 0
+            @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+          else
+            @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+          end
+          row += DEFAULT_SCALE
+        end
       end
       row
     end
@@ -131,34 +167,70 @@ module Przn
     def render_ordered_list(block, width, row)
       left = content_left(width)
       block[:items].each_with_index do |item, i|
-        indent = "  " * (item[:depth] || 0)
-        @terminal.move_to(row, left)
-        @terminal.write "#{KittyText.sized("#{indent}#{i + 1}. ", s: DEFAULT_SCALE)}#{render_inline_scaled(item[:text], DEFAULT_SCALE)}"
-        row += DEFAULT_SCALE
+        depth = item[:depth] || 0
+        indent = "  " * depth
+        prefix = "#{indent}#{i + 1}. "
+        prefix_w = display_width(prefix)
+        max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
+
+        segments = Parser.parse_inline(item[:text])
+        wrapped = wrap_segments(segments, max_w)
+
+        wrapped.each_with_index do |line_segs, li|
+          @terminal.move_to(row, left)
+          if li == 0
+            @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+          else
+            @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+          end
+          row += DEFAULT_SCALE
+        end
       end
       row
     end
 
     def render_definition_list(block, width, row)
       left = content_left(width)
-      @terminal.move_to(row, left)
-      @terminal.write "#{ANSI[:bold]}#{render_inline_scaled(block[:term], DEFAULT_SCALE)}#{ANSI[:reset]}"
-      row += DEFAULT_SCALE
-      block[:definition].each_line do |line|
-        @terminal.move_to(row, left + 4)
-        @terminal.write render_inline_scaled(line.chomp, DEFAULT_SCALE)
+      max_w = max_text_width(width, left, DEFAULT_SCALE)
+
+      segments = Parser.parse_inline(block[:term])
+      wrapped = wrap_segments(segments, max_w)
+      wrapped.each do |line_segs|
+        @terminal.move_to(row, left)
+        @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
         row += DEFAULT_SCALE
+      end
+
+      def_max_w = [max_w - 4, 1].max
+      block[:definition].each_line do |line|
+        segments = Parser.parse_inline(line.chomp)
+        wrapped = wrap_segments(segments, def_max_w)
+        wrapped.each do |line_segs|
+          @terminal.move_to(row, left + 4)
+          @terminal.write render_segments_scaled(line_segs, DEFAULT_SCALE)
+          row += DEFAULT_SCALE
+        end
       end
       row
     end
 
     def render_blockquote(block, width, row)
       left = content_left(width)
+      prefix = "| "
+      prefix_w = display_width(prefix)
+      max_w = max_text_width(width, left + 1, DEFAULT_SCALE) - prefix_w
+
       block[:content].each_line do |line|
         text = line.chomp
-        @terminal.move_to(row, left + 1)
-        @terminal.write "#{ANSI[:dim]}#{KittyText.sized("| #{text}", s: DEFAULT_SCALE)}#{ANSI[:reset]}"
-        row += DEFAULT_SCALE
+        segments = [[:text, text]]
+        wrapped = wrap_segments(segments, max_w)
+
+        wrapped.each_with_index do |line_segs, li|
+          @terminal.move_to(row, left + 1)
+          p = li == 0 ? prefix : " " * prefix_w
+          @terminal.write "#{ANSI[:dim]}#{KittyText.sized(p, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
+          row += DEFAULT_SCALE
+        end
       end
       row
     end
@@ -169,7 +241,7 @@ module Przn
       col_widths = Array.new(block[:header]&.size || 0, 0)
       all_rows.each do |cells|
         cells&.each_with_index do |cell, ci|
-          col_widths[ci] = [col_widths[ci] || 0, cell.size].max
+          col_widths[ci] = [col_widths[ci] || 0, display_width(cell)].max
         end
       end
 
@@ -178,7 +250,7 @@ module Przn
 
         @terminal.move_to(row, left)
         line = cells.each_with_index.map { |cell, ci|
-          cell.ljust(col_widths[ci] || 0)
+          pad_to_width(cell, col_widths[ci] || 0)
         }.join("  |  ")
         if ri == 0
           @terminal.write "#{ANSI[:bold]}#{KittyText.sized(line, s: DEFAULT_SCALE)}#{ANSI[:reset]}"
@@ -198,6 +270,10 @@ module Przn
 
     def content_left(width)
       width / 8
+    end
+
+    def max_text_width(terminal_width, left_col, scale)
+      (terminal_width - left_col) / scale
     end
 
     def compute_pad(width, content_width, align)
@@ -234,8 +310,8 @@ module Przn
       end
     end
 
-    def render_inline_scaled(text, para_scale)
-      Parser.parse_inline(text).map { |segment|
+    def render_segments_scaled(segments, para_scale)
+      segments.map { |segment|
         type = segment[0]
         content = segment[1]
         case type
@@ -244,7 +320,7 @@ module Przn
           if (scale = Parser::SIZE_SCALES[tag_name])
             KittyText.sized(content, s: scale)
           elsif Parser::NAMED_COLORS.key?(tag_name)
-            "#{color_code(tag_name)}#{content}#{ANSI[:reset]}"
+            "#{color_code(tag_name)}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
           else
             KittyText.sized(content, s: para_scale)
           end
@@ -256,6 +332,76 @@ module Przn
         when :text          then KittyText.sized(content, s: para_scale)
         end
       }.join
+    end
+
+    def render_inline_scaled(text, para_scale)
+      render_segments_scaled(Parser.parse_inline(text), para_scale)
+    end
+
+    # Wrap parsed inline segments into lines that fit within max_width display units
+    def wrap_segments(segments, max_width)
+      return [segments] if max_width <= 0
+
+      lines = [[]]
+      width = 0
+
+      segments.each do |seg|
+        content = seg[1] || ""
+        seg_w = display_width(content)
+
+        if width + seg_w <= max_width
+          lines.last << seg
+          width += seg_w
+          next
+        end
+
+        remaining = content
+        loop do
+          space = max_width - width
+          if space <= 0
+            lines << []
+            width = 0
+            space = max_width
+          end
+
+          chunk, remaining = split_by_display_width(remaining, space)
+          lines.last << [seg[0], chunk, *Array(seg[2..])]
+          width += display_width(chunk)
+
+          break unless remaining
+          lines << []
+          width = 0
+        end
+      end
+
+      lines
+    end
+
+    def split_by_display_width(text, max_width)
+      w = 0
+      text.each_char.with_index do |c, i|
+        cw = display_width(c)
+        if w + cw > max_width && w > 0
+          return [text[0...i], text[i..]]
+        end
+        w += cw
+      end
+      [text, nil]
+    end
+
+    def truncate_to_width(text, max_width)
+      w = 0
+      text.each_char.with_index do |c, i|
+        cw = display_width(c)
+        return text[0...i] if w + cw > max_width
+        w += cw
+      end
+      text
+    end
+
+    def pad_to_width(text, target_width)
+      current = display_width(text)
+      text + " " * [target_width - current, 0].max
     end
 
     def max_inline_scale(text)
@@ -296,21 +442,20 @@ module Przn
       display_width(strip_markup(text))
     end
 
-    # Calculate display width accounting for double-width CJK characters
     def display_width(str)
       str.each_char.sum { |c|
         o = c.ord
         if o >= 0x1100 &&
-            (o <= 0x115f || # Hangul Jamo
+            (o <= 0x115f ||
              o == 0x2329 || o == 0x232a ||
-             (o >= 0x2e80 && o <= 0x303e) || # CJK Radicals..CJK Symbols
-             (o >= 0x3040 && o <= 0x33bf) || # Hiragana..CJK Compatibility
-             (o >= 0x3400 && o <= 0x4dbf) || # CJK Unified Ext A
-             (o >= 0x4e00 && o <= 0xa4cf) || # CJK Unified..Yi Radicals
-             (o >= 0xac00 && o <= 0xd7a3) || # Hangul Syllables
-             (o >= 0xf900 && o <= 0xfaff) || # CJK Compatibility Ideographs
-             (o >= 0xfe30 && o <= 0xfe6f) || # CJK Compatibility Forms
-             (o >= 0xff00 && o <= 0xff60) || # Fullwidth Forms
+             (o >= 0x2e80 && o <= 0x303e) ||
+             (o >= 0x3040 && o <= 0x33bf) ||
+             (o >= 0x3400 && o <= 0x4dbf) ||
+             (o >= 0x4e00 && o <= 0xa4cf) ||
+             (o >= 0xac00 && o <= 0xd7a3) ||
+             (o >= 0xf900 && o <= 0xfaff) ||
+             (o >= 0xfe30 && o <= 0xfe6f) ||
+             (o >= 0xff00 && o <= 0xff60) ||
              (o >= 0xffe0 && o <= 0xffe6) ||
              (o >= 0x20000 && o <= 0x2fffd) ||
              (o >= 0x30000 && o <= 0x3fffd))
@@ -332,28 +477,41 @@ module Przn
         .gsub(/`([^`]+)`/, '\1')
     end
 
-    def calculate_height(blocks)
-      blocks.sum { |b| block_height(b) }
+    def calculate_height(blocks, width)
+      blocks.sum { |b| block_height(b, width) }
     end
 
-    def block_height(block)
+    def block_height(block, width)
       s = DEFAULT_SCALE
+      left = content_left(width)
+      max_w = max_text_width(width, left, s)
+
       case block[:type]
       when :heading
         scale = KittyText::HEADING_SCALES[block[:level]] || s
-        block[:level] == 1 ? scale + 1 : scale
+        if block[:level] == 1
+          scale + 1
+        else
+          lines_count(block[:content], [max_w - 2, 1].max) * scale
+        end
       when :paragraph
-        max_inline_scale(block[:content]) || s
+        para_scale = max_inline_scale(block[:content]) || s
+        lines_count(block[:content], [max_text_width(width, left, para_scale), 1].max) * para_scale
       when :code_block
         [block[:content].lines.size * s, s].max
       when :unordered_list
-        block[:items].size * s
+        block[:items].sum { |item|
+          prefix_w = (item[:depth] || 0) * 2 + 2
+          lines_count(item[:text], [max_w - prefix_w, 1].max) * s
+        }
       when :ordered_list
         block[:items].size * s
       when :definition_list
-        (1 + block[:definition].lines.size) * s
+        term_lines = lines_count(block[:term], [max_w, 1].max)
+        def_lines = block[:definition].lines.sum { |l| lines_count(l.chomp, [max_w - 4, 1].max) }
+        (term_lines + def_lines) * s
       when :blockquote
-        block[:content].lines.size * s
+        block[:content].lines.sum { |l| lines_count(l.chomp, [max_w - 3, 1].max) } * s
       when :table
         ((block[:header] ? 2 : 0) + block[:rows].size) * s
       when :align
@@ -363,6 +521,12 @@ module Przn
       else
         s
       end
+    end
+
+    def lines_count(text, max_width)
+      vis_w = display_width(strip_markup(text))
+      return 1 if vis_w <= max_width
+      (vis_w.to_f / max_width).ceil
     end
   end
 end
