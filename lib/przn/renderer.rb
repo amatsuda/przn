@@ -66,18 +66,18 @@ module Przn
 
     def render_heading(block, width, row)
       text = block[:content]
-      scale = KittyText::HEADING_SCALES[block[:level]]
 
-      if scale
+      if block[:level] == 1
+        scale = KittyText::HEADING_SCALES[1]
         visible_width = display_width(text) * scale
         pad = [(width - visible_width) / 2, 0].max
         @terminal.move_to(row, pad + 1)
         @terminal.write "#{ANSI[:bold]}#{KittyText.sized(text, s: scale)}#{ANSI[:reset]}"
         row + scale
       else
-        pad = [(width - display_width(text)) / 2, 0].max
-        @terminal.move_to(row, pad + 1)
-        @terminal.write "#{ANSI[:bold]}#{text}#{ANSI[:reset]}"
+        left = content_left(width)
+        @terminal.move_to(row, left)
+        @terminal.write "・#{render_inline(text)}"
         row + 1
       end
     end
@@ -85,17 +85,18 @@ module Przn
     def render_paragraph(block, width, row, align: nil)
       text = block[:content]
       scale = max_inline_scale(text)
+      left = content_left(width)
 
+      if align
+        vis = scale ? visible_width_scaled(text, scale) : visible_length(text)
+        left = compute_pad(width, vis, align)
+      end
+
+      @terminal.move_to(row, left + 1)
       if scale
-        visible_width = visible_width_scaled(text, scale)
-        pad = compute_pad(width, visible_width, align || :center)
-        @terminal.move_to(row, pad + 1)
         @terminal.write render_inline_scaled(text, scale)
         row + scale
       else
-        vis_len = visible_length(text)
-        pad = compute_pad(width, vis_len, align || :center)
-        @terminal.move_to(row, pad + 1)
         @terminal.write render_inline(text)
         row + 1
       end
@@ -105,13 +106,13 @@ module Przn
       code_lines = block[:content].lines.map(&:chomp)
       return row + 1 if code_lines.empty?
 
+      left = content_left(width)
       max_len = code_lines.map(&:size).max
-      box_width = [max_len + 4, width - 8].min
-      left_pad = [(width - box_width) / 2, 0].max
+      box_width = [max_len + 4, width - left - 4].min
 
       code_lines.each do |code_line|
         padded = code_line.ljust(box_width - 4)
-        @terminal.move_to(row, left_pad + 1)
+        @terminal.move_to(row, left + 1)
         @terminal.write "#{ANSI[:gray_bg]}  #{padded}  #{ANSI[:reset]}"
         row += 1
       end
@@ -120,7 +121,7 @@ module Przn
     end
 
     def render_unordered_list(block, width, row)
-      left = width / 4
+      left = content_left(width)
       block[:items].each do |item|
         indent = "  " * (item[:depth] || 0)
         @terminal.move_to(row, left)
@@ -131,7 +132,7 @@ module Przn
     end
 
     def render_ordered_list(block, width, row)
-      left = width / 4
+      left = content_left(width)
       block[:items].each_with_index do |item, i|
         indent = "  " * (item[:depth] || 0)
         @terminal.move_to(row, left)
@@ -142,7 +143,7 @@ module Przn
     end
 
     def render_definition_list(block, width, row)
-      left = width / 4
+      left = content_left(width)
       @terminal.move_to(row, left)
       @terminal.write "#{ANSI[:bold]}#{render_inline(block[:term])}#{ANSI[:reset]}"
       row += 1
@@ -155,19 +156,18 @@ module Przn
     end
 
     def render_blockquote(block, width, row)
+      left = content_left(width)
       block[:content].each_line do |line|
         text = line.chomp
-        visible = "  | #{text}"
-        pad = [(width - visible.size) / 2, 0].max
-        @terminal.move_to(row, pad + 1)
-        @terminal.write "  #{ANSI[:dim]}| #{text}#{ANSI[:reset]}"
+        @terminal.move_to(row, left + 1)
+        @terminal.write "#{ANSI[:dim]}| #{text}#{ANSI[:reset]}"
         row += 1
       end
       row
     end
 
     def render_table(block, width, row)
-      left = width / 4
+      left = content_left(width)
       all_rows = [block[:header]] + block[:rows]
       col_widths = Array.new(block[:header]&.size || 0, 0)
       all_rows.each do |cells|
@@ -199,11 +199,15 @@ module Przn
       row
     end
 
+    def content_left(width)
+      width / 8
+    end
+
     def compute_pad(width, content_width, align)
       case align
       when :right  then [(width - content_width - 2), 0].max
       when :center then [(width - content_width) / 2, 0].max
-      else 0
+      else content_left(width)
       end
     end
 
