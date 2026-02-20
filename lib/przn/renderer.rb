@@ -3,14 +3,14 @@
 module Przn
   class Renderer
     ANSI = {
-      bold:    "\e[1m",
-      italic:  "\e[3m",
+      bold:          "\e[1m",
+      italic:        "\e[3m",
       reverse:       "\e[7m",
       strikethrough: "\e[9m",
-      dim:     "\e[2m",
-      cyan:    "\e[36m",
-      gray_bg: "\e[48;5;236m",
-      reset:   "\e[0m",
+      dim:           "\e[2m",
+      cyan:          "\e[36m",
+      gray_bg:       "\e[48;5;236m",
+      reset:         "\e[0m",
     }.freeze
 
     def initialize(terminal)
@@ -26,13 +26,13 @@ module Przn
       usable_height = h - 1
       row = [(usable_height - content_height) / 2 + 1, 1].max
 
-      pending_style = nil
+      pending_align = nil
       slide.blocks.each do |block|
-        if block[:type] == :style
-          pending_style = block
+        if block[:type] == :align
+          pending_align = block[:align]
         else
-          row = render_block(block, w, row, style: pending_style)
-          pending_style = nil
+          row = render_block(block, w, row, align: pending_align)
+          pending_align = nil
         end
       end
 
@@ -45,14 +45,17 @@ module Przn
 
     private
 
-    def render_block(block, width, row, style: nil)
+    def render_block(block, width, row, align: nil)
       case block[:type]
-      when :heading        then render_heading(block, width, row)
-      when :paragraph      then render_paragraph(block, width, row, style: style)
-      when :code_block     then render_code_block(block, width, row)
-      when :unordered_list then render_unordered_list(block, width, row)
-      when :ordered_list   then render_ordered_list(block, width, row)
-      when :blockquote     then render_blockquote(block, width, row)
+      when :heading         then render_heading(block, width, row)
+      when :paragraph       then render_paragraph(block, width, row, align: align)
+      when :code_block      then render_code_block(block, width, row)
+      when :unordered_list  then render_unordered_list(block, width, row)
+      when :ordered_list    then render_ordered_list(block, width, row)
+      when :definition_list then render_definition_list(block, width, row)
+      when :blockquote      then render_blockquote(block, width, row)
+      when :table           then render_table(block, width, row)
+      when :blank           then row + 1
       else row + 1
       end
     end
@@ -75,30 +78,21 @@ module Przn
       end
     end
 
-    def render_paragraph(block, width, row, style: nil)
+    def render_paragraph(block, width, row, align: nil)
       text = block[:content]
-      scale = style&.[](:scale) || max_inline_scale(text)
-      bold = style&.[](:bold)
-      italic = style&.[](:italic)
-      color = style&.[](:color)
-
-      # Build ANSI prefix/suffix to wrap OUTSIDE any OSC 66 sequence
-      ansi_pre = +""
-      ansi_pre << ANSI[:bold] if bold
-      ansi_pre << ANSI[:italic] if italic
-      ansi_pre << color_code(color) if color
-      ansi_post = (bold || italic || color) ? ANSI[:reset] : ""
+      scale = max_inline_scale(text)
 
       if scale
         visible_width = visible_width_scaled(text, scale)
-        pad = [(width - visible_width) / 2, 0].max
+        pad = compute_pad(width, visible_width, align || :center)
         @terminal.move_to(row, pad + 1)
-        @terminal.write "#{ansi_pre}#{render_inline_scaled(text, scale)}#{ansi_post}"
+        @terminal.write render_inline_scaled(text, scale)
         row + scale
       else
-        pad = [(width - visible_length(text)) / 2, 0].max
+        vis_len = visible_length(text)
+        pad = compute_pad(width, vis_len, align || :center)
         @terminal.move_to(row, pad + 1)
-        @terminal.write "#{ansi_pre}#{render_inline(text)}#{ansi_post}"
+        @terminal.write render_inline(text)
         row + 1
       end
     end
@@ -124,8 +118,9 @@ module Przn
     def render_unordered_list(block, width, row)
       left = width / 4
       block[:items].each do |item|
+        indent = "  " * (item[:depth] || 0)
         @terminal.move_to(row, left)
-        @terminal.write "・#{render_inline(item)}"
+        @terminal.write "#{indent}・#{render_inline(item[:text])}"
         row += 1
       end
       row
@@ -134,20 +129,78 @@ module Przn
     def render_ordered_list(block, width, row)
       left = width / 4
       block[:items].each_with_index do |item, i|
+        indent = "  " * (item[:depth] || 0)
         @terminal.move_to(row, left)
-        @terminal.write "#{i + 1}. #{render_inline(item)}"
+        @terminal.write "#{indent}#{i + 1}. #{render_inline(item[:text])}"
+        row += 1
+      end
+      row
+    end
+
+    def render_definition_list(block, width, row)
+      left = width / 4
+      @terminal.move_to(row, left)
+      @terminal.write "#{ANSI[:bold]}#{render_inline(block[:term])}#{ANSI[:reset]}"
+      row += 1
+      block[:definition].each_line do |line|
+        @terminal.move_to(row, left + 4)
+        @terminal.write render_inline(line.chomp)
         row += 1
       end
       row
     end
 
     def render_blockquote(block, width, row)
-      text = block[:content]
-      visible = "  | #{text}"
-      pad = [(width - visible.size) / 2, 0].max
-      @terminal.move_to(row, pad + 1)
-      @terminal.write "  #{ANSI[:dim]}| #{text}#{ANSI[:reset]}"
-      row + 1
+      block[:content].each_line do |line|
+        text = line.chomp
+        visible = "  | #{text}"
+        pad = [(width - visible.size) / 2, 0].max
+        @terminal.move_to(row, pad + 1)
+        @terminal.write "  #{ANSI[:dim]}| #{text}#{ANSI[:reset]}"
+        row += 1
+      end
+      row
+    end
+
+    def render_table(block, width, row)
+      left = width / 4
+      all_rows = [block[:header]] + block[:rows]
+      col_widths = Array.new(block[:header]&.size || 0, 0)
+      all_rows.each do |cells|
+        cells&.each_with_index do |cell, ci|
+          col_widths[ci] = [col_widths[ci] || 0, cell.size].max
+        end
+      end
+
+      all_rows.each_with_index do |cells, ri|
+        next unless cells
+
+        @terminal.move_to(row, left)
+        line = cells.each_with_index.map { |cell, ci|
+          cell.ljust(col_widths[ci] || 0)
+        }.join("  |  ")
+        if ri == 0
+          @terminal.write "#{ANSI[:bold]}#{line}#{ANSI[:reset]}"
+        else
+          @terminal.write line
+        end
+        row += 1
+
+        if ri == 0
+          @terminal.move_to(row, left)
+          @terminal.write col_widths.map { |w| "-" * w }.join("--+--")
+          row += 1
+        end
+      end
+      row
+    end
+
+    def compute_pad(width, content_width, align)
+      case align
+      when :right  then [(width - content_width - 2), 0].max
+      when :center then [(width - content_width) / 2, 0].max
+      else 0
+      end
     end
 
     def render_inline(text)
@@ -155,9 +208,8 @@ module Przn
         type = segment[0]
         content = segment[1]
         case type
-        when :tag
-          tag_name = segment[2]
-          render_tag(content, tag_name)
+        when :tag           then render_tag(content, segment[2])
+        when :note          then "#{ANSI[:dim]}#{content}#{ANSI[:reset]}"
         when :bold          then "#{ANSI[:bold]}#{content}#{ANSI[:reset]}"
         when :italic        then "#{ANSI[:italic]}#{content}#{ANSI[:reset]}"
         when :strikethrough then "#{ANSI[:strikethrough]}#{content}#{ANSI[:reset]}"
@@ -177,9 +229,6 @@ module Przn
       end
     end
 
-    # Render paragraph where the max scale is already known.
-    # Each segment is rendered at its own scale (from tag) or at the
-    # paragraph-level scale; plain text outside tags uses the given scale.
     def render_inline_scaled(text, para_scale)
       Parser.parse_inline(text).map { |segment|
         type = segment[0]
@@ -194,6 +243,7 @@ module Przn
           else
             KittyText.sized(content, s: para_scale)
           end
+        when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
         when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
         when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
         when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
@@ -203,8 +253,6 @@ module Przn
       }.join
     end
 
-    # Detect the max scale from inline {::tag name="..."} in text.
-    # Returns nil if no size tags found.
     def max_inline_scale(text)
       max = 0
       text.scan(/\{::tag\s+name="([^"]+)"\}/) do
@@ -214,19 +262,15 @@ module Przn
       max > 0 ? max : nil
     end
 
-    # Calculate visible width accounting for scale
     def visible_width_scaled(text, default_scale)
-      segments = Parser.parse_inline(text)
-      segments.sum { |segment|
+      Parser.parse_inline(text).sum { |segment|
         type = segment[0]
         content = segment[1]
         case type
         when :tag
-          tag_name = segment[2]
-          scale = Parser::SIZE_SCALES[tag_name] || default_scale
+          scale = Parser::SIZE_SCALES[segment[2]] || default_scale
           content.size * scale
         else
-          content = strip_markup(content) if type != :text
           content.size * default_scale
         end
       }
@@ -250,6 +294,8 @@ module Przn
     def strip_markup(text)
       text
         .gsub(/\{::tag\s+name="[^"]+"\}(.*?)\{:\/tag\}/, '\1')
+        .gsub(/\{::note\}(.*?)\{:\/note\}/, '\1')
+        .gsub(/\{::wait\/\}/, '')
         .gsub(/\*\*(.+?)\*\*/, '\1')
         .gsub(/\*(.+?)\*/, '\1')
         .gsub(/~~(.+?)~~/, '\1')
@@ -257,31 +303,29 @@ module Przn
     end
 
     def calculate_height(blocks)
-      height = 0
-      pending_style = nil
-      blocks.each do |block|
-        if block[:type] == :style
-          pending_style = block
-        else
-          height += block_height(block, style: pending_style)
-          pending_style = nil
-        end
-      end
-      height
+      blocks.sum { |b| block_height(b) }
     end
 
-    def block_height(block, style: nil)
+    def block_height(block)
       case block[:type]
       when :heading
         KittyText::HEADING_SCALES[block[:level]] || 1
       when :paragraph
-        style&.[](:scale) || max_inline_scale(block[:content]) || 1
+        max_inline_scale(block[:content]) || 1
       when :code_block
         [block[:content].lines.size, 1].max
       when :unordered_list
         block[:items].size
       when :ordered_list
         block[:items].size
+      when :definition_list
+        1 + block[:definition].lines.size
+      when :blockquote
+        block[:content].lines.size
+      when :table
+        (block[:header] ? 2 : 0) + block[:rows].size
+      when :align, :blank
+        0
       else
         1
       end
