@@ -162,6 +162,7 @@ module Przn
           end
           row += DEFAULT_SCALE
         end
+        row += 1
       end
       row
     end
@@ -187,6 +188,7 @@ module Przn
           end
           row += DEFAULT_SCALE
         end
+        row += 1
       end
       row
     end
