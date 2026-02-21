@@ -298,12 +298,13 @@ module Przn
       target_cols = [target_cols, 1].max
       target_rows = [target_rows, 1].max
 
-      pad = [(width - target_cols) / 2, 0].max
-      @terminal.move_to(row, pad + 1)
+      x = [(width - target_cols) / 2, 0].max
 
       if ImageUtil.kitty_terminal?
-        @terminal.write ImageUtil.kitty_display(path, cols: target_cols, rows: target_rows)
+        data = ImageUtil.kitty_icat(path, cols: target_cols, rows: target_rows, x: x, y: row - 1)
+        @terminal.write data if data && !data.empty?
       elsif ImageUtil.sixel_available?
+        @terminal.move_to(row, x + 1)
         target_pixel_w = target_cols * cell_w
         target_pixel_h = target_rows * cell_h
         sixel = ImageUtil.sixel_encode(path, width: target_pixel_w, height: target_pixel_h)

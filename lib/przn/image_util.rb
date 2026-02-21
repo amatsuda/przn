@@ -53,13 +53,12 @@ module Przn
       nil
     end
 
-    # Kitty graphics protocol: transmit file and display at given cell size
-    def kitty_display(path, cols: nil, rows: nil)
-      encoded_path = [File.expand_path(path)].pack('m0')
-      params = +"a=T,t=f"
-      params << ",c=#{cols}" if cols
-      params << ",r=#{rows}" if rows
-      "\e_G#{params};#{encoded_path}\e\\"
+    # Display image using kitten icat with --place for positioning
+    def kitty_icat(path, cols:, rows:, x:, y:)
+      args = ['kitten', 'icat', '--transfer-mode', 'stream',
+              '--place', "#{cols}x#{rows}@#{x}x#{y}",
+              File.expand_path(path)]
+      IO.popen(args, 'r', err: File::NULL) { |io| io.read }
     end
 
     def kitty_terminal?
