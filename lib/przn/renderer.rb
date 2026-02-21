@@ -272,9 +272,9 @@ module Przn
 
     def render_image(block, width, row)
       path = resolve_image_path(block[:path])
-      return row + DEFAULT_SCALE unless Sixel.available? && File.exist?(path)
+      return row + DEFAULT_SCALE unless File.exist?(path)
 
-      img_size = Sixel.image_size(path)
+      img_size = ImageUtil.image_size(path)
       return row + DEFAULT_SCALE unless img_size
 
       img_w, img_h = img_size
@@ -284,30 +284,33 @@ module Przn
       left = content_left(width)
       available_cols = width - left * 2
 
-      max_pixel_w = available_cols * cell_w
-      max_pixel_h = available_rows * cell_h
-
       if (rh = block[:attrs]['relative_height'])
-        target_pixel_h = (@terminal.height * rh.to_i * cell_h / 100.0).to_i
-        max_pixel_h = [target_pixel_h, max_pixel_h].min
+        target_rows = (@terminal.height * rh.to_i / 100.0).to_i
+        available_rows = [target_rows, available_rows].min
       end
 
-      scale_w = max_pixel_w.to_f / img_w
-      scale_h = max_pixel_h.to_f / img_h
-      scale = [scale_w, scale_h, 1.0].min
-      target_w = (img_w * scale).to_i
-      target_h = (img_h * scale).to_i
+      # Calculate target cell size maintaining aspect ratio
+      img_cell_w = img_w.to_f / cell_w
+      img_cell_h = img_h.to_f / cell_h
+      scale = [available_cols / img_cell_w, available_rows / img_cell_h, 1.0].min
+      target_cols = (img_cell_w * scale).to_i
+      target_rows = (img_cell_h * scale).to_i
+      target_cols = [target_cols, 1].max
+      target_rows = [target_rows, 1].max
 
-      sixel = Sixel.encode(path, width: target_w, height: target_h)
-      return row + DEFAULT_SCALE unless sixel && !sixel.empty?
-
-      img_cols = (target_w.to_f / cell_w).ceil
-      pad = [(width - img_cols) / 2, 0].max
+      pad = [(width - target_cols) / 2, 0].max
       @terminal.move_to(row, pad + 1)
-      @terminal.write sixel
 
-      rows_used = (target_h.to_f / cell_h).ceil
-      row + rows_used
+      if ImageUtil.kitty_terminal?
+        @terminal.write ImageUtil.kitty_display(path, cols: target_cols, rows: target_rows)
+      elsif ImageUtil.sixel_available?
+        target_pixel_w = target_cols * cell_w
+        target_pixel_h = target_rows * cell_h
+        sixel = ImageUtil.sixel_encode(path, width: target_pixel_w, height: target_pixel_h)
+        @terminal.write sixel if sixel && !sixel.empty?
+      end
+
+      row + target_rows
     end
 
     def resolve_image_path(path)
@@ -580,7 +583,7 @@ module Przn
 
     def image_block_height(block, width)
       path = resolve_image_path(block[:path])
-      img_size = Sixel.image_size(path)
+      img_size = ImageUtil.image_size(path)
       return DEFAULT_SCALE unless img_size
 
       img_w, img_h = img_size
@@ -589,16 +592,16 @@ module Przn
 
       left = content_left(width)
       available_cols = width - left * 2
-      max_pixel_w = available_cols * cell_w
-      max_pixel_h = (h / 2) * cell_h
+      available_rows = h / 2
 
       if (rh = block[:attrs]['relative_height'])
-        max_pixel_h = (h * rh.to_i * cell_h / 100.0).to_i
+        available_rows = (h * rh.to_i / 100.0).to_i
       end
 
-      scale = [max_pixel_w.to_f / img_w, max_pixel_h.to_f / img_h, 1.0].min
-      target_h = (img_h * scale).to_i
-      (target_h.to_f / cell_h).ceil
+      img_cell_w = img_w.to_f / cell_w
+      img_cell_h = img_h.to_f / cell_h
+      scale = [available_cols / img_cell_w, available_rows / img_cell_h, 1.0].min
+      [(img_cell_h * scale).ceil, 1].max
     end
   end
 end

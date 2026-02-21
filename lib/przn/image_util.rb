@@ -1,24 +1,8 @@
 # frozen_string_literal: true
 
 module Przn
-  module Sixel
+  module ImageUtil
     module_function
-
-    def available?
-      @available = system('command -v img2sixel > /dev/null 2>&1') if @available.nil?
-      @available
-    end
-
-    def encode(path, width: nil, height: nil)
-      return nil unless available?
-      return nil unless File.exist?(path)
-
-      args = ['img2sixel']
-      args += ['-w', width.to_s] if width
-      args += ['-h', height.to_s] if height
-      args << path
-      IO.popen(args, 'r', err: File::NULL) { |io| io.read }
-    end
 
     def image_size(path)
       return nil unless File.exist?(path)
@@ -67,6 +51,36 @@ module Przn
       nil
     rescue
       nil
+    end
+
+    # Kitty graphics protocol: transmit file and display at given cell size
+    def kitty_display(path, cols: nil, rows: nil)
+      encoded_path = [File.expand_path(path)].pack('m0')
+      params = +"a=T,t=f"
+      params << ",c=#{cols}" if cols
+      params << ",r=#{rows}" if rows
+      "\e_G#{params};#{encoded_path}\e\\"
+    end
+
+    def kitty_terminal?
+      ENV['TERM'] == 'xterm-kitty' || ENV['TERM_PROGRAM'] == 'kitty'
+    end
+
+    # Sixel via img2sixel
+    def sixel_available?
+      @sixel_available = system('command -v img2sixel > /dev/null 2>&1') if @sixel_available.nil?
+      @sixel_available
+    end
+
+    def sixel_encode(path, width: nil, height: nil)
+      return nil unless sixel_available?
+      return nil unless File.exist?(path)
+
+      args = ['img2sixel']
+      args += ['-w', width.to_s] if width
+      args += ['-h', height.to_s] if height
+      args << path
+      IO.popen(args, 'r', err: File::NULL) { |io| io.read }
     end
   end
 end

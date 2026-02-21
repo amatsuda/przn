@@ -2,7 +2,7 @@
 
 require_relative "przn/version"
 require_relative "przn/kitty_text"
-require_relative "przn/sixel"
+require_relative "przn/image_util"
 require_relative "przn/slide"
 require_relative "przn/parser"
 require_relative "przn/presentation"
