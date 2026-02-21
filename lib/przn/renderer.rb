@@ -15,8 +15,9 @@ module Przn
 
     DEFAULT_SCALE = 2
 
-    def initialize(terminal)
+    def initialize(terminal, base_dir: '.')
       @terminal = terminal
+      @base_dir = base_dir
     end
 
     def render(slide, current:, total:)
@@ -61,6 +62,7 @@ module Przn
       when :definition_list then render_definition_list(block, width, row)
       when :blockquote      then render_blockquote(block, width, row)
       when :table           then render_table(block, width, row)
+      when :image           then render_image(block, width, row)
       when :blank           then row + DEFAULT_SCALE
       else row + 1
       end
@@ -266,6 +268,51 @@ module Przn
         end
       end
       row
+    end
+
+    def render_image(block, width, row)
+      path = resolve_image_path(block[:path])
+      return row + DEFAULT_SCALE unless Sixel.available? && File.exist?(path)
+
+      img_size = Sixel.image_size(path)
+      return row + DEFAULT_SCALE unless img_size
+
+      img_w, img_h = img_size
+      cell_w, cell_h = @terminal.cell_pixel_size
+
+      available_rows = @terminal.height - row - 2
+      left = content_left(width)
+      available_cols = width - left * 2
+
+      max_pixel_w = available_cols * cell_w
+      max_pixel_h = available_rows * cell_h
+
+      if (rh = block[:attrs]['relative_height'])
+        target_pixel_h = (@terminal.height * rh.to_i * cell_h / 100.0).to_i
+        max_pixel_h = [target_pixel_h, max_pixel_h].min
+      end
+
+      scale_w = max_pixel_w.to_f / img_w
+      scale_h = max_pixel_h.to_f / img_h
+      scale = [scale_w, scale_h, 1.0].min
+      target_w = (img_w * scale).to_i
+      target_h = (img_h * scale).to_i
+
+      sixel = Sixel.encode(path, width: target_w, height: target_h)
+      return row + DEFAULT_SCALE unless sixel && !sixel.empty?
+
+      img_cols = (target_w.to_f / cell_w).ceil
+      pad = [(width - img_cols) / 2, 0].max
+      @terminal.move_to(row, pad + 1)
+      @terminal.write sixel
+
+      rows_used = (target_h.to_f / cell_h).ceil
+      row + rows_used
+    end
+
+    def resolve_image_path(path)
+      return path if File.absolute_path?(path) == path
+      File.expand_path(path, @base_dir)
     end
 
     def content_left(width)
@@ -514,6 +561,8 @@ module Przn
         block[:content].lines.sum { |l| lines_count(l.chomp, [max_w - 3, 1].max) } * s
       when :table
         ((block[:header] ? 2 : 0) + block[:rows].size) * s
+      when :image
+        image_block_height(block, width)
       when :align
         0
       when :blank
@@ -527,6 +576,29 @@ module Przn
       vis_w = display_width(strip_markup(text))
       return 1 if vis_w <= max_width
       (vis_w.to_f / max_width).ceil
+    end
+
+    def image_block_height(block, width)
+      path = resolve_image_path(block[:path])
+      img_size = Sixel.image_size(path)
+      return DEFAULT_SCALE unless img_size
+
+      img_w, img_h = img_size
+      cell_w, cell_h = @terminal.cell_pixel_size
+      h = @terminal.height
+
+      left = content_left(width)
+      available_cols = width - left * 2
+      max_pixel_w = available_cols * cell_w
+      max_pixel_h = (h / 2) * cell_h
+
+      if (rh = block[:attrs]['relative_height'])
+        max_pixel_h = (h * rh.to_i * cell_h / 100.0).to_i
+      end
+
+      scale = [max_pixel_w.to_f / img_w, max_pixel_h.to_f / img_h, 1.0].min
+      target_h = (img_h * scale).to_i
+      (target_h.to_f / cell_h).ceil
     end
   end
 end

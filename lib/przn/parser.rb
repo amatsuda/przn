@@ -165,6 +165,26 @@ module Przn
           i -= 1
           blocks << {type: :ordered_list, items: items}
 
+        # Image: ![alt](path "title"){:attrs}
+        when /\A!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]*)")?\)(.*)/
+          alt = Regexp.last_match(1)
+          path = Regexp.last_match(2)
+          title = Regexp.last_match(3)
+          rest = Regexp.last_match(4).strip
+          attrs = {}
+          if rest.match(/\{([^}]+)\}/)
+            parse_image_attrs(Regexp.last_match(1), attrs)
+          elsif rest.match(/\{(.+)/) || ((i + 1) < lines.size && lines[i + 1]&.match?(/\A\s*\{/))
+            attr_str = rest.sub(/\A\{:?\s*/, '')
+            while !attr_str.include?('}') && (i + 1) < lines.size
+              i += 1
+              attr_str << " " << lines[i].strip
+            end
+            attr_str = attr_str.sub(/\}\s*\z/, '')
+            parse_image_attrs(attr_str, attrs)
+          end
+          blocks << {type: :image, path: path, alt: alt, title: title, attrs: attrs}
+
         # Definition list: term on one line, :   definition on next
         when /\A(\S.*)\s*\z/
           if (i + 1) < lines.size && lines[i + 1].match?(/\A:\s{3}/)
@@ -195,6 +215,13 @@ module Przn
       end
 
       Slide.new(blocks)
+    end
+
+    def parse_image_attrs(str, attrs)
+      str = str.sub(/\A:?\s*/, '')
+      str.scan(/([\w-]+)=['"]([^'"]*)['"]/) do |key, value|
+        attrs[key.tr('-', '_')] = value
+      end
     end
 
     def parse_table(lines)

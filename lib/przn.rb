@@ -2,6 +2,7 @@
 
 require_relative "przn/version"
 require_relative "przn/kitty_text"
+require_relative "przn/sixel"
 require_relative "przn/slide"
 require_relative "przn/parser"
 require_relative "przn/presentation"
@@ -16,7 +17,8 @@ module Przn
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     terminal = Terminal.new
-    renderer = Renderer.new(terminal)
+    base_dir = File.dirname(File.expand_path(file))
+    renderer = Renderer.new(terminal, base_dir: base_dir)
     Controller.new(presentation, terminal, renderer)
   end
 end

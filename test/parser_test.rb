@@ -397,4 +397,37 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:code, "foo"]], Przn::Parser.parse_inline("`foo`")
     end
   end
+
+  sub_test_case "przn extension: images" do
+    test "parses ![alt](path)" do
+      slide = Przn::Parser.parse_slide("![doge](doge.png)\n")
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_not_nil img
+      assert_equal "doge.png", img[:path]
+      assert_equal "doge", img[:alt]
+    end
+
+    test "parses ![](path \"title\")" do
+      slide = Przn::Parser.parse_slide('![](pic.jpg "My Title")' + "\n")
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal "pic.jpg", img[:path]
+      assert_equal "My Title", img[:title]
+    end
+
+    test "parses image with kramdown attributes" do
+      slide = Przn::Parser.parse_slide("![](pic.png){:relative_height='80'}\n")
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal "pic.png", img[:path]
+      assert_equal "80", img[:attrs]["relative_height"]
+    end
+
+    test "parses image with multi-line attributes" do
+      md = "![](pic.png){:relative_height='80'\n                relative_width='50'}\n"
+      slide = Przn::Parser.parse_slide(md)
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal "pic.png", img[:path]
+      assert_equal "80", img[:attrs]["relative_height"]
+      assert_equal "50", img[:attrs]["relative_width"]
+    end
+  end
 end
