@@ -320,7 +320,7 @@ module Przn
     end
 
     def content_left(width)
-      width / 8
+      width / 16
     end
 
     def max_text_width(terminal_width, left_col, scale)
