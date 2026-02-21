@@ -77,7 +77,7 @@ module Przn
         pad = [(width - visible_width) / 2, 0].max
         @terminal.move_to(row, pad + 1)
         @terminal.write "#{ANSI[:bold]}#{KittyText.sized(text, s: scale)}#{ANSI[:reset]}"
-        row + scale + 1
+        row + scale + 4
       else
         left = content_left(width)
         prefix = "・"
@@ -541,7 +541,7 @@ module Przn
       when :heading
         scale = KittyText::HEADING_SCALES[block[:level]] || s
         if block[:level] == 1
-          scale + 1
+          scale + 4
         else
           lines_count(block[:content], [max_w - 2, 1].max) * scale
         end
