@@ -3,10 +3,24 @@
 
 require_relative '../lib/przn'
 
+require 'optparse'
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: przn [options] <presentation.md>"
+  opts.on('--export FORMAT', 'Export to a format (e.g. pdf)') { |v| options[:export] = v }
+  opts.on('-o', '--output FILE', 'Output file path for export') { |v| options[:output] = v }
+end.parse!
+
 file = ARGV[0]
 unless file
-  $stderr.puts "Usage: przn <presentation.md>"
+  $stderr.puts "Usage: przn [options] <presentation.md>"
   exit 1
 end
 
-Przn.start(file).run
+if options[:export] == 'pdf'
+  output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
+  Przn.export_pdf(file, output)
+else
+  Przn.start(file).run
+end
