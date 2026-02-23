@@ -15,6 +15,16 @@ gem install przn
 przn your_slides.md
 ```
 
+### PDF export
+
+```
+przn --export your_slides.md
+przn --export pdf your_slides.md
+przn --export pdf -o output.pdf your_slides.md
+```
+
+Requires a TrueType font (with `glyf` outlines) for proper rendering. Prawn does not support CFF-based fonts (most `.otf` files). Fonts are auto-detected in this order: NotoSansJP TTF, HackGen, Arial Unicode.
+
 ### Key bindings
 
 | Key | Action |
