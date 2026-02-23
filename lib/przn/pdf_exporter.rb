@@ -30,14 +30,14 @@ module Przn
       @base_dir = base_dir
     end
 
+    # Prawn's ttfunk requires TrueType outlines (glyf table), not CFF-based fonts
     FONT_SEARCH_PATHS = [
-      # Noto Sans JP (user-installed)
-      -> { Dir.glob(File.join(Dir.home, 'Library/Fonts/NotoSansJP-*.otf')).first },
-      -> { Dir.glob(File.join(Dir.home, 'Library/Fonts/NotoSansJP-*.ttf')).first },
-      -> { Dir.glob('/usr/share/fonts/**/NotoSansCJK*.ttc').first },
-      -> { Dir.glob('/usr/share/fonts/**/NotoSansJP-*.otf').first },
-      # Hiragino (macOS built-in, TTC with font index)
-      -> { '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc' },
+      -> { File.join(Dir.home, 'Library/Fonts/NotoSansJP-Regular.ttf') },
+      -> { Dir.glob('/usr/share/fonts/**/NotoSansCJK-Regular.ttc').first },
+      -> { Dir.glob('/usr/share/fonts/**/NotoSansJP-Regular.ttf').first },
+      -> { File.join(Dir.home, 'Library/Fonts/HackGen-Regular.ttf') },
+      -> { '/Library/Fonts/Arial Unicode.ttf' },
+      -> { '/System/Library/Fonts/Supplemental/Arial Unicode.ttf' },
     ].freeze
 
     def export(output_path)
