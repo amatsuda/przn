@@ -4,9 +4,6 @@ module Przn
   class PdfExporter
     PAGE_WIDTH  = 960
     PAGE_HEIGHT = 540
-    BG_COLOR    = '1e1e2e'
-    FG_COLOR    = 'cdd6f4'
-
     SCALE_TO_PT = {
       1 => 10, 2 => 18, 3 => 24, 4 => 32,
       5 => 40, 6 => 48, 7 => 56,
@@ -22,12 +19,16 @@ module Przn
       'bright_white' => 'FFFFFF',
     }.freeze
 
-    CODE_BG = '313244'
-    DIM_COLOR = '6c7086'
-
-    def initialize(presentation, base_dir: '.')
+    def initialize(presentation, base_dir: '.', theme: nil)
       @presentation = presentation
       @base_dir = base_dir
+      @theme = theme || Theme.default
+      @bg_color = @theme.colors[:background]
+      @fg_color = @theme.colors[:foreground]
+      @code_bg = @theme.colors[:code_bg]
+      @dim_color = @theme.colors[:dim]
+      @inline_code_color = @theme.colors[:inline_code]
+      @heading_color = @theme.colors[:heading] || @fg_color
     end
 
     # Prawn's ttfunk requires TrueType outlines (glyf table), not CFF-based fonts
@@ -89,6 +90,18 @@ module Przn
     end
 
     def find_cjk_font
+      if (family = @theme.font[:family])
+        theme_paths = [
+          -> { File.join(Dir.home, "Library/Fonts/#{family}-Regular.ttf") },
+          -> { Dir.glob("/usr/share/fonts/**/#{family}-Regular.ttf").first },
+          -> { Dir.glob("/usr/share/fonts/**/#{family}-Regular.ttc").first },
+        ]
+        theme_paths.each do |finder|
+          path = finder.call
+          return path if path && File.exist?(path)
+        end
+      end
+
       FONT_SEARCH_PATHS.each do |finder|
         path = finder.call
         return path if path && File.exist?(path)
@@ -123,17 +136,17 @@ module Przn
       # Page number
       total = @presentation.total
       status = "#{slide_index + 1} / #{total}"
-      pdf.fill_color DIM_COLOR
+      pdf.fill_color @dim_color
       pdf.text_box status, at: [0, 16], width: PAGE_WIDTH - 10, height: 14, size: 8, align: :right
-      pdf.fill_color FG_COLOR
+      pdf.fill_color @fg_color
     end
 
     def draw_background(pdf)
       pdf.canvas do
-        pdf.fill_color BG_COLOR
+        pdf.fill_color @bg_color
         pdf.fill_rectangle [0, PAGE_HEIGHT], PAGE_WIDTH, PAGE_HEIGHT
       end
-      pdf.fill_color FG_COLOR
+      pdf.fill_color @fg_color
     end
 
     def render_block(pdf, block, margin_x, content_width, y, align: nil)
@@ -162,7 +175,7 @@ module Przn
         y - pt - heading_margin(pt)
       else
         pt = SCALE_TO_PT[DEFAULT_SCALE]
-        prefix = [{text: "\u30FB", size: pt, color: FG_COLOR, styles: [:bold]}]
+        prefix = [{text: "\u30FB", size: pt, color: @heading_color, styles: [:bold]}]
         formatted = prefix + build_formatted_text(text, pt)
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
         y - pt - 4
@@ -190,13 +203,13 @@ module Przn
       box_height = code_lines.size * line_height + padding * 2
 
       # Draw background
-      pdf.fill_color CODE_BG
+      pdf.fill_color @code_bg
       pdf.fill_rounded_rectangle [margin_x, y], content_width, box_height, 4
-      pdf.fill_color FG_COLOR
+      pdf.fill_color @fg_color
 
       code_y = y - padding
       code_lines.each do |line|
-        pdf.text_box line, at: [margin_x + padding, code_y], width: content_width - padding * 2, height: line_height, size: pt, color: FG_COLOR, overflow: :shrink_to_fit
+        pdf.text_box line, at: [margin_x + padding, code_y], width: content_width - padding * 2, height: line_height, size: pt, color: @fg_color, overflow: :shrink_to_fit
         code_y -= line_height
       end
 
@@ -208,7 +221,7 @@ module Przn
       block[:items].each do |item|
         depth = item[:depth] || 0
         indent = depth * pt
-        prefix = [{text: "\u30FB", size: pt, color: FG_COLOR}]
+        prefix = [{text: "\u30FB", size: pt, color: @fg_color}]
         formatted = prefix + build_formatted_text(item[:text], pt)
         pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
         y -= pt + 6
@@ -221,7 +234,7 @@ module Przn
       block[:items].each_with_index do |item, i|
         depth = item[:depth] || 0
         indent = depth * pt
-        prefix = [{text: "#{i + 1}. ", size: pt, color: FG_COLOR}]
+        prefix = [{text: "#{i + 1}. ", size: pt, color: @fg_color}]
         formatted = prefix + build_formatted_text(item[:text], pt)
         pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
         y -= pt + 6
@@ -253,11 +266,11 @@ module Przn
 
       block[:content].each_line do |line|
         # Draw pipe
-        pdf.fill_color DIM_COLOR
+        pdf.fill_color @dim_color
         pdf.fill_rectangle [margin_x, y], 2, pt
-        pdf.fill_color FG_COLOR
+        pdf.fill_color @fg_color
 
-        formatted = build_formatted_text(line.chomp, pt).map { |f| f.merge(color: DIM_COLOR) }
+        formatted = build_formatted_text(line.chomp, pt).map { |f| f.merge(color: @dim_color) }
         pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
         y -= pt + 2
       end
@@ -279,17 +292,17 @@ module Przn
         cells.each_with_index do |cell, ci|
           x = margin_x + ci * col_width
           styles = ri == 0 ? [:bold] : []
-          pdf.formatted_text_box [{text: cell, size: pt, color: FG_COLOR, styles: styles}],
+          pdf.formatted_text_box [{text: cell, size: pt, color: @fg_color, styles: styles}],
             at: [x + 4, y], width: col_width - 8, height: row_height, overflow: :shrink_to_fit
         end
         y -= row_height
 
         # Separator after header
         if ri == 0
-          pdf.stroke_color DIM_COLOR
+          pdf.stroke_color @dim_color
           pdf.line_width 0.5
           pdf.stroke_horizontal_line margin_x, margin_x + content_width, at: y + row_height * 0.3
-          pdf.stroke_color FG_COLOR
+          pdf.stroke_color @fg_color
         end
       end
       y - 4
@@ -336,28 +349,28 @@ module Przn
         when :tag
           tag_name = segment[2]
           if (scale = Parser::SIZE_SCALES[tag_name])
-            {text: content, size: SCALE_TO_PT[scale], color: FG_COLOR}
+            {text: content, size: SCALE_TO_PT[scale], color: @fg_color}
           elsif (hex = COLOR_MAP[tag_name])
             {text: content, size: default_pt, color: hex}
           elsif tag_name.match?(/\A[0-9a-fA-F]{6}\z/)
             {text: content, size: default_pt, color: tag_name.upcase}
           else
-            {text: content, size: default_pt, color: FG_COLOR}
+            {text: content, size: default_pt, color: @fg_color}
           end
         when :bold
-          {text: content, size: default_pt, color: FG_COLOR, styles: [:bold]}
+          {text: content, size: default_pt, color: @fg_color, styles: [:bold]}
         when :italic
-          {text: content, size: default_pt, color: FG_COLOR, styles: [:italic]}
+          {text: content, size: default_pt, color: @fg_color, styles: [:italic]}
         when :strikethrough
-          {text: content, size: default_pt, color: FG_COLOR, styles: [:strikethrough]}
+          {text: content, size: default_pt, color: @fg_color, styles: [:strikethrough]}
         when :code
-          {text: " #{content} ", size: default_pt * 0.85, color: 'a6e3a1'}
+          {text: " #{content} ", size: default_pt * 0.85, color: @inline_code_color}
         when :note
-          {text: content, size: default_pt * 0.7, color: DIM_COLOR}
+          {text: content, size: default_pt * 0.7, color: @dim_color}
         when :text
-          {text: content, size: default_pt, color: FG_COLOR}
+          {text: content, size: default_pt, color: @fg_color}
         else
-          {text: content.to_s, size: default_pt, color: FG_COLOR}
+          {text: content.to_s, size: default_pt, color: @fg_color}
         end
       }
     end

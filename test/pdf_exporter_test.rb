@@ -13,10 +13,10 @@ class PdfExporterTest < Test::Unit::TestCase
     FileUtils.remove_entry @tmpdir
   end
 
-  def export(markdown, base_dir: '.')
+  def export(markdown, base_dir: '.', theme: nil)
     presentation = Przn::Parser.parse(markdown)
     output = File.join(@tmpdir, 'test.pdf')
-    Przn::PdfExporter.new(presentation, base_dir: base_dir).export(output)
+    Przn::PdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
     output
   end
 
@@ -175,19 +175,23 @@ class PdfExporterTest < Test::Unit::TestCase
       exporter.send(:build_formatted_text, text, pt)
     end
 
+    def default_theme
+      @default_theme ||= Przn::Theme.default
+    end
+
     test "plain text" do
       result = build("hello")
-      assert_equal [{text: "hello", size: 18, color: Przn::PdfExporter::FG_COLOR}], result
+      assert_equal [{text: "hello", size: 18, color: default_theme.colors[:foreground]}], result
     end
 
     test "bold" do
       result = build("**bold**")
-      assert_equal [{text: "bold", size: 18, color: Przn::PdfExporter::FG_COLOR, styles: [:bold]}], result
+      assert_equal [{text: "bold", size: 18, color: default_theme.colors[:foreground], styles: [:bold]}], result
     end
 
     test "italic" do
       result = build("*italic*")
-      assert_equal [{text: "italic", size: 18, color: Przn::PdfExporter::FG_COLOR, styles: [:italic]}], result
+      assert_equal [{text: "italic", size: 18, color: default_theme.colors[:foreground], styles: [:italic]}], result
     end
 
     test "color tag" do
@@ -206,14 +210,54 @@ class PdfExporterTest < Test::Unit::TestCase
       result = build("`code`")
       assert_equal 1, result.size
       assert_equal " code ", result[0][:text]
-      assert_equal 'a6e3a1', result[0][:color]
+      assert_equal default_theme.colors[:inline_code], result[0][:color]
     end
 
     test "note" do
       result = build("{::note}note{:/note}")
       assert_equal 1, result.size
-      assert_equal Przn::PdfExporter::DIM_COLOR, result[0][:color]
+      assert_equal default_theme.colors[:dim], result[0][:color]
       assert_operator result[0][:size], :<, 18
+    end
+  end
+
+  sub_test_case "theme" do
+    test "export with custom theme produces valid PDF" do
+      theme = Przn::Theme.new(
+        colors: {
+          background: 'ff0000', foreground: '00ff00', heading: '0000ff',
+          code_bg: '111111', dim: '222222', inline_code: '333333',
+        },
+        font: {family: nil},
+      )
+      path = export("# Hello\n\nWorld\n\n```ruby\nputs 1\n```\n", theme: theme)
+      assert_pdf path
+    end
+
+    test "export with default theme still works" do
+      path = export("# Hello\n\nWorld\n", theme: Przn::Theme.default)
+      assert_pdf path
+    end
+
+    test "build_formatted_text uses theme colors" do
+      theme = Przn::Theme.new(
+        colors: {
+          background: '000000', foreground: 'ffffff', heading: nil,
+          code_bg: '111111', dim: '222222', inline_code: '333333',
+        },
+        font: {family: nil},
+      )
+      presentation = Przn::Parser.parse("# dummy\n")
+      exporter = Przn::PdfExporter.new(presentation, theme: theme)
+
+      result = exporter.send(:build_formatted_text, "hello", 18)
+      assert_equal 'ffffff', result[0][:color]
+
+      result = exporter.send(:build_formatted_text, "`code`", 18)
+      assert_equal '333333', result[0][:color]
+
+      result = exporter.send(:build_formatted_text, "{::note}note{:/note}", 18)
+      assert_equal '222222', result[0][:color]
     end
   end
 

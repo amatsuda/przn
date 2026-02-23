@@ -17,6 +17,7 @@ OptionParser.new do |opts|
     end
   }
   opts.on('-o', '--output FILE', 'Output file path for export') { |v| options[:output] = v }
+  opts.on('--theme FILE', 'Theme file (YAML)') { |v| options[:theme] = v }
 end.parse!
 
 file = ARGV[0]
@@ -25,9 +26,11 @@ unless file
   exit 1
 end
 
+theme = options[:theme] ? Przn::Theme.load(options[:theme]) : nil
+
 if options[:export] == 'pdf'
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
-  Przn.export_pdf(file, output)
+  Przn.export_pdf(file, output, theme: theme)
 else
-  Przn.start(file).run
+  Przn.start(file, theme: theme).run
 end

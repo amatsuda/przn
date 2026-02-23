@@ -15,9 +15,10 @@ module Przn
 
     DEFAULT_SCALE = 2
 
-    def initialize(terminal, base_dir: '.')
+    def initialize(terminal, base_dir: '.', theme: nil)
       @terminal = terminal
       @base_dir = base_dir
+      @theme = theme
     end
 
     def render(slide, current:, total:)
