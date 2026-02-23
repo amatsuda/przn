@@ -8,7 +8,14 @@ require 'optparse'
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: przn [options] <presentation.md>"
-  opts.on('--export FORMAT', 'Export to a format (e.g. pdf)') { |v| options[:export] = v }
+  opts.on('--export [FORMAT]', 'Export to a format (default: pdf)') { |v|
+    if v && v.end_with?('.md')
+      ARGV.unshift(v)
+      options[:export] = 'pdf'
+    else
+      options[:export] = v || 'pdf'
+    end
+  }
   opts.on('-o', '--output FILE', 'Output file path for export') { |v| options[:output] = v }
 end.parse!
 
