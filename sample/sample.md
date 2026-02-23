@@ -2,33 +2,25 @@
 
 A terminal presentation tool written in Ruby
 
----
-
-## Features
+# Features
 
 - **Markdown** based slides
 - *Kitty text sizing* protocol support
 - Simple keyboard navigation
 
----
-
-### Code Blocks
+# Code Blocks
 
 ```ruby
 puts "Hello from przn!"
 ```
 
----
-
-## Inline Formatting
+# Inline Formatting
 
 This is **bold**, this is *italic*, and this is `inline code`.
 
 > This is a blockquote
 
----
-
-## Lists
+# Lists
 
 - First item
 - Second item
@@ -38,9 +30,7 @@ This is **bold**, this is *italic*, and this is `inline code`.
 2. Ordered two
 3. Ordered three
 
----
-
-## Custom Styling
+# Custom Styling
 
 {::tag name="xx-large"}BIG text{:/tag}
 
@@ -50,8 +40,6 @@ This is **bold**, this is *italic*, and this is `inline code`.
 
 normal and {::tag name="red"}red text{:/tag} mixed
 
----
-
 # Thank You!
 
-That's all folks
+That's all! Enjoy!
