@@ -18,7 +18,15 @@ OptionParser.new do |opts|
   }
   opts.on('-o', '--output FILE', 'Output file path for export') { |v| options[:output] = v }
   opts.on('--theme FILE', 'Theme file (YAML)') { |v| options[:theme] = v }
+  opts.on('--generate-theme', 'Generate theme.yml in current directory') { options[:generate_theme] = true }
 end.parse!
+
+if options[:generate_theme]
+  content = File.read(Przn::Theme::DEFAULT_PATH).sub(/\A(#[^\n]*\n)+\n/, '')
+  File.write('theme.yml', content)
+  puts "Generated: theme.yml"
+  exit
+end
 
 file = ARGV[0]
 unless file
