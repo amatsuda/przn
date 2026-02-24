@@ -202,7 +202,7 @@ class PdfExporterTest < Test::Unit::TestCase
     test "size tag" do
       result = build('{::tag name="x-large"}big{:/tag}')
       assert_equal 1, result.size
-      assert_equal Przn::PdfExporter::SCALE_TO_PT[4], result[0][:size]
+      assert_equal Przn::PdfExporter::DEFAULT_SCALE_TO_PT[4], result[0][:size]
     end
 
     test "inline code" do

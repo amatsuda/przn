@@ -13,3 +13,4 @@ colors:
 
 font:
   family:               # auto-detect
+  size: 18              # base font size in pt for PDF export

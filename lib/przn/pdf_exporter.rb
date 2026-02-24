@@ -4,7 +4,8 @@ module Przn
   class PdfExporter
     PAGE_WIDTH  = 960
     PAGE_HEIGHT = 540
-    SCALE_TO_PT = {
+    DEFAULT_FONT_SIZE = 18
+    DEFAULT_SCALE_TO_PT = {
       1 => 10, 2 => 18, 3 => 24, 4 => 32,
       5 => 40, 6 => 48, 7 => 56,
     }.freeze
@@ -29,6 +30,9 @@ module Przn
       @dim_color = @theme.colors[:dim]
       @inline_code_color = @theme.colors[:inline_code]
       @heading_color = @theme.colors[:heading] || @fg_color
+      base = (@theme.font[:size] || DEFAULT_FONT_SIZE).to_f
+      ratio = base / DEFAULT_FONT_SIZE
+      @scale_to_pt = DEFAULT_SCALE_TO_PT.transform_values { |v| v * ratio }
     end
 
     # Fallback font paths when fc-match is not available.
@@ -183,8 +187,8 @@ module Przn
       when :blockquote      then render_blockquote(pdf, block, margin_x, content_width, y)
       when :table           then render_table(pdf, block, margin_x, content_width, y)
       when :image           then render_image(pdf, block, margin_x, content_width, y)
-      when :blank           then y - SCALE_TO_PT[DEFAULT_SCALE]
-      else y - SCALE_TO_PT[DEFAULT_SCALE]
+      when :blank           then y - @scale_to_pt[DEFAULT_SCALE]
+      else y - @scale_to_pt[DEFAULT_SCALE]
       end
     end
 
@@ -192,12 +196,12 @@ module Przn
       text = block[:content]
       if block[:level] == 1
         scale = KittyText::HEADING_SCALES[1]
-        pt = SCALE_TO_PT[scale]
+        pt = @scale_to_pt[scale]
         formatted = build_formatted_text(text, pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, align: :center, overflow: :shrink_to_fit
         y - pt - heading_margin(pt)
       else
-        pt = SCALE_TO_PT[DEFAULT_SCALE]
+        pt = @scale_to_pt[DEFAULT_SCALE]
         prefix = [{text: bullet, size: pt, color: @heading_color, styles: [:bold]}]
         formatted = prefix + build_formatted_text(text, pt)
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
@@ -208,7 +212,7 @@ module Przn
     def render_paragraph(pdf, block, margin_x, content_width, y, align: nil)
       text = block[:content]
       scale = max_inline_scale(text) || DEFAULT_SCALE
-      pt = SCALE_TO_PT[scale]
+      pt = @scale_to_pt[scale]
       formatted = build_formatted_text(text, pt)
       align_sym = align || :left
 
@@ -218,9 +222,9 @@ module Przn
 
     def render_code_block(pdf, block, margin_x, content_width, y)
       code_lines = block[:content].lines.map(&:chomp)
-      return y - SCALE_TO_PT[DEFAULT_SCALE] if code_lines.empty?
+      return y - @scale_to_pt[DEFAULT_SCALE] if code_lines.empty?
 
-      pt = SCALE_TO_PT[DEFAULT_SCALE] * 0.7
+      pt = @scale_to_pt[DEFAULT_SCALE] * 0.7
       line_height = pt * 1.4
       padding = 8
       box_height = code_lines.size * line_height + padding * 2
@@ -240,7 +244,7 @@ module Przn
     end
 
     def render_unordered_list(pdf, block, margin_x, content_width, y)
-      pt = SCALE_TO_PT[DEFAULT_SCALE]
+      pt = @scale_to_pt[DEFAULT_SCALE]
       block[:items].each do |item|
         depth = item[:depth] || 0
         indent = depth * pt
@@ -253,7 +257,7 @@ module Przn
     end
 
     def render_ordered_list(pdf, block, margin_x, content_width, y)
-      pt = SCALE_TO_PT[DEFAULT_SCALE]
+      pt = @scale_to_pt[DEFAULT_SCALE]
       block[:items].each_with_index do |item, i|
         depth = item[:depth] || 0
         indent = depth * pt
@@ -266,7 +270,7 @@ module Przn
     end
 
     def render_definition_list(pdf, block, margin_x, content_width, y)
-      pt = SCALE_TO_PT[DEFAULT_SCALE]
+      pt = @scale_to_pt[DEFAULT_SCALE]
 
       # Term (bold)
       formatted = build_formatted_text(block[:term], pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
@@ -284,7 +288,7 @@ module Przn
     end
 
     def render_blockquote(pdf, block, margin_x, content_width, y)
-      pt = SCALE_TO_PT[DEFAULT_SCALE]
+      pt = @scale_to_pt[DEFAULT_SCALE]
       indent = pt
 
       block[:content].each_line do |line|
@@ -301,7 +305,7 @@ module Przn
     end
 
     def render_table(pdf, block, margin_x, content_width, y)
-      pt = SCALE_TO_PT[DEFAULT_SCALE] * 0.8
+      pt = @scale_to_pt[DEFAULT_SCALE] * 0.8
       row_height = pt * 1.6
       all_rows = [block[:header]] + block[:rows]
       num_cols = block[:header]&.size || 0
@@ -333,7 +337,7 @@ module Przn
 
     def render_image(pdf, block, margin_x, content_width, y)
       path = resolve_image_path(block[:path])
-      return y - SCALE_TO_PT[DEFAULT_SCALE] unless File.exist?(path)
+      return y - @scale_to_pt[DEFAULT_SCALE] unless File.exist?(path)
 
       begin
         max_h = PAGE_HEIGHT * 0.6
@@ -342,7 +346,7 @@ module Przn
         end
 
         img_size = ImageUtil.image_size(path)
-        return y - SCALE_TO_PT[DEFAULT_SCALE] unless img_size
+        return y - @scale_to_pt[DEFAULT_SCALE] unless img_size
 
         img_w, img_h = img_size
         scale = [content_width / img_w.to_f, max_h / img_h.to_f, 1.0].min
@@ -353,7 +357,7 @@ module Przn
         pdf.image path, fit: [content_width, max_h], at: [img_x, y]
         y - display_h - 6
       rescue Prawn::Errors::UnsupportedImageType
-        y - SCALE_TO_PT[DEFAULT_SCALE]
+        y - @scale_to_pt[DEFAULT_SCALE]
       end
     end
 
@@ -372,7 +376,7 @@ module Przn
         when :tag
           tag_name = segment[2]
           if (scale = Parser::SIZE_SCALES[tag_name])
-            {text: content, size: SCALE_TO_PT[scale], color: @fg_color}
+            {text: content, size: @scale_to_pt[scale], color: @fg_color}
           elsif (hex = COLOR_MAP[tag_name])
             {text: content, size: default_pt, color: hex}
           elsif tag_name.match?(/\A[0-9a-fA-F]{6}\z/)
@@ -417,36 +421,36 @@ module Przn
         case block[:type]
         when :heading
           scale = block[:level] == 1 ? KittyText::HEADING_SCALES[1] : DEFAULT_SCALE
-          h += SCALE_TO_PT[scale] + (block[:level] == 1 ? heading_margin(SCALE_TO_PT[scale]) : 4)
+          h += @scale_to_pt[scale] + (block[:level] == 1 ? heading_margin(@scale_to_pt[scale]) : 4)
         when :paragraph
           scale = max_inline_scale(block[:content]) || DEFAULT_SCALE
-          h += SCALE_TO_PT[scale] + 2
+          h += @scale_to_pt[scale] + 2
         when :code_block
           lines = block[:content].lines.size
-          pt = SCALE_TO_PT[DEFAULT_SCALE] * 0.7
+          pt = @scale_to_pt[DEFAULT_SCALE] * 0.7
           h += lines * pt * 1.4 + 16 + 6
         when :unordered_list
-          h += block[:items].size * (SCALE_TO_PT[DEFAULT_SCALE] + 6)
+          h += block[:items].size * (@scale_to_pt[DEFAULT_SCALE] + 6)
         when :ordered_list
-          h += block[:items].size * (SCALE_TO_PT[DEFAULT_SCALE] + 6)
+          h += block[:items].size * (@scale_to_pt[DEFAULT_SCALE] + 6)
         when :definition_list
-          pt = SCALE_TO_PT[DEFAULT_SCALE]
+          pt = @scale_to_pt[DEFAULT_SCALE]
           h += pt + 2 + block[:definition].lines.size * (pt + 2) + 4
         when :blockquote
-          pt = SCALE_TO_PT[DEFAULT_SCALE]
+          pt = @scale_to_pt[DEFAULT_SCALE]
           h += block[:content].lines.size * (pt + 2) + 4
         when :table
-          pt = SCALE_TO_PT[DEFAULT_SCALE] * 0.8
+          pt = @scale_to_pt[DEFAULT_SCALE] * 0.8
           rows = (block[:header] ? 1 : 0) + block[:rows].size
           h += rows * pt * 1.6 + 4
         when :image
           h += PAGE_HEIGHT * 0.4
         when :blank
-          h += SCALE_TO_PT[DEFAULT_SCALE]
+          h += @scale_to_pt[DEFAULT_SCALE]
         when :align
           # no height
         else
-          h += SCALE_TO_PT[DEFAULT_SCALE]
+          h += @scale_to_pt[DEFAULT_SCALE]
         end
       end
       h
