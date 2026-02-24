@@ -198,14 +198,14 @@ module Przn
         scale = KittyText::HEADING_SCALES[1]
         pt = @scale_to_pt[scale]
         formatted = build_formatted_text(text, pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
-        pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, align: :center, overflow: :shrink_to_fit
-        y - pt - heading_margin(pt)
+        h = render_formatted(pdf, formatted, at: [margin_x, y], width: content_width, align: :center)
+        y - h - heading_margin(pt)
       else
         pt = @scale_to_pt[DEFAULT_SCALE]
         prefix = [{text: bullet, size: pt, color: @heading_color, styles: [:bold]}]
         formatted = prefix + build_formatted_text(text, pt)
-        pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
-        y - pt - 4
+        h = render_formatted(pdf, formatted, at: [margin_x, y], width: content_width)
+        y - h - 4
       end
     end
 
@@ -216,8 +216,8 @@ module Przn
       formatted = build_formatted_text(text, pt)
       align_sym = align || :left
 
-      pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, align: align_sym, overflow: :shrink_to_fit
-      y - pt - 2
+      h = render_formatted(pdf, formatted, at: [margin_x, y], width: content_width, align: align_sym)
+      y - h - 2
     end
 
     def render_code_block(pdf, block, margin_x, content_width, y)
@@ -250,8 +250,8 @@ module Przn
         indent = depth * pt
         prefix = [{text: bullet, size: pt, color: @fg_color}]
         formatted = prefix + build_formatted_text(item[:text], pt)
-        pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
-        y -= pt + 6
+        h = render_formatted(pdf, formatted, at: [margin_x + indent, y], width: content_width - indent)
+        y -= h + 6
       end
       y
     end
@@ -263,8 +263,8 @@ module Przn
         indent = depth * pt
         prefix = [{text: "#{i + 1}. ", size: pt, color: @fg_color}]
         formatted = prefix + build_formatted_text(item[:text], pt)
-        pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
-        y -= pt + 6
+        h = render_formatted(pdf, formatted, at: [margin_x + indent, y], width: content_width - indent)
+        y -= h + 6
       end
       y
     end
@@ -274,15 +274,15 @@ module Przn
 
       # Term (bold)
       formatted = build_formatted_text(block[:term], pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
-      pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
-      y -= pt + 2
+      h = render_formatted(pdf, formatted, at: [margin_x, y], width: content_width)
+      y -= h + 2
 
       # Definition (indented)
       indent = pt * 1.5
       block[:definition].each_line do |line|
         formatted = build_formatted_text(line.chomp, pt)
-        pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
-        y -= pt + 2
+        h = render_formatted(pdf, formatted, at: [margin_x + indent, y], width: content_width - indent)
+        y -= h + 2
       end
       y - 4
     end
@@ -292,14 +292,15 @@ module Przn
       indent = pt
 
       block[:content].each_line do |line|
+        formatted = build_formatted_text(line.chomp, pt).map { |f| f.merge(color: @dim_color) }
+        h = render_formatted(pdf, formatted, at: [margin_x + indent, y], width: content_width - indent)
+
         # Draw pipe
         pdf.fill_color @dim_color
-        pdf.fill_rectangle [margin_x, y], 2, pt
+        pdf.fill_rectangle [margin_x, y], 2, h
         pdf.fill_color @fg_color
 
-        formatted = build_formatted_text(line.chomp, pt).map { |f| f.merge(color: @dim_color) }
-        pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
-        y -= pt + 2
+        y -= h + 2
       end
       y - 4
     end
@@ -454,6 +455,16 @@ module Przn
         end
       end
       h
+    end
+
+    # Render formatted text and return actual rendered height
+    def render_formatted(pdf, formatted, at:, width:, align: :left)
+      box = Prawn::Text::Formatted::Box.new(
+        formatted, at: at, width: width, align: align,
+        overflow: :shrink_to_fit, document: pdf
+      )
+      box.render
+      box.height
     end
 
     def bullet
