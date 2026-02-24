@@ -260,6 +260,73 @@ class PdfExporterTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "fc_find" do
+    def exporter
+      @exporter ||= Przn::PdfExporter.new(Przn::Parser.parse("# dummy\n"))
+    end
+
+    test "returns nil for non-existent family" do
+      assert_nil exporter.send(:fc_find, "NonExistentFontFamily12345")
+    end
+
+    test "prefers Regular style by default" do
+      path = exporter.send(:fc_find, "PlemolJP35 Console NF")
+      return unless path  # skip if font not installed
+
+      assert_match(/-Regular\b/, File.basename(path))
+    end
+
+    test "prefers Bold style when requested" do
+      path = exporter.send(:fc_find, "PlemolJP35 Console NF", style: 'Bold')
+      return unless path  # skip if font not installed
+
+      assert_match(/-Bold\b/, File.basename(path))
+    end
+
+    test "returns .ttf or .ttc only" do
+      path = exporter.send(:fc_find, "PlemolJP35 Console NF")
+      return unless path
+
+      assert path.end_with?('.ttf', '.ttc'), "Expected .ttf or .ttc, got #{path}"
+    end
+
+    test "falls back to first path when no style match" do
+      # Noto Emoji has no -Regular variant in filename; should still return a path
+      path = exporter.send(:fc_find, "Noto Emoji")
+      return unless path
+
+      assert path.end_with?('.ttf', '.ttc')
+    end
+  end
+
+  sub_test_case "find_emoji_font" do
+    def exporter
+      @exporter ||= Przn::PdfExporter.new(Przn::Parser.parse("# dummy\n"))
+    end
+
+    test "returns a font with glyf outlines" do
+      path = exporter.send(:find_emoji_font)
+      return unless path  # skip if no emoji font installed
+
+      ttf = TTFunk::File.open(path)
+      assert ttf.directory.tables.key?('glyf'), "Emoji font should have glyf outlines"
+    end
+
+    test "does not return Apple Color Emoji" do
+      path = exporter.send(:find_emoji_font)
+      return unless path
+
+      refute_match(/Apple Color Emoji/, path)
+    end
+  end
+
+  sub_test_case "emoji export" do
+    test "exports slide with emoji" do
+      path = export("# Hello 🎉\n\nWorld 🚀\n")
+      assert_pdf path
+    end
+  end
+
   sub_test_case "full sample files" do
     test "exports sample/sample.md" do
       sample = File.join(File.dirname(__dir__), 'sample', 'sample.md')
