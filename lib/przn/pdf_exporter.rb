@@ -236,7 +236,9 @@ module Przn
 
       code_y = y - padding
       code_lines.each do |line|
-        pdf.text_box line, at: [margin_x + padding, code_y], width: content_width - padding * 2, height: line_height, size: pt, color: @fg_color, overflow: :shrink_to_fit
+        # Replace leading spaces with non-breaking spaces to preserve indentation
+        preserved = line.sub(/\A +/) { |m| "\u00A0" * m.length }
+        pdf.text_box preserved, at: [margin_x + padding, code_y], width: content_width - padding * 2, height: line_height, size: pt, color: @fg_color, overflow: :shrink_to_fit
         code_y -= line_height
       end
 
