@@ -31,7 +31,8 @@ module Przn
       @heading_color = @theme.colors[:heading] || @fg_color
     end
 
-    # Prawn's ttfunk requires TrueType outlines (glyf table), not CFF-based fonts
+    # Fallback font paths when fc-match is not available.
+    # Prawn's ttfunk requires TrueType outlines (glyf table), not CFF-based fonts.
     FONT_SEARCH_PATHS = [
       -> { File.join(Dir.home, 'Library/Fonts/NotoSansJP-Regular.ttf') },
       -> { Dir.glob('/usr/share/fonts/**/NotoSansCJK-Regular.ttc').first },
@@ -40,6 +41,8 @@ module Przn
       -> { '/Library/Fonts/Arial Unicode.ttf' },
       -> { '/System/Library/Fonts/Supplemental/Arial Unicode.ttf' },
     ].freeze
+
+    FALLBACK_FONT_FAMILIES = %w[NotoSansCJK NotoSansJP HackGen].freeze
 
     def export(output_path)
       require 'prawn'
@@ -62,7 +65,7 @@ module Przn
     private
 
     def register_fonts(pdf)
-      font_path = find_cjk_font
+      font_path = find_font
       return unless font_path
 
       if font_path.end_with?('.ttc')
@@ -74,8 +77,7 @@ module Przn
           }
         )
       else
-        bold_path = font_path.sub(/Regular|Medium/, 'Bold').sub(/-[^-]*\./, '-Bold.')
-        bold_path = font_path unless File.exist?(bold_path)
+        bold_path = find_bold_font(font_path)
         pdf.font_families.update(
           'CJK' => {
             normal: font_path,
@@ -89,23 +91,45 @@ module Przn
       @font_registered = true
     end
 
-    def find_cjk_font
-      if (family = @theme.font[:family])
-        theme_paths = [
-          -> { File.join(Dir.home, "Library/Fonts/#{family}-Regular.ttf") },
-          -> { Dir.glob("/usr/share/fonts/**/#{family}-Regular.ttf").first },
-          -> { Dir.glob("/usr/share/fonts/**/#{family}-Regular.ttc").first },
-        ]
-        theme_paths.each do |finder|
-          path = finder.call
-          return path if path && File.exist?(path)
-        end
+    def find_font
+      family = @theme.font[:family]
+
+      if family
+        path = fc_match(family)
+        return path if path
+      end
+
+      FALLBACK_FONT_FAMILIES.each do |name|
+        path = fc_match(name)
+        return path if path
       end
 
       FONT_SEARCH_PATHS.each do |finder|
         path = finder.call
         return path if path && File.exist?(path)
       end
+      nil
+    end
+
+    def find_bold_font(normal_path)
+      family = @theme.font[:family]
+      if family
+        path = fc_match("#{family}:style=Bold")
+        return path if path
+      end
+
+      bold_path = normal_path.sub(/Regular|Medium/, 'Bold').sub(/-[^-]*\./, '-Bold.')
+      File.exist?(bold_path) ? bold_path : normal_path
+    end
+
+    # Resolve a font query to a .ttf/.ttc path via fc-match
+    def fc_match(query)
+      path = IO.popen(['fc-match', query, '--format=%{file}'], &:read)&.chomp
+      return nil if path.nil? || path.empty?
+      return nil unless path.end_with?('.ttf', '.ttc')
+      return nil unless File.exist?(path)
+      path
+    rescue Errno::ENOENT
       nil
     end
 
