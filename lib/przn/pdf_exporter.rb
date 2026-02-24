@@ -193,13 +193,13 @@ module Przn
       if block[:level] == 1
         scale = KittyText::HEADING_SCALES[1]
         pt = SCALE_TO_PT[scale]
-        formatted = build_formatted_text(text, pt)
+        formatted = build_formatted_text(text, pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, align: :center, overflow: :shrink_to_fit
         y - pt - heading_margin(pt)
       else
         pt = SCALE_TO_PT[DEFAULT_SCALE]
         prefix = [{text: bullet, size: pt, color: @heading_color, styles: [:bold]}]
-        formatted = prefix + build_formatted_text(text, pt)
+        formatted = prefix + build_formatted_text(text, pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
         y - pt - 4
       end
