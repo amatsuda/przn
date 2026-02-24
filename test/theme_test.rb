@@ -6,6 +6,7 @@ require "tmpdir"
 class ThemeTest < Test::Unit::TestCase
   def setup
     @tmpdir = Dir.mktmpdir
+    @defaults = Przn::Theme.default
   end
 
   def teardown
@@ -13,10 +14,10 @@ class ThemeTest < Test::Unit::TestCase
   end
 
   sub_test_case ".default" do
-    test "returns theme with default colors" do
+    test "returns theme with colors from default_theme.yml" do
       theme = Przn::Theme.default
-      assert_equal '1e1e2e', theme.colors[:background]
-      assert_equal 'cdd6f4', theme.colors[:foreground]
+      assert_equal '000000', theme.colors[:background]
+      assert_equal 'ffffff', theme.colors[:foreground]
       assert_equal '313244', theme.colors[:code_bg]
       assert_equal '6c7086', theme.colors[:dim]
       assert_equal 'a6e3a1', theme.colors[:inline_code]
@@ -53,10 +54,10 @@ class ThemeTest < Test::Unit::TestCase
 
       theme = Przn::Theme.load(theme_path)
       assert_equal 'ff0000', theme.colors[:background]
-      assert_equal 'cdd6f4', theme.colors[:foreground]
-      assert_equal '313244', theme.colors[:code_bg]
-      assert_equal '6c7086', theme.colors[:dim]
-      assert_equal 'a6e3a1', theme.colors[:inline_code]
+      assert_equal @defaults.colors[:foreground], theme.colors[:foreground]
+      assert_equal @defaults.colors[:code_bg], theme.colors[:code_bg]
+      assert_equal @defaults.colors[:dim], theme.colors[:dim]
+      assert_equal @defaults.colors[:inline_code], theme.colors[:inline_code]
       assert_nil theme.font[:family]
     end
 
@@ -64,8 +65,8 @@ class ThemeTest < Test::Unit::TestCase
       write_theme ""
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal '1e1e2e', theme.colors[:background]
-      assert_equal 'cdd6f4', theme.colors[:foreground]
+      assert_equal @defaults.colors[:background], theme.colors[:background]
+      assert_equal @defaults.colors[:foreground], theme.colors[:foreground]
     end
 
     test "missing file raises error" do

@@ -175,7 +175,7 @@ module Przn
         y - pt - heading_margin(pt)
       else
         pt = SCALE_TO_PT[DEFAULT_SCALE]
-        prefix = [{text: "\u30FB", size: pt, color: @heading_color, styles: [:bold]}]
+        prefix = [{text: bullet, size: pt, color: @heading_color, styles: [:bold]}]
         formatted = prefix + build_formatted_text(text, pt)
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
         y - pt - 4
@@ -221,7 +221,7 @@ module Przn
       block[:items].each do |item|
         depth = item[:depth] || 0
         indent = depth * pt
-        prefix = [{text: "\u30FB", size: pt, color: @fg_color}]
+        prefix = [{text: bullet, size: pt, color: @fg_color}]
         formatted = prefix + build_formatted_text(item[:text], pt)
         pdf.formatted_text_box formatted, at: [margin_x + indent, y], width: content_width - indent, overflow: :shrink_to_fit
         y -= pt + 6
@@ -427,6 +427,10 @@ module Przn
         end
       end
       h
+    end
+
+    def bullet
+      @font_registered ? "\u30FB" : "-"
     end
 
   end
