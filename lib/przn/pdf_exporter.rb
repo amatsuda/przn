@@ -65,7 +65,7 @@ module Przn
     private
 
     def register_fonts(pdf)
-      font_path = find_font
+      font_path, family = find_font
       return unless font_path
 
       if font_path.end_with?('.ttc')
@@ -77,7 +77,7 @@ module Przn
           }
         )
       else
-        bold_path = find_bold_font(font_path)
+        bold_path = find_bold_font(font_path, family)
         pdf.font_families.update(
           'CJK' => {
             normal: font_path,
@@ -96,23 +96,22 @@ module Przn
 
       if family
         path = fc_match(family)
-        return path if path
+        return [path, family] if path
       end
 
       FALLBACK_FONT_FAMILIES.each do |name|
         path = fc_match(name)
-        return path if path
+        return [path, name] if path
       end
 
       FONT_SEARCH_PATHS.each do |finder|
         path = finder.call
-        return path if path && File.exist?(path)
+        return [path, nil] if path && File.exist?(path)
       end
-      nil
+      [nil, nil]
     end
 
-    def find_bold_font(normal_path)
-      family = @theme.font[:family]
+    def find_bold_font(normal_path, family)
       if family
         path = fc_match("#{family}:style=Bold")
         return path if path
