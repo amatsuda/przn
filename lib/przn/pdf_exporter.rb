@@ -93,18 +93,20 @@ module Przn
 
       pdf.font 'CJK'
       @font_registered = true
+
+      register_emoji_fallback(pdf, font_path)
     end
 
     def find_font
       family = @theme.font[:family]
 
       if family
-        path = fc_match(family)
+        path = fc_find(family)
         return [path, family] if path
       end
 
       FALLBACK_FONT_FAMILIES.each do |name|
-        path = fc_match(name)
+        path = fc_find(name)
         return [path, name] if path
       end
 
@@ -117,7 +119,7 @@ module Przn
 
     def find_bold_font(normal_path, family)
       if family
-        path = fc_match("#{family}:style=Bold")
+        path = fc_find(family, style: 'Bold')
         return path if path
       end
 
@@ -125,13 +127,46 @@ module Przn
       File.exist?(bold_path) ? bold_path : normal_path
     end
 
-    # Resolve a font query to a .ttf/.ttc path via fc-match
-    def fc_match(query)
-      path = IO.popen(['fc-match', query, '--format=%{file}'], &:read)&.chomp
-      return nil if path.nil? || path.empty?
-      return nil unless path.end_with?('.ttf', '.ttc')
-      return nil unless File.exist?(path)
-      path
+    def register_emoji_fallback(pdf, primary_font_path)
+      emoji_path = find_emoji_font
+      return unless emoji_path
+      return if emoji_path == primary_font_path
+
+      pdf.font_families.update(
+        'Emoji' => { normal: emoji_path, bold: emoji_path, italic: emoji_path }
+      )
+      pdf.fallback_fonts = ['Emoji']
+    rescue
+      nil
+    end
+
+    EMOJI_FONT_FAMILIES = ['Noto Emoji'].freeze
+
+    def find_emoji_font
+      EMOJI_FONT_FAMILIES.each do |name|
+        path = fc_find(name)
+        next unless path
+        # Only use fonts with glyf outlines (not SBIX/COLR bitmap-only fonts)
+        ttf = TTFunk::File.open(path)
+        return path if ttf.directory.tables.key?('glyf')
+      rescue
+        next
+      end
+      nil
+    end
+
+    # Find a font file by family name using fc-list.
+    # fc-list does exact family matching (unlike fc-match which always returns something).
+    # We parse fc-list output directly to get the file path, optionally filtering by style.
+    def fc_find(family, style: nil)
+      pattern = style ? "#{family}:style=#{style}" : family
+      args = ['fc-list', pattern, '--format=%{file}\n']
+
+      output = IO.popen(args, &:read)&.strip
+      return nil if output.nil? || output.empty?
+
+      # Pick the first .ttf or .ttc path from fc-list results
+      output.lines.map(&:strip).find { |p| p.end_with?('.ttf', '.ttc') && File.exist?(p) }
     rescue Errno::ENOENT
       nil
     end
