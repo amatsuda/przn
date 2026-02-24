@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "prawn"
 require "tmpdir"
 
 class PdfExporterTest < Test::Unit::TestCase
