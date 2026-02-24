@@ -199,7 +199,7 @@ module Przn
       else
         pt = SCALE_TO_PT[DEFAULT_SCALE]
         prefix = [{text: bullet, size: pt, color: @heading_color, styles: [:bold]}]
-        formatted = prefix + build_formatted_text(text, pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
+        formatted = prefix + build_formatted_text(text, pt)
         pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
         y - pt - 4
       end
@@ -269,7 +269,7 @@ module Przn
       pt = SCALE_TO_PT[DEFAULT_SCALE]
 
       # Term (bold)
-      formatted = build_formatted_text(block[:term], pt).map { |f| f.merge(styles: (f[:styles] || []) + [:bold]) }
+      formatted = build_formatted_text(block[:term], pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
       pdf.formatted_text_box formatted, at: [margin_x, y], width: content_width, overflow: :shrink_to_fit
       y -= pt + 2
 
