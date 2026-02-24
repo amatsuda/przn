@@ -320,6 +320,42 @@ class PdfExporterTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "CJK line wrapping" do
+    test "exports long Japanese text without error" do
+      long_text = "これは長い日本語のテキストで、行の折り返しが正しく動作するかテストしています。"
+      path = export("# スライド\n\n#{long_text}\n")
+      assert_pdf path
+    end
+
+    test "scan_pattern tokenizes CJK characters individually" do
+      # Ensure Prawn is loaded and patched
+      require 'prawn'
+      Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
+
+      lw = Prawn::Text::Formatted::LineWrap.new
+      tokens = lw.tokenize("Hello世界Test")
+      assert_equal ["Hello", "世", "界", "Test"], tokens
+    end
+
+    test "scan_pattern keeps ASCII words intact" do
+      require 'prawn'
+      Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
+
+      lw = Prawn::Text::Formatted::LineWrap.new
+      tokens = lw.tokenize("hello world")
+      assert_equal ["hello", " ", "world"], tokens
+    end
+
+    test "scan_pattern splits pure CJK into individual characters" do
+      require 'prawn'
+      Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
+
+      lw = Prawn::Text::Formatted::LineWrap.new
+      tokens = lw.tokenize("日本語")
+      assert_equal ["日", "本", "語"], tokens
+    end
+  end
+
   sub_test_case "emoji export" do
     test "exports slide with emoji" do
       path = export("# Hello 🎉\n\nWorld 🚀\n")

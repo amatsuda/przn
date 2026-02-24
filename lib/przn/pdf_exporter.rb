@@ -1,5 +1,37 @@
 # frozen_string_literal: true
 
+# Patch Prawn's line wrapping to break at CJK character boundaries.
+# Prawn's default scan_pattern only breaks at spaces and hyphens,
+# which prevents wrapping for languages like Japanese that have no word spaces.
+module PrawnCJKLineWrap
+  private
+
+  CJK_CHARS = "\u3000-\u9FFF\uF900-\uFAFF\uFF01-\uFF60"
+
+  def scan_pattern(encoding = ::Encoding::UTF_8)
+    ebc = break_chars(encoding)
+    eshy = soft_hyphen(encoding)
+    ehy = hyphen(encoding)
+    ews = whitespace(encoding)
+
+    patterns = [
+      "[^#{CJK_CHARS}#{ebc}]+#{eshy}",
+      "[^#{CJK_CHARS}#{ebc}]+#{ehy}+",
+      "[^#{CJK_CHARS}#{ebc}]+",
+      "[#{CJK_CHARS}]",
+      "[#{ews}]+",
+      "#{ehy}+[^#{ebc}]*",
+      eshy.to_s,
+    ]
+
+    pattern = patterns
+      .map { |p| p.encode(encoding) }
+      .join('|')
+
+    Regexp.new(pattern)
+  end
+end
+
 module Przn
   class PdfExporter
     PAGE_WIDTH  = 960
@@ -50,6 +82,7 @@ module Przn
 
     def export(output_path)
       require 'prawn'
+      Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
 
       pdf = Prawn::Document.new(
         page_size: [PAGE_WIDTH, PAGE_HEIGHT],
