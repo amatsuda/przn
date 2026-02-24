@@ -157,16 +157,17 @@ module Przn
 
     # Find a font file by family name using fc-list.
     # fc-list does exact family matching (unlike fc-match which always returns something).
-    # We parse fc-list output directly to get the file path, optionally filtering by style.
+    # We parse fc-list output directly to get the file path, preferring the requested style.
     def fc_find(family, style: nil)
-      pattern = style ? "#{family}:style=#{style}" : family
-      args = ['fc-list', pattern, '--format=%{file}\n']
-
-      output = IO.popen(args, &:read)&.strip
+      output = IO.popen(['fc-list', family, '--format=%{file}\n'], &:read)&.strip
       return nil if output.nil? || output.empty?
 
-      # Pick the first .ttf or .ttc path from fc-list results
-      output.lines.map(&:strip).find { |p| p.end_with?('.ttf', '.ttc') && File.exist?(p) }
+      paths = output.lines.map(&:strip).uniq.select { |p| p.end_with?('.ttf', '.ttc') && File.exist?(p) }
+      return nil if paths.empty?
+
+      # Prefer the path whose filename matches the requested style (default: Regular)
+      keyword = style || 'Regular'
+      paths.find { |p| File.basename(p) =~ /[-_]#{keyword}\b/i } || paths.first
     rescue Errno::ENOENT
       nil
     end
