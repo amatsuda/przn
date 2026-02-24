@@ -9,6 +9,9 @@ module PrawnCJKLineWrap
   CJK_CHARS = "\u3000-\u9FFF\uF900-\uFAFF\uFF01-\uFF60"
 
   def scan_pattern(encoding = ::Encoding::UTF_8)
+    # CJK wrapping only applies to UTF-8; fall back to original for other encodings (e.g. AFM fonts)
+    return super unless encoding == ::Encoding::UTF_8
+
     ebc = break_chars(encoding)
     eshy = soft_hyphen(encoding)
     ehy = hyphen(encoding)
@@ -24,11 +27,7 @@ module PrawnCJKLineWrap
       eshy.to_s,
     ]
 
-    pattern = patterns
-      .map { |p| p.encode(encoding) }
-      .join('|')
-
-    Regexp.new(pattern)
+    Regexp.new(patterns.join('|'))
   end
 end
 
