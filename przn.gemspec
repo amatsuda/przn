@@ -12,7 +12,6 @@ Gem::Specification.new do |spec|
   spec.description = 'A terminal-based presentation tool that renders Markdown slides with Kitty text sizing protocol support for beautifully scaled headers'
   spec.homepage = 'https://github.com/amatsuda/przn'
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.metadata["source_code_uri"] = spec.homepage
 
@@ -29,8 +28,5 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "prawn", "~> 2.4"
-
-  # For more information and examples about making a new gem, check out our
-  # guide at: https://bundler.io/guides/creating_gem.html
+  spec.add_dependency "prawn"
 end
