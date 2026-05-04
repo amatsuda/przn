@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "tempfile"
 
 class RendererTest < Test::Unit::TestCase
   def setup
@@ -143,6 +144,98 @@ class RendererTest < Test::Unit::TestCase
         [:bold, "f"],                  # 1 char * 2 = 2
       ]
       assert_equal 18, @renderer.send(:segments_visible_cells, segments, 2)
+    end
+  end
+
+  sub_test_case "image cache" do
+    def setup
+      super
+      @tmp = Tempfile.new(["renderer_cache_img", ".png"])
+      @tmp.write("\x89PNG\r\n\x1a\n")  # not a real PNG, but enough for File.mtime
+      @tmp.flush
+      @path = @tmp.path
+    end
+
+    def teardown
+      @tmp.close!
+    end
+
+    test "kitty: identical args trigger ImageUtil.kitty_icat once" do
+      calls = 0
+      Przn::ImageUtil.define_singleton_method(:kitty_icat) do |path, cols:, rows:, x:, y:|
+        calls += 1
+        "PAYLOAD"
+      end
+      begin
+        a = @renderer.send(:cached_kitty_icat, @path, cols: 10, rows: 5, x: 1, y: 2)
+        b = @renderer.send(:cached_kitty_icat, @path, cols: 10, rows: 5, x: 1, y: 2)
+        assert_equal "PAYLOAD", a
+        assert_equal "PAYLOAD", b
+        assert_equal 1, calls
+      ensure
+        Przn::ImageUtil.singleton_class.remove_method(:kitty_icat)
+      end
+    end
+
+    test "kitty: different sizing keys produce separate cache entries" do
+      calls = 0
+      Przn::ImageUtil.define_singleton_method(:kitty_icat) do |path, cols:, rows:, x:, y:|
+        calls += 1
+        "data-#{cols}x#{rows}"
+      end
+      begin
+        @renderer.send(:cached_kitty_icat, @path, cols: 10, rows: 5, x: 0, y: 0)
+        @renderer.send(:cached_kitty_icat, @path, cols: 20, rows: 5, x: 0, y: 0)
+        @renderer.send(:cached_kitty_icat, @path, cols: 10, rows: 5, x: 0, y: 0) # hit
+        assert_equal 2, calls
+      ensure
+        Przn::ImageUtil.singleton_class.remove_method(:kitty_icat)
+      end
+    end
+
+    test "kitty: cache invalidates when file mtime changes" do
+      calls = 0
+      Przn::ImageUtil.define_singleton_method(:kitty_icat) do |path, cols:, rows:, x:, y:|
+        calls += 1
+        "v#{calls}"
+      end
+      begin
+        @renderer.send(:cached_kitty_icat, @path, cols: 10, rows: 5, x: 0, y: 0)
+        File.utime(Time.now, Time.now + 60, @path)  # bump mtime
+        @renderer.send(:cached_kitty_icat, @path, cols: 10, rows: 5, x: 0, y: 0)
+        assert_equal 2, calls
+      ensure
+        Przn::ImageUtil.singleton_class.remove_method(:kitty_icat)
+      end
+    end
+
+    test "sixel: identical args trigger ImageUtil.sixel_encode once" do
+      calls = 0
+      Przn::ImageUtil.define_singleton_method(:sixel_encode) do |path, width:, height:|
+        calls += 1
+        "SIXEL"
+      end
+      begin
+        @renderer.send(:cached_sixel_encode, @path, width: 100, height: 50)
+        @renderer.send(:cached_sixel_encode, @path, width: 100, height: 50)
+        assert_equal 1, calls
+      ensure
+        Przn::ImageUtil.singleton_class.remove_method(:sixel_encode)
+      end
+    end
+
+    test "caches a nil result so the subprocess isn't re-run on failure" do
+      calls = 0
+      Przn::ImageUtil.define_singleton_method(:kitty_icat) do |path, **_kw|
+        calls += 1
+        nil
+      end
+      begin
+        2.times { @renderer.send(:cached_kitty_icat, @path, cols: 1, rows: 1, x: 0, y: 0) }
+        assert_equal 1, calls
+      ensure
+        Przn::ImageUtil.singleton_class.remove_method(:kitty_icat)
+      end
     end
   end
 end

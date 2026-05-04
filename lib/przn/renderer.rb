@@ -19,6 +19,7 @@ module Przn
       @terminal = terminal
       @base_dir = base_dir
       @theme = theme
+      @image_cache = {}
     end
 
     def render(slide, current:, total:)
@@ -311,13 +312,13 @@ module Przn
       x = [(width - target_cols) / 2, 0].max
 
       if ImageUtil.kitty_terminal?
-        data = ImageUtil.kitty_icat(path, cols: target_cols, rows: target_rows, x: x, y: row - 1)
+        data = cached_kitty_icat(path, cols: target_cols, rows: target_rows, x: x, y: row - 1)
         @terminal.write data if data && !data.empty?
       elsif ImageUtil.sixel_available?
         @terminal.move_to(row, x + 1)
         target_pixel_w = target_cols * cell_w
         target_pixel_h = target_rows * cell_h
-        sixel = ImageUtil.sixel_encode(path, width: target_pixel_w, height: target_pixel_h)
+        sixel = cached_sixel_encode(path, width: target_pixel_w, height: target_pixel_h)
         @terminal.write sixel if sixel && !sixel.empty?
       end
 
@@ -327,6 +328,27 @@ module Przn
     def resolve_image_path(path)
       return path if File.absolute_path?(path) == path
       File.expand_path(path, @base_dir)
+    end
+
+    # Memoize the encoded escape-sequence bytes so revisiting a slide
+    # skips both the subprocess fork and the image decode/encode work.
+    # Keyed by file mtime so edits to the source image invalidate.
+    def cached_kitty_icat(path, cols:, rows:, x:, y:)
+      key = [:kitty, path, image_mtime(path), cols, rows, x, y]
+      return @image_cache[key] if @image_cache.key?(key)
+      @image_cache[key] = ImageUtil.kitty_icat(path, cols: cols, rows: rows, x: x, y: y)
+    end
+
+    def cached_sixel_encode(path, width:, height:)
+      key = [:sixel, path, image_mtime(path), width, height]
+      return @image_cache[key] if @image_cache.key?(key)
+      @image_cache[key] = ImageUtil.sixel_encode(path, width: width, height: height)
+    end
+
+    def image_mtime(path)
+      File.mtime(path).to_f
+    rescue Errno::ENOENT
+      nil
     end
 
     def content_left(width)
