@@ -74,18 +74,25 @@ module Przn
 
       if block[:level] == 1
         scale = KittyText::HEADING_SCALES[1]
-        visible_width = display_width(text) * scale
-        pad = [(width - visible_width) / 2, 0].max
-        @terminal.move_to(row, pad + 1)
-        @terminal.write "#{ANSI[:bold]}#{KittyText.sized(text, s: scale)}#{ANSI[:reset]}"
-        row + scale + 4
+        max_w = max_text_width(width, 0, scale)
+        segments = Parser.parse_inline(text)
+        wrapped = wrap_segments(segments, max_w, scale)
+
+        wrapped.each do |line_segs|
+          vis = segments_visible_cells(line_segs, scale)
+          pad = [(width - vis) / 2, 0].max
+          @terminal.move_to(row, pad + 1)
+          @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale)}#{ANSI[:reset]}"
+          row += scale
+        end
+        row + 4
       else
         left = content_left(width)
         prefix = "・"
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
         segments = Parser.parse_inline(text)
-        wrapped = wrap_segments(segments, max_w)
+        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left)
@@ -112,7 +119,7 @@ module Przn
 
       max_w = max_text_width(width, left, scale)
       segments = Parser.parse_inline(text)
-      wrapped = wrap_segments(segments, max_w)
+      wrapped = wrap_segments(segments, max_w, scale)
 
       wrapped.each do |line_segs|
         @terminal.move_to(row, left + 1)
@@ -152,7 +159,7 @@ module Przn
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w)
+        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left)
@@ -178,7 +185,7 @@ module Przn
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w)
+        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left)
@@ -199,7 +206,7 @@ module Przn
       max_w = max_text_width(width, left, DEFAULT_SCALE)
 
       segments = Parser.parse_inline(block[:term])
-      wrapped = wrap_segments(segments, max_w)
+      wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
       wrapped.each do |line_segs|
         @terminal.move_to(row, left)
         @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
@@ -209,7 +216,7 @@ module Przn
       def_max_w = [max_w - 4, 1].max
       block[:definition].each_line do |line|
         segments = Parser.parse_inline(line.chomp)
-        wrapped = wrap_segments(segments, def_max_w)
+        wrapped = wrap_segments(segments, def_max_w, DEFAULT_SCALE)
         wrapped.each do |line_segs|
           @terminal.move_to(row, left + 4)
           @terminal.write render_segments_scaled(line_segs, DEFAULT_SCALE)
@@ -228,7 +235,7 @@ module Przn
       block[:content].each_line do |line|
         text = line.chomp
         segments = [[:text, text]]
-        wrapped = wrap_segments(segments, max_w)
+        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left + 1)
@@ -392,43 +399,62 @@ module Przn
       render_segments_scaled(Parser.parse_inline(text), para_scale)
     end
 
-    # Wrap parsed inline segments into lines that fit within max_width display units
-    def wrap_segments(segments, max_width)
+    # Wrap parsed inline segments into lines that fit within max_width units,
+    # where 1 unit = `para_scale` terminal cells. Per-segment scaling (e.g.
+    # size tags) is honored so a span with a larger scale consumes more budget.
+    def wrap_segments(segments, max_width, para_scale = DEFAULT_SCALE)
       return [segments] if max_width <= 0
 
+      max_cells = max_width * para_scale
       lines = [[]]
-      width = 0
+      used = 0
 
       segments.each do |seg|
         content = seg[1] || ""
-        seg_w = display_width(content)
+        next if content.empty?
 
-        if width + seg_w <= max_width
+        seg_scale = effective_seg_scale(seg, para_scale)
+        seg_cells = display_width(content) * seg_scale
+
+        if used + seg_cells <= max_cells
           lines.last << seg
-          width += seg_w
+          used += seg_cells
           next
         end
 
         remaining = content
         loop do
-          space = max_width - width
-          if space <= 0
+          space_cells = max_cells - used
+          if space_cells < seg_scale && used > 0
             lines << []
-            width = 0
-            space = max_width
+            used = 0
+            space_cells = max_cells
           end
 
-          chunk, remaining = split_by_display_width(remaining, space)
+          chunk_max_dw = [space_cells / seg_scale, 1].max
+          chunk, remaining = split_by_display_width(remaining, chunk_max_dw)
           lines.last << [seg[0], chunk, *Array(seg[2..])]
-          width += display_width(chunk)
+          used += display_width(chunk) * seg_scale
 
           break unless remaining
           lines << []
-          width = 0
+          used = 0
         end
       end
 
       lines
+    end
+
+    def effective_seg_scale(seg, para_scale)
+      return para_scale unless seg[0] == :tag
+      Parser::SIZE_SCALES[seg[2]] || para_scale
+    end
+
+    def segments_visible_cells(segments, para_scale)
+      segments.sum { |seg|
+        content = seg[1] || ""
+        display_width(content) * effective_seg_scale(seg, para_scale)
+      }
     end
 
     def split_by_display_width(text, max_width)
