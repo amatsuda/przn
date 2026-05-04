@@ -2,7 +2,6 @@
 
 require "test_helper"
 require "tempfile"
-require "base64"
 
 class ImageUtilTest < Test::Unit::TestCase
   def make_tmpfile(contents, ext: ".bin")
@@ -11,6 +10,10 @@ class ImageUtilTest < Test::Unit::TestCase
     f.write(contents)
     f.flush
     f
+  end
+
+  def decode64(str)
+    str.unpack1("m")
   end
 
   sub_test_case "png?" do
@@ -54,13 +57,13 @@ class ImageUtilTest < Test::Unit::TestCase
       assert_equal "100", pairs["f"]
       assert_equal "42",  pairs["i"]
       assert_equal "2",   pairs["q"]
-      assert_equal "/tmp/foo.png", Base64.decode64(payload)
+      assert_equal "/tmp/foo.png", decode64(payload)
     end
 
     test "uses an absolute path even when given a relative one" do
       out = Przn::ImageUtil.kitty_upload_png("foo.png", image_id: 1)
       _, payload = out[3..-3].split(";", 2)
-      decoded = Base64.decode64(payload)
+      decoded = decode64(payload)
       assert_equal File.expand_path("foo.png"), decoded
     end
   end
