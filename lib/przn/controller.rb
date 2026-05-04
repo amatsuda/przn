@@ -6,6 +6,7 @@ module Przn
       @presentation = presentation
       @terminal = terminal
       @renderer = renderer
+      @preload_gen = 0
     end
 
     def run
@@ -34,6 +35,8 @@ module Przn
         end
       end
     ensure
+      @preload_gen += 1
+      @preload_thread&.join
       @terminal.show_cursor
       @terminal.leave_alt_screen
     end
@@ -46,6 +49,29 @@ module Przn
         current: @presentation.current,
         total: @presentation.total
       )
+      schedule_preload
+    end
+
+    # Kick off a background thread that pre-uploads images for the slides the
+    # user is most likely to visit next (the immediate neighbors). Uses a
+    # generation counter so a navigation that lands while a preload is still
+    # running causes that preload to exit early instead of stacking work.
+    def schedule_preload
+      @preload_gen += 1
+      gen = @preload_gen
+      cur = @presentation.current
+      total = @presentation.total
+      indices = [cur + 1, cur - 1].select { |i| i.between?(0, total - 1) }
+      return if indices.empty?
+
+      @preload_thread = Thread.new do
+        indices.each do |idx|
+          break if gen != @preload_gen
+          @renderer.preload(@presentation.slides[idx])
+        end
+      rescue StandardError
+        # Background work must not crash the presentation.
+      end
     end
 
     def read_key

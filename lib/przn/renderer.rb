@@ -21,36 +21,58 @@ module Przn
       @theme = theme
       @image_cache = {}
       @kitty_uploads = {}
+      @mutex = Mutex.new
     end
 
     def render(slide, current:, total:)
-      @terminal.clear
-      w = @terminal.width
-      h = @terminal.height
+      @mutex.synchronize do
+        @terminal.clear
+        w = @terminal.width
+        h = @terminal.height
 
-      row = if current == 0
-        content_height = calculate_height(slide.blocks, w)
-        usable_height = h - 1
-        [(usable_height - content_height) / 2 + 1, 1].max
-      else
-        2
-      end
-
-      pending_align = nil
-      slide.blocks.each do |block|
-        if block[:type] == :align
-          pending_align = block[:align]
+        row = if current == 0
+          content_height = calculate_height(slide.blocks, w)
+          usable_height = h - 1
+          [(usable_height - content_height) / 2 + 1, 1].max
         else
-          row = render_block(block, w, row, align: pending_align)
-          pending_align = nil
+          2
         end
+
+        pending_align = nil
+        slide.blocks.each do |block|
+          if block[:type] == :align
+            pending_align = block[:align]
+          else
+            row = render_block(block, w, row, align: pending_align)
+            pending_align = nil
+          end
+        end
+
+        status = " #{current + 1} / #{total} "
+        @terminal.move_to(h, w - status.size)
+        @terminal.write "#{ANSI[:dim]}#{status}#{ANSI[:reset]}"
+
+        @terminal.flush
       end
+    end
 
-      status = " #{current + 1} / #{total} "
-      @terminal.move_to(h, w - status.size)
-      @terminal.write "#{ANSI[:dim]}#{status}#{ANSI[:reset]}"
+    # Warm caches for a slide we expect to navigate to soon. Uploads any PNG
+    # images on the Kitty Graphics Protocol so the next render only needs a
+    # placement command. Safe to call from a background thread; serialized
+    # against `render` via the renderer's mutex so terminal writes don't
+    # interleave.
+    def preload(slide)
+      return unless ImageUtil.kitty_terminal?
 
-      @terminal.flush
+      @mutex.synchronize do
+        slide.blocks.each do |block|
+          next unless block[:type] == :image
+          path = resolve_image_path(block[:path])
+          next unless File.exist?(path) && ImageUtil.png?(path)
+          ensure_kitty_uploaded(path)
+        end
+        @terminal.flush
+      end
     end
 
     private

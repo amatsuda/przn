@@ -291,4 +291,84 @@ class RendererTest < Test::Unit::TestCase
       other&.close!
     end
   end
+
+  sub_test_case "preload" do
+    class FakeTerm2
+      attr_reader :writes, :flushes
+      def initialize; @writes = []; @flushes = 0; end
+      def write(s); @writes << s; end
+      def flush; @flushes += 1; end
+    end
+
+    def setup
+      super
+      @term = FakeTerm2.new
+      @renderer = Przn::Renderer.new(@term)
+      @png = Tempfile.new(["preload", ".png"])
+      @png.binmode
+      @png.write("\x89PNG\r\n\x1a\n".b)
+      @png.flush
+      @gif = Tempfile.new(["preload", ".gif"])
+      @gif.binmode
+      @gif.write("GIF89a".b)
+      @gif.flush
+
+      # Force kitty terminal detection
+      @orig_kitty = Przn::ImageUtil.method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+    end
+
+    def teardown
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?, @orig_kitty)
+      @png.close!
+      @gif.close!
+    end
+
+    def slide_with(blocks)
+      Struct.new(:blocks).new(blocks)
+    end
+
+    test "uploads PNG image blocks and flushes the terminal" do
+      slide = slide_with([
+        {type: :heading, level: 1, content: "Hi"},
+        {type: :image, path: @png.path, attrs: {}},
+      ])
+      @renderer.preload(slide)
+      assert_equal 1, @term.writes.size
+      assert_match(/\A\e_Ga=t,t=f,f=100,/, @term.writes[0])
+      assert_equal 1, @term.flushes
+    end
+
+    test "skips non-PNG image blocks" do
+      slide = slide_with([{type: :image, path: @gif.path, attrs: {}}])
+      @renderer.preload(slide)
+      assert_equal 0, @term.writes.size
+    end
+
+    test "skips images that don't exist on disk" do
+      slide = slide_with([{type: :image, path: "/nope/missing.png", attrs: {}}])
+      @renderer.preload(slide)
+      assert_equal 0, @term.writes.size
+    end
+
+    test "is a no-op outside Kitty terminals" do
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { false }
+      slide = slide_with([{type: :image, path: @png.path, attrs: {}}])
+      @renderer.preload(slide)
+      assert_equal 0, @term.writes.size
+      assert_equal 0, @term.flushes
+    end
+
+    test "preload populates the cache so a subsequent ensure_kitty_uploaded is a hit" do
+      slide = slide_with([{type: :image, path: @png.path, attrs: {}}])
+      @renderer.preload(slide)
+      writes_after_preload = @term.writes.size
+
+      id = @renderer.send(:ensure_kitty_uploaded, @png.path)
+      assert_equal 1, id
+      assert_equal writes_after_preload, @term.writes.size  # no new upload
+    end
+  end
 end
