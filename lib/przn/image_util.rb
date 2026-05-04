@@ -65,6 +65,30 @@ module Przn
       ENV['TERM'] == 'xterm-kitty' || ENV['TERM_PROGRAM'] == 'kitty'
     end
 
+    PNG_MAGIC = "\x89PNG\r\n\x1a\n".b.freeze
+
+    def png?(path)
+      File.open(path, 'rb') { |f| f.read(8)&.b == PNG_MAGIC }
+    rescue Errno::ENOENT
+      false
+    end
+
+    # Kitty Graphics Protocol: upload a PNG file by path with the given id.
+    # Kitty reads the file directly from disk; we just send a small APC
+    # control sequence with the base64-encoded path. Use this once per
+    # image; subsequent renders only need a placement command.
+    # https://sw.kovidgoyal.net/kitty/graphics-protocol/
+    def kitty_upload_png(path, image_id:)
+      encoded = [File.expand_path(path)].pack('m0')
+      "\e_Ga=t,t=f,f=100,i=#{image_id},q=2;#{encoded}\e\\"
+    end
+
+    # Kitty Graphics Protocol: place a previously-uploaded image at the
+    # current cursor position, scaled to fit `cols` x `rows` cells.
+    def kitty_place(image_id:, cols:, rows:)
+      "\e_Ga=p,i=#{image_id},c=#{cols},r=#{rows},q=2\e\\"
+    end
+
     # Sixel via img2sixel
     def sixel_available?
       @sixel_available = system('command -v img2sixel > /dev/null 2>&1') if @sixel_available.nil?

@@ -20,6 +20,7 @@ module Przn
       @base_dir = base_dir
       @theme = theme
       @image_cache = {}
+      @kitty_uploads = {}
     end
 
     def render(slide, current:, total:)
@@ -311,7 +312,11 @@ module Przn
 
       x = [(width - target_cols) / 2, 0].max
 
-      if ImageUtil.kitty_terminal?
+      if ImageUtil.kitty_terminal? && ImageUtil.png?(path)
+        image_id = ensure_kitty_uploaded(path)
+        @terminal.move_to(row, x + 1)
+        @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows)
+      elsif ImageUtil.kitty_terminal?
         data = cached_kitty_icat(path, cols: target_cols, rows: target_rows, x: x, y: row - 1)
         @terminal.write data if data && !data.empty?
       elsif ImageUtil.sixel_available?
@@ -349,6 +354,18 @@ module Przn
       File.mtime(path).to_f
     rescue Errno::ENOENT
       nil
+    end
+
+    # Upload a PNG to the Kitty terminal once and return the assigned image
+    # id. Subsequent renders of the same file (same mtime) reuse the id and
+    # only emit a small placement command, skipping the file-transfer cost.
+    def ensure_kitty_uploaded(path)
+      key = [path, image_mtime(path)]
+      return @kitty_uploads[key] if @kitty_uploads.key?(key)
+
+      image_id = @kitty_uploads.size + 1
+      @terminal.write ImageUtil.kitty_upload_png(path, image_id: image_id)
+      @kitty_uploads[key] = image_id
     end
 
     def content_left(width)

@@ -238,4 +238,57 @@ class RendererTest < Test::Unit::TestCase
       end
     end
   end
+
+  sub_test_case "ensure_kitty_uploaded" do
+    class FakeTerm
+      attr_reader :writes
+      def initialize; @writes = []; end
+      def write(s); @writes << s; end
+    end
+
+    def setup
+      super
+      @term = FakeTerm.new
+      @renderer = Przn::Renderer.new(@term)
+      @tmp = Tempfile.new(["kitty_upload", ".png"])
+      @tmp.binmode
+      @tmp.write("\x89PNG\r\n\x1a\n".b)
+      @tmp.flush
+      @path = @tmp.path
+    end
+
+    def teardown
+      @tmp.close!
+    end
+
+    test "uploads on first call and reuses the assigned id on subsequent calls" do
+      first  = @renderer.send(:ensure_kitty_uploaded, @path)
+      second = @renderer.send(:ensure_kitty_uploaded, @path)
+      assert_equal first, second
+      assert_equal 1, @term.writes.size
+      assert_match(/\A\e_Ga=t,t=f,f=100,i=#{first},q=2;/, @term.writes[0])
+    end
+
+    test "re-uploads with a new id when the file mtime changes" do
+      first = @renderer.send(:ensure_kitty_uploaded, @path)
+      File.utime(Time.now, Time.now + 60, @path)
+      second = @renderer.send(:ensure_kitty_uploaded, @path)
+      refute_equal first, second
+      assert_equal 2, @term.writes.size
+    end
+
+    test "assigns distinct ids to distinct files" do
+      other = Tempfile.new(["kitty_upload2", ".png"])
+      other.binmode
+      other.write("\x89PNG\r\n\x1a\n".b)
+      other.flush
+
+      a = @renderer.send(:ensure_kitty_uploaded, @path)
+      b = @renderer.send(:ensure_kitty_uploaded, other.path)
+      refute_equal a, b
+      assert_equal 2, @term.writes.size
+    ensure
+      other&.close!
+    end
+  end
 end
