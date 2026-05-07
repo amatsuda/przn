@@ -18,7 +18,7 @@ module Przn
     def initialize(terminal, base_dir: '.', theme: nil)
       @terminal = terminal
       @base_dir = base_dir
-      @theme = theme
+      @theme = theme || Theme.default
       @image_cache = {}
       @kitty_uploads = {}
       @mutex = Mutex.new
@@ -112,7 +112,7 @@ module Przn
         row + 4
       else
         left = content_left(width)
-        prefix = "・"
+        prefix = @theme.bullet
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
         segments = Parser.parse_inline(text)
@@ -178,7 +178,7 @@ module Przn
       block[:items].each do |item|
         depth = item[:depth] || 0
         indent = "  " * depth
-        prefix = "#{indent}・"
+        prefix = "#{indent}#{@theme.bullet}"
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
 

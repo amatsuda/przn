@@ -538,7 +538,7 @@ module Przn
     end
 
     def bullet
-      @font_registered ? "\u30FB" : "-"
+      @font_registered ? @theme.bullet : "-"
     end
 
   end

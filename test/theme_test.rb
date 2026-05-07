@@ -28,6 +28,10 @@ class ThemeTest < Test::Unit::TestCase
       theme = Przn::Theme.default
       assert_nil theme.font[:family]
     end
+
+    test "returns theme with default bullet" do
+      assert_equal "・", Przn::Theme.default.bullet
+    end
   end
 
   sub_test_case ".load" do
@@ -73,6 +77,23 @@ class ThemeTest < Test::Unit::TestCase
       assert_raise(ArgumentError) do
         Przn::Theme.load("/nonexistent/theme.yml")
       end
+    end
+
+    test "user file overrides the bullet" do
+      write_theme <<~YAML
+        bullet: "●"
+      YAML
+
+      assert_equal "●", Przn::Theme.load(theme_path).bullet
+    end
+
+    test "unspecified bullet falls back to default" do
+      write_theme <<~YAML
+        colors:
+          background: "ff0000"
+      YAML
+
+      assert_equal @defaults.bullet, Przn::Theme.load(theme_path).bullet
     end
   end
 
