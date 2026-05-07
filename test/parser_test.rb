@@ -280,6 +280,54 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "XML-style inline" do
+    test "parses <size=NAME>...</size>" do
+      assert_equal [[:tag, "big", "x-large"]], Przn::Parser.parse_inline('<size=x-large>big</size>')
+      assert_equal [[:tag, "max", "7"]],       Przn::Parser.parse_inline('<size=7>max</size>')
+    end
+
+    test "parses <color=NAME>...</color> with named and hex values" do
+      assert_equal [[:tag, "warn", "red"]],    Przn::Parser.parse_inline('<color=red>warn</color>')
+      assert_equal [[:tag, "hex", "ff5555"]],  Przn::Parser.parse_inline('<color=ff5555>hex</color>')
+    end
+
+    test "parses <note>...</note>" do
+      assert_equal [[:note, "side"]], Przn::Parser.parse_inline('<note>side</note>')
+    end
+
+    test "skips <wait/>" do
+      assert_equal [[:text, "text"]], Przn::Parser.parse_inline('<wait/>text')
+    end
+
+    test "interleaves XML tags with surrounding text" do
+      result = Przn::Parser.parse_inline('hi <size=3>X</size> there')
+      assert_equal [[:text, "hi "], [:tag, "X", "3"], [:text, " there"]], result
+    end
+
+    test "rejects mismatched closing tag (left as plain text)" do
+      result = Przn::Parser.parse_inline('<size=3>X</color>')
+      assert_equal :text, result[0][0]
+    end
+  end
+
+  sub_test_case "XML-style block alignment" do
+    test "<center>...</center> emits :align then :paragraph" do
+      slide = Przn::Parser.parse("# t\n\n<center><size=3>Hello</size></center>\n").slides[0]
+      align = slide.blocks.find { |b| b[:type] == :align }
+      para  = slide.blocks.find { |b| b[:type] == :paragraph }
+      assert_equal :center, align[:align]
+      assert_equal "<size=3>Hello</size>", para[:content]
+    end
+
+    test "<right>...</right> emits :align :right then :paragraph" do
+      slide = Przn::Parser.parse("# t\n\n<right>X</right>\n").slides[0]
+      align = slide.blocks.find { |b| b[:type] == :align }
+      para  = slide.blocks.find { |b| b[:type] == :paragraph }
+      assert_equal :right, align[:align]
+      assert_equal "X", para[:content]
+    end
+  end
+
   sub_test_case "Rabbit: inline - mixed" do
     test "parses mixed inline formatting" do
       result = Przn::Parser.parse_inline("hello *world* and **bold**")

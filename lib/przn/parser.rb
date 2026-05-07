@@ -71,6 +71,11 @@ module Przn
         when /\A\s*\{:\.(\w+)\}\s*\z/
           blocks << {type: :align, align: Regexp.last_match(1).to_sym}
 
+        # Block alignment, XML form: <center>content</center> or <right>content</right>
+        when /\A\s*<(center|right)>(.*)<\/\1>\s*\z/
+          blocks << {type: :align, align: Regexp.last_match(1).to_sym}
+          blocks << {type: :paragraph, content: Regexp.last_match(2)}
+
         # Fenced code block
         when /\A\s*```(\w*)\s*\z/
           lang = Regexp.last_match(1)
@@ -243,9 +248,13 @@ module Przn
       until scanner.eos?
         if scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
           segments << [:tag, scanner[2], scanner[1]]
+        elsif scanner.scan(/<(size|color)=([^>\s]+)>(.*?)<\/\1>/)
+          segments << [:tag, scanner[3], scanner[2]]
         elsif scanner.scan(/\{::note\}(.*?)\{:\/note\}/)
           segments << [:note, scanner[1]]
-        elsif scanner.scan(/\{::wait\/\}/)
+        elsif scanner.scan(/<note>(.*?)<\/note>/)
+          segments << [:note, scanner[1]]
+        elsif scanner.scan(/\{::wait\/\}/) || scanner.scan(/<wait\s*\/>/)
           # skip wait markers in inline text
         elsif scanner.scan(/`([^`]+)`/)
           segments << [:code, scanner[1]]
@@ -256,7 +265,7 @@ module Przn
         elsif scanner.scan(/~~(.+?)~~/)
           segments << [:strikethrough, scanner[1]]
         else
-          segments << [:text, scanner.scan(/[^`*~{]+|./)]
+          segments << [:text, scanner.scan(/[^`*~{<]+|./)]
         end
       end
 
