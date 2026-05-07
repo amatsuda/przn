@@ -4,6 +4,8 @@ require 'io/console'
 
 module Przn
   class Terminal
+    MOUSE_OFF = "\e[?1006l\e[?1003l\e[?1002l\e[?1000l"
+
     def initialize(input: $stdin, output: $stdout)
       @in = input
       @out = output
@@ -45,9 +47,11 @@ module Przn
 
     def enter_alt_screen
       write "\e[?1049h"
+      write MOUSE_OFF
     end
 
     def leave_alt_screen
+      write MOUSE_OFF
       write "\e[?1049l"
     end
 
