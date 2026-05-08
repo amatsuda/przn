@@ -12,7 +12,7 @@ colors:
   inline_code: "a6e3a1"
 
 font:
-  family:               # auto-detect
+  family:               # body text font; terminal: OSC 66 f= (Echoes); PDF: Prawn font (auto-detected if blank)
   size: 18              # base font size in pt for PDF export
 
 bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix

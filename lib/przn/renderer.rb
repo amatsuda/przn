@@ -485,11 +485,14 @@ module Przn
       "#{color_code(color)}#{base}#{ANSI[:reset]}"
     end
 
-    # `default_face:` lets a caller (currently h1 rendering) ask every OSC 66
-    # emit to carry an `f=` attribute, so the whole heading renders in one
-    # font. Inline `<font face="...">` runs still win for their own segments.
-    def render_segments_scaled(segments, para_scale, default_face: nil)
-      f = default_face
+    # `default_face:` lets a caller (currently h1 rendering) override every
+    # OSC 66 emit's `f=` attribute. When unset, body text falls back to
+    # `theme.font.family`. To opt out of that body fallback (so a heading can
+    # render in the terminal's default font when its own `heading_face` is
+    # unset), pass `default_face:` explicitly — even `nil` is honored.
+    # Inline `<font face="...">` runs still win for their own segments.
+    def render_segments_scaled(segments, para_scale, default_face: :body)
+      f = default_face == :body ? @theme.font[:family] : default_face
       segments.map { |segment|
         type = segment[0]
         content = segment[1]

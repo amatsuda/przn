@@ -154,6 +154,48 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "render_segments_scaled font fallback" do
+    def render_with_theme(theme, segments, para_scale = 2, **opts)
+      r = Przn::Renderer.new(nil, theme: theme)
+      r.send(:render_segments_scaled, segments, para_scale, **opts)
+    end
+
+    test "body segments pick up theme.font.family as f=" do
+      theme = Przn::Theme.new(colors: {}, font: {family: "Helvetica Neue"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]])
+      assert(out.include?("f=Helvetica Neue"), "expected f= in output: #{out.inspect}")
+    end
+
+    test "no f= emitted when neither default_face nor theme.font.family is set" do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]])
+      assert(!out.include?(":f="), "did not expect any f= in output: #{out.inspect}")
+    end
+
+    test "explicit default_face beats theme.font.family" do
+      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]], default_face: "HeadingFont")
+      assert(out.include?("f=HeadingFont"))
+      assert(!out.include?("f=BodyFont"))
+    end
+
+    test "explicit nil default_face emits no face (no body fallback)" do
+      # h1 takes this path when heading_face is unset: it shouldn't silently
+      # fall back to theme.font.family, so the title can render in the
+      # terminal's default font even when body text is themed.
+      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]], default_face: nil)
+      assert(!out.include?("f="), "expected no f= when default_face is explicitly nil: #{out.inspect}")
+    end
+
+    test "inline <font face=\"...\"> wins over both" do
+      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:font, "x", {face: "Inline"}]])
+      assert(out.include?("f=Inline"))
+      assert(!out.include?("f=BodyFont"))
+    end
+  end
+
   sub_test_case "effective_seg_scale" do
     test "returns para_scale for non-tag segments" do
       assert_equal 2, @renderer.send(:effective_seg_scale, [:text, "hi"], 2)
