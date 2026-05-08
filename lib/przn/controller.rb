@@ -37,6 +37,7 @@ module Przn
     ensure
       @preload_gen += 1
       @preload_thread&.join
+      @terminal.write "\e]7772;bg-clear\a"
       @terminal.show_cursor
       @terminal.leave_alt_screen
     end

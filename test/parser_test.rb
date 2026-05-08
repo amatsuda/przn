@@ -353,6 +353,38 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "Slide background: <bg .../>" do
+    test "self-closing block with from/to/angle is captured as :bg" do
+      slide = Przn::Parser.parse(%(# t\n\n<bg from="#1a1a2e" to="#16213e" angle="90"/>\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_not_nil bg
+      assert_equal "#1a1a2e", bg[:attrs][:from]
+      assert_equal "#16213e", bg[:attrs][:to]
+      assert_equal "90",      bg[:attrs][:angle]
+    end
+
+    test "self-closing block with single color is also captured as :bg" do
+      slide = Przn::Parser.parse(%(# t\n\n<bg color="#1a1a2e"/>\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_not_nil bg
+      assert_equal "#1a1a2e", bg[:attrs][:color]
+    end
+
+    test "attribute order doesn't matter" do
+      slide = Przn::Parser.parse(%(# t\n\n<bg angle="45" to="#fff" from="#000"/>\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_equal "#000", bg[:attrs][:from]
+      assert_equal "#fff", bg[:attrs][:to]
+      assert_equal "45",   bg[:attrs][:angle]
+    end
+
+    test "extra attributes (e.g. type=) pass through" do
+      slide = Przn::Parser.parse(%(# t\n\n<bg from="#000" to="#fff" type="linear"/>\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_equal "linear", bg[:attrs][:type]
+    end
+  end
+
   sub_test_case "Rabbit: inline - mixed" do
     test "parses mixed inline formatting" do
       result = Przn::Parser.parse_inline("hello *world* and **bold**")

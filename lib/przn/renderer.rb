@@ -27,6 +27,7 @@ module Przn
     def render(slide, current:, total:)
       @mutex.synchronize do
         @terminal.clear
+        apply_slide_background(slide)
         w = @terminal.width
         h = @terminal.height
 
@@ -89,8 +90,32 @@ module Przn
       when :table           then render_table(block, width, row)
       when :image           then render_image(block, width, row)
       when :blank           then row + DEFAULT_SCALE
+      when :bg              then row
       else row + 1
       end
+    end
+
+    # Emit Echoes' OSC 7772 to set a slide-specific solid color or gradient,
+    # or clear any previous override. Other terminals ignore the OSC code,
+    # so this is a no-op outside Echoes.
+    def apply_slide_background(slide)
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      @terminal.write "\e]7772;bg-clear\a"
+      return unless bg
+
+      attrs = bg[:attrs] || {}
+
+      if (color = attrs[:color])
+        @terminal.write "\e]7772;bg-color;#{color}\a"
+        return
+      end
+
+      colors = [attrs[:from], attrs[:to]].compact
+      return if colors.size < 2
+
+      type = attrs[:type] || 'linear'
+      angle = attrs[:angle] || 0
+      @terminal.write "\e]7772;bg-gradient;type=#{type}:angle=#{angle}:colors=#{colors.join(',')}\a"
     end
 
     def render_heading(block, width, row)
@@ -692,6 +717,8 @@ module Przn
       when :image
         image_block_height(block, width)
       when :align
+        0
+      when :bg
         0
       when :blank
         s

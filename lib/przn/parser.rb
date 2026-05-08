@@ -76,6 +76,12 @@ module Przn
           blocks << {type: :align, align: Regexp.last_match(1).to_sym}
           blocks << {type: :paragraph, content: Regexp.last_match(2)}
 
+        # Slide background (Echoes OSC 7772):
+        #   <bg color="#..."/>                              — solid (bg-color)
+        #   <bg from="#..." to="#..." angle="N"/>           — linear gradient (bg-gradient)
+        when /\A\s*<bg((?:\s+\w+="[^"]+")*)\s*\/>\s*\z/
+          blocks << {type: :bg, attrs: parse_xml_attrs(Regexp.last_match(1))}
+
         # Fenced code block
         when /\A\s*```(\w*)\s*\z/
           lang = Regexp.last_match(1)
@@ -226,13 +232,17 @@ module Przn
     # Kramdown's {::font name="..."} legacy spelling for the family is also
     # accepted and folded into :face so the renderer has one shape to handle.
     def parse_font_attrs(str)
+      attrs = parse_xml_attrs(str)
+      attrs[:face] = attrs.delete(:name) if attrs.key?(:name) && !attrs.key?(:face)
+      attrs.slice(:face, :size, :color)
+    end
+
+    # Generic attribute scanner — `key="value"` pairs, returned as a hash with
+    # symbolized keys. Doesn't validate which keys are allowed; callers slice.
+    def parse_xml_attrs(str)
       attrs = {}
       str.scan(/(\w+)="([^"]+)"/) do |key, value|
-        case key
-        when 'face', 'name' then attrs[:face]  = value
-        when 'size'         then attrs[:size]  = value
-        when 'color'        then attrs[:color] = value
-        end
+        attrs[key.to_sym] = value
       end
       attrs
     end
