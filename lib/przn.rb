@@ -15,9 +15,10 @@ require_relative "przn/theme"
 module Przn
   class Error < StandardError; end
 
-  def self.start(file, theme: nil)
+  def self.start(file, theme: nil, start_at: nil)
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
+    presentation.go_to(start_at - 1) if start_at
     terminal = Terminal.new
     base_dir = File.dirname(File.expand_path(file))
     renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme)

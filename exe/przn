@@ -28,9 +28,17 @@ if options[:generate_theme]
   exit
 end
 
+# Extract a leading-`@N` positional like `przn deck.md @42` and treat it as
+# the slide to open the presentation at (1-based). Removed from ARGV so the
+# remaining positional is the deck file.
+start_at = nil
+if (idx = ARGV.index { |a| a =~ /\A@(\d+)\z/ })
+  start_at = ARGV.delete_at(idx)[1..].to_i
+end
+
 file = ARGV[0]
 unless file
-  $stderr.puts "Usage: przn [options] <presentation.md>"
+  $stderr.puts "Usage: przn [options] <presentation.md> [@N]"
   exit 1
 end
 
@@ -40,5 +48,5 @@ if options[:export] == 'pdf'
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
   Przn.export_pdf(file, output, theme: theme)
 else
-  Przn.start(file, theme: theme).run
+  Przn.start(file, theme: theme, start_at: start_at).run
 end
