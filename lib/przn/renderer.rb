@@ -133,7 +133,7 @@ module Przn
           vis = segments_visible_cells(line_segs, scale)
           pad = [(width - vis) / 2, 0].max
           @terminal.move_to(row, pad + 1)
-          @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face)}#{ANSI[:reset]}"
+          @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2)}#{ANSI[:reset]}"
           row += scale
         end
         row + 4
@@ -477,9 +477,9 @@ module Przn
     # via OSC 66 f= (Echoes extension); the size resolves through the same
     # SIZE_SCALES table that <size=N> uses; the color wraps in the same ANSI
     # escape that <color=NAME> uses.
-    def render_font_segment(content, attrs, para_scale, default_face: nil)
+    def render_font_segment(content, attrs, para_scale, default_face: nil, default_h: nil)
       scale = (attrs[:size] && Parser::SIZE_SCALES[attrs[:size]]) || para_scale
-      base = KittyText.sized(content, s: scale, f: attrs[:face] || default_face)
+      base = KittyText.sized(content, s: scale, f: attrs[:face] || default_face, h: default_h)
       color = attrs[:color]
       return base unless color
       "#{color_code(color)}#{base}#{ANSI[:reset]}"
@@ -491,8 +491,15 @@ module Przn
     # render in the terminal's default font when its own `heading_face` is
     # unset), pass `default_face:` explicitly — even `nil` is honored.
     # Inline `<font face="...">` runs still win for their own segments.
-    def render_segments_scaled(segments, para_scale, default_face: :body)
+    #
+    # `default_h:` threads an OSC 66 `h=` (horizontal alignment) into every
+    # emit on the line. h1 uses h=2 so a proportional `heading_face` is
+    # centered within the reserved cell block — without it the glyphs left-
+    # align inside the block and the visible text drifts left of the center
+    # column we computed.
+    def render_segments_scaled(segments, para_scale, default_face: :body, default_h: nil)
       f = default_face == :body ? @theme.font[:family] : default_face
+      h = default_h
       segments.map { |segment|
         type = segment[0]
         content = segment[1]
@@ -500,19 +507,19 @@ module Przn
         when :tag
           tag_name = segment[2]
           if (scale = Parser::SIZE_SCALES[tag_name])
-            KittyText.sized(content, s: scale, f: f)
+            KittyText.sized(content, s: scale, f: f, h: h)
           elsif Parser::NAMED_COLORS.key?(tag_name)
-            "#{color_code(tag_name)}#{KittyText.sized(content, s: para_scale, f: f)}#{ANSI[:reset]}"
+            "#{color_code(tag_name)}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
           else
-            KittyText.sized(content, s: para_scale, f: f)
+            KittyText.sized(content, s: para_scale, f: f, h: h)
           end
-        when :font          then render_font_segment(content, segment[2] || {}, para_scale, default_face: f)
-        when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f)}#{ANSI[:reset]}"
-        when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale, f: f)}#{ANSI[:reset]}"
-        when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale, f: f)}#{ANSI[:reset]}"
-        when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale, f: f)}#{ANSI[:reset]}"
-        when :code          then "#{ANSI[:gray_bg]}#{KittyText.sized(" #{content} ", s: para_scale, f: f)}#{ANSI[:reset]}"
-        when :text          then KittyText.sized(content, s: para_scale, f: f)
+        when :font          then render_font_segment(content, segment[2] || {}, para_scale, default_face: f, default_h: h)
+        when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+        when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+        when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+        when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+        when :code          then "#{ANSI[:gray_bg]}#{KittyText.sized(" #{content} ", s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+        when :text          then KittyText.sized(content, s: para_scale, f: f, h: h)
         end
       }.join
     end

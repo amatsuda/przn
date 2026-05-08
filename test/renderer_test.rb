@@ -194,6 +194,13 @@ class RendererTest < Test::Unit::TestCase
       assert(out.include?("f=Inline"))
       assert(!out.include?("f=BodyFont"))
     end
+
+    test "default_h threads through every OSC 66 emit (used by h1 to center proportional fonts)" do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      segments = [[:text, "hi"], [:bold, "yo"], [:font, "x", {face: "Inter"}]]
+      out = render_with_theme(theme, segments, default_h: 2)
+      assert_equal 3, out.scan(":h=2").size, "expected h=2 on every OSC 66 segment: #{out.inspect}"
+    end
   end
 
   sub_test_case "effective_seg_scale" do
