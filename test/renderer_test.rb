@@ -107,6 +107,12 @@ class RendererTest < Test::Unit::TestCase
       assert_equal "ok", lines[0].last[1]
     end
 
+    test "honors emoji as 2-cell wide (so list bullets like 🍕 don't make wrap budget overflow)" do
+      assert_equal 2, @renderer.send(:display_width, "🍕")
+      assert_equal 2, @renderer.send(:display_width, "🎯")
+      assert_equal 2, @renderer.send(:display_width, "🚀")
+    end
+
     test "honors CJK double-width characters in cell counting" do
       # CJK char display_width = 2; at para_scale=2 each takes 4 cells.
       # Budget = 4 units * 2 = 8 cells = 2 CJK chars per line.

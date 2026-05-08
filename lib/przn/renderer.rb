@@ -686,6 +686,7 @@ module Przn
              (o >= 0xfe30 && o <= 0xfe6f) ||
              (o >= 0xff00 && o <= 0xff60) ||
              (o >= 0xffe0 && o <= 0xffe6) ||
+             (o >= 0x1f300 && o <= 0x1faff) ||  # emoji blocks; terminals render these as 2 cells
              (o >= 0x20000 && o <= 0x2fffd) ||
              (o >= 0x30000 && o <= 0x3fffd))
           2
