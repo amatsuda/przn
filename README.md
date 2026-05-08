@@ -43,6 +43,10 @@ Requires a TrueType font (with `glyf` outlines) for proper rendering. Prawn does
 | `G` | Last slide |
 | `q` `Ctrl-C` | Quit |
 
+### Selecting and copying text
+
+`przn` doesn't capture mouse events, so drag-to-select and the terminal's own copy shortcut (Kitty: `Cmd+C` on macOS, `Ctrl+Shift+C` on Linux) work normally on a slide. Mouse-tracking modes that may have leaked from a previously crashed program are explicitly disabled on entry, so drag selection is reliable.
+
 ## Markdown format
 
 przn's Markdown format is compatible with [Rabbit](https://rabbit-shocker.org/)'s Markdown mode.
@@ -69,6 +73,8 @@ more content
 ~~strikethrough~~
 `inline code`
 ```
+
+Long lines wrap at whitespace boundaries (not mid-word) for English-style text. A single word that's longer than the line — a URL, a class name — still wraps at the character it has to. CJK runs without inter-character whitespace fall back to per-character splitting.
 
 ### Lists
 
@@ -274,7 +280,7 @@ Notes:
 
 - **`bullet`** / **`bullet_size`** — `bullet` is the character; `bullet_size` is the OSC 66 scale used to render it. When smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line.
 - **`font.family`** — applied to body text (terminal: via OSC 66 `f=`, requires Echoes; PDF: registered via fontconfig). Inline `<font face="...">` runs override it per-segment.
-- **`heading_face`** — independent from `font.family`. h1 uses `heading_face` if set, else falls back to the terminal's default font (it does **not** silently inherit `font.family`). h2–h6 are body text.
+- **`heading_face`** — independent from `font.family`. h1 uses `heading_face` if set, else falls back to the terminal's default font (it does **not** silently inherit `font.family`). h2–h6 are body text. When the chosen face is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block.
 - **`bg`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide.
 
 ## License
