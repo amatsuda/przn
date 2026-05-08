@@ -273,8 +273,8 @@ module Przn
       until scanner.eos?
         if scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
           segments << [:tag, scanner[2], scanner[1]]
-        elsif scanner.scan(/<(size|color)=([^>\s]+)>(.*?)<\/\1>/)
-          segments << [:tag, scanner[3], scanner[2]]
+        elsif scanner.scan(/<size=([^>\s]+)>(.*?)<\/size>/)
+          segments << [:tag, scanner[2], scanner[1]]
         elsif scanner.scan(/<font((?:\s+\w+="[^"]+")+)\s*>(.*?)<\/font>/)
           segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
         elsif scanner.scan(/\{::font((?:\s+\w+="[^"]+")+)\}(.*?)\{:\/font\}/)

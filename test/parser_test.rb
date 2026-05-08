@@ -286,9 +286,14 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:tag, "max", "7"]],       Przn::Parser.parse_inline('<size=7>max</size>')
     end
 
-    test "parses <color=NAME>...</color> with named and hex values" do
-      assert_equal [[:tag, "warn", "red"]],    Przn::Parser.parse_inline('<color=red>warn</color>')
-      assert_equal [[:tag, "hex", "ff5555"]],  Przn::Parser.parse_inline('<color=ff5555>hex</color>')
+    test "color is set via <font color=\"...\">, not a standalone <color> tag" do
+      # Standalone <color=...> is no longer recognized — falls through to text.
+      result = Przn::Parser.parse_inline('<color=red>warn</color>')
+      assert_equal :text, result[0][0]
+
+      # The HTML4-style <font color="..."> form is the supported XML way.
+      assert_equal [[:font, "warn", {color: "red"}]],
+                   Przn::Parser.parse_inline('<font color="red">warn</font>')
     end
 
     test "parses <note>...</note>" do
