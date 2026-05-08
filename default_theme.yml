@@ -18,6 +18,8 @@ font:
 bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix
 bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = the body text's scale
 
+heading_face:           # font family for h1 (slide titles); inline <font face="..."> still wins per-run
+
 # Default slide background, applied when a slide has no <bg .../> directive.
 # Echoes-only (OSC 7772). Use either `color` (solid) or `from`/`to`/`angle`
 # (linear gradient). Both unset = no background override.

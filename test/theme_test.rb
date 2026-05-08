@@ -40,6 +40,10 @@ class ThemeTest < Test::Unit::TestCase
     test "default bg is empty (renderer emits no override)" do
       assert_equal({}, Przn::Theme.default.bg)
     end
+
+    test "default heading_face is nil (renderer omits OSC 66 f=)" do
+      assert_nil Przn::Theme.default.heading_face
+    end
   end
 
   sub_test_case ".load" do
@@ -141,6 +145,14 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal "#1a1a2e", bg[:from]
       assert_equal "#16213e", bg[:to]
       assert_equal 90,        bg[:angle]
+    end
+
+    test "user file overrides heading_face" do
+      write_theme <<~YAML
+        heading_face: "Helvetica Neue"
+      YAML
+
+      assert_equal "Helvetica Neue", Przn::Theme.load(theme_path).heading_face
     end
   end
 
