@@ -119,6 +119,41 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "split_by_display_width word-awareness" do
+    def split(text, max_width)
+      @renderer.send(:split_by_display_width, text, max_width)
+    end
+
+    test "breaks at the last whitespace, not mid-word" do
+      assert_equal ["the quick", "brown fox"], split("the quick brown fox", 9)
+    end
+
+    test "drops the whitespace at the break point" do
+      chunk, remaining = split("hello world", 8)
+      assert_equal "hello", chunk
+      assert_equal "world", remaining
+    end
+
+    test "breaks at the overflow space when overflow lands on a space" do
+      assert_equal ["hello", "world"], split("hello world", 5)
+    end
+
+    test "falls back to char-level split when a single word exceeds max_width" do
+      assert_equal ["antidise", "stablishment"], split("antidisestablishment", 8)
+    end
+
+    test "CJK runs (no whitespace) still split per character" do
+      assert_equal ["あいう", "えお"], split("あいうえお", 6)
+    end
+
+    test "leading whitespace doesn't produce empty chunks" do
+      chunk, remaining = split(" hello", 4)
+      assert(!chunk.empty?, "chunk must not be empty: #{chunk.inspect}")
+      assert_equal " hel", chunk
+      assert_equal "lo", remaining
+    end
+  end
+
   sub_test_case "effective_seg_scale" do
     test "returns para_scale for non-tag segments" do
       assert_equal 2, @renderer.send(:effective_seg_scale, [:text, "hi"], 2)

@@ -583,14 +583,27 @@ module Przn
       }
     end
 
+    # Split `text` so the first piece fits within `max_width` cells, preferring
+    # to break at the last whitespace before the overflow rather than mid-word.
+    # Falls back to a char-level split when no whitespace is available — single
+    # long words, CJK runs (no inter-character whitespace) — so a word that's
+    # itself longer than the line still wraps instead of overflowing.
     def split_by_display_width(text, max_width)
       w = 0
+      last_space = nil
       text.each_char.with_index do |c, i|
         cw = display_width(c)
         if w + cw > max_width && w > 0
-          return [text[0...i], text[i..]]
+          if c == ' '
+            return [text[0...i], text[(i + 1)..]]
+          elsif last_space && last_space > 0
+            return [text[0...last_space], text[(last_space + 1)..]]
+          else
+            return [text[0...i], text[i..]]
+          end
         end
         w += cw
+        last_space = i if c == ' '
       end
       [text, nil]
     end
