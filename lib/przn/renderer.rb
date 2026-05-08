@@ -704,6 +704,7 @@ module Przn
         .gsub(/\*(.+?)\*/, '\1')
         .gsub(/~~(.+?)~~/, '\1')
         .gsub(/`([^`]+)`/, '\1')
+        .gsub(/&(lt|gt|amp);/) { |_| {"lt" => "<", "gt" => ">", "amp" => "&"}[$1] }
     end
 
     def calculate_height(blocks, width)

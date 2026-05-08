@@ -309,6 +309,18 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:text, "hi "], [:tag, "X", "3"], [:text, " there"]], result
     end
 
+    test "&lt; / &gt; / &amp; decode to literal characters" do
+      assert_equal [[:text, "<"]], Przn::Parser.parse_inline("&lt;")
+      assert_equal [[:text, ">"]], Przn::Parser.parse_inline("&gt;")
+      assert_equal [[:text, "&"]], Przn::Parser.parse_inline("&amp;")
+    end
+
+    test "&lt;note&gt; renders as literal text, not the note tag" do
+      result = Przn::Parser.parse_inline("&lt;note&gt;")
+      # No :note segment — it's three literal characters
+      assert_equal [[:text, "<"], [:text, "note"], [:text, ">"]], result
+    end
+
     test "rejects mismatched closing tag (left as plain text)" do
       result = Przn::Parser.parse_inline('<size=3>X</color>')
       assert_equal :text, result[0][0]
