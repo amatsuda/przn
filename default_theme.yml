@@ -16,3 +16,4 @@ font:
   size: 18              # base font size in pt for PDF export
 
 bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix
+bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = the body text's scale

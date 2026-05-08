@@ -10,8 +10,10 @@ module Przn
 
     module_function
 
-    def sized(text, s:, h: nil, v: nil)
+    def sized(text, s:, h: nil, v: nil, n: nil, d: nil)
       params = +"s=#{s}"
+      params << ":n=#{n}" if n
+      params << ":d=#{d}" if d
       params << ":h=#{h}" if h
       params << ":v=#{v}" if v
       "\e]66;#{params};#{text}\a"

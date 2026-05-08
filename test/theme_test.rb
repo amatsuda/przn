@@ -32,6 +32,10 @@ class ThemeTest < Test::Unit::TestCase
     test "returns theme with default bullet" do
       assert_equal "・", Przn::Theme.default.bullet
     end
+
+    test "returns nil bullet_size by default (renderer falls back to body scale)" do
+      assert_nil Przn::Theme.default.bullet_size
+    end
   end
 
   sub_test_case ".load" do
@@ -94,6 +98,22 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       assert_equal @defaults.bullet, Przn::Theme.load(theme_path).bullet
+    end
+
+    test "user file overrides bullet_size" do
+      write_theme <<~YAML
+        bullet_size: 1
+      YAML
+
+      assert_equal 1, Przn::Theme.load(theme_path).bullet_size
+    end
+
+    test "unspecified bullet_size falls back to default (nil)" do
+      write_theme <<~YAML
+        bullet: "●"
+      YAML
+
+      assert_nil Przn::Theme.load(theme_path).bullet_size
     end
   end
 

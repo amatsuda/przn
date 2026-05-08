@@ -121,7 +121,7 @@ module Przn
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left)
           if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
             @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           end
@@ -188,7 +188,7 @@ module Przn
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left)
           if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
             @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           end
@@ -429,6 +429,20 @@ module Przn
         "#{color_code(tag_name)}#{text}#{ANSI[:reset]}"
       else
         text
+      end
+    end
+
+    # Render the list/heading bullet. When `bullet_size` is smaller than the
+    # body scale, use OSC 66 fractional scaling (n/d) with v=2 to keep the
+    # glyph's cell footprint at body scale but draw a smaller dot vertically
+    # centered. Plain `s=N` for a smaller bullet would top-align it inside
+    # the row, which looks wrong against the larger body text.
+    def render_bullet(prefix)
+      size = @theme.bullet_size
+      if size && size < DEFAULT_SCALE
+        KittyText.sized(prefix, s: DEFAULT_SCALE, n: size, d: DEFAULT_SCALE, v: 2)
+      else
+        KittyText.sized(prefix, s: size || DEFAULT_SCALE)
       end
     end
 
