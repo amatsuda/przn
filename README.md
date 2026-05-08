@@ -220,6 +220,18 @@ Visible text {::note}(speaker note){:/note}
 Visible text <note>(speaker note)</note>
 ```
 
+### Escaping `<`, `>`, `&`
+
+To show literal markup characters that would otherwise be interpreted as a tag, use HTML-style entity references:
+
+```markdown
+&lt;note&gt;            renders as: <note>
+2 &lt; 3                renders as: 2 < 3
+A &amp; B               renders as: A & B
+```
+
+A bare `<` not followed by a recognized tag name renders literally as well, so most accidental `<` characters are fine. The entities are only needed when you'd otherwise hit one of the tag patterns (`<size=...>`, `<font ...>`, `<note>`, `<wait/>`, `<center>`, `<right>`, `<bg .../>`).
+
 ### Wait marker
 
 Self-closing presentation flow marker, consumed at parse time:
