@@ -96,14 +96,15 @@ module Przn
     end
 
     # Emit Echoes' OSC 7772 to set a slide-specific solid color or gradient,
-    # or clear any previous override. Other terminals ignore the OSC code,
-    # so this is a no-op outside Echoes.
+    # or clear any previous override. A `<bg .../>` block on the slide wins;
+    # otherwise the theme's `bg:` section is used as the deck-wide default.
+    # Other terminals ignore the OSC code, so this is a no-op outside Echoes.
     def apply_slide_background(slide)
-      bg = slide.blocks.find { |b| b[:type] == :bg }
-      @terminal.write "\e]7772;bg-clear\a"
-      return unless bg
+      block = slide.blocks.find { |b| b[:type] == :bg }
+      attrs = block ? block[:attrs] : (@theme.bg || {})
 
-      attrs = bg[:attrs] || {}
+      @terminal.write "\e]7772;bg-clear\a"
+      return if attrs.empty?
 
       if (color = attrs[:color])
         @terminal.write "\e]7772;bg-color;#{color}\a"

@@ -36,6 +36,10 @@ class ThemeTest < Test::Unit::TestCase
     test "returns nil bullet_size by default (renderer falls back to body scale)" do
       assert_nil Przn::Theme.default.bullet_size
     end
+
+    test "default bg is empty (renderer emits no override)" do
+      assert_equal({}, Przn::Theme.default.bg)
+    end
   end
 
   sub_test_case ".load" do
@@ -114,6 +118,29 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       assert_nil Przn::Theme.load(theme_path).bullet_size
+    end
+
+    test "user file sets a solid bg color" do
+      write_theme <<~YAML
+        bg:
+          color: "#1a1a2e"
+      YAML
+
+      assert_equal({color: "#1a1a2e"}, Przn::Theme.load(theme_path).bg)
+    end
+
+    test "user file sets a gradient bg" do
+      write_theme <<~YAML
+        bg:
+          from: "#1a1a2e"
+          to:   "#16213e"
+          angle: 90
+      YAML
+
+      bg = Przn::Theme.load(theme_path).bg
+      assert_equal "#1a1a2e", bg[:from]
+      assert_equal "#16213e", bg[:to]
+      assert_equal 90,        bg[:angle]
     end
   end
 

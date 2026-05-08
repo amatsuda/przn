@@ -17,3 +17,13 @@ font:
 
 bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix
 bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = the body text's scale
+
+# Default slide background, applied when a slide has no <bg .../> directive.
+# Echoes-only (OSC 7772). Use either `color` (solid) or `from`/`to`/`angle`
+# (linear gradient). Both unset = no background override.
+bg:
+  color:                # solid color, e.g. "#1a1a2e"
+  from:                 # gradient endpoint, e.g. "#1a1a2e"
+  to:                   # gradient endpoint, e.g. "#16213e"
+  angle:                # gradient angle in degrees (0 = left→right, 90 = bottom→top)
+  type:                 # gradient type; defaults to "linear"
