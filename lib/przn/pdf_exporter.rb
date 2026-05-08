@@ -127,6 +127,57 @@ module Przn
       @font_registered = true
 
       register_emoji_fallback(pdf, font_path)
+      register_inline_fonts(pdf)
+    end
+
+    # Pre-register every font family referenced by an inline <font face="..."> /
+    # {::font name="..."} tag, so build_formatted_text can use it as a Prawn
+    # font: option. Families that fontconfig can't locate are silently dropped
+    # — those runs render in the default font instead of erroring.
+    def register_inline_fonts(pdf)
+      @registered_inline_fonts = {}
+      inline_font_families.each do |family|
+        next if @registered_inline_fonts.key?(family) || family == 'CJK'
+
+        path = fc_find(family)
+        next unless path
+        bold_path = find_bold_font(path, family)
+        pdf.font_families.update(family => {
+          normal: path,
+          bold: bold_path,
+          italic: path,
+        })
+        @registered_inline_fonts[family] = true
+      rescue
+        next
+      end
+    end
+
+    def inline_font_families
+      families = []
+      @presentation.slides.each do |slide|
+        slide.blocks.each do |b|
+          texts = []
+          texts << b[:content] if b[:content].is_a?(String)
+          texts << b[:term] if b[:term].is_a?(String)
+          texts << b[:definition] if b[:definition].is_a?(String)
+          if b[:items].is_a?(Array)
+            b[:items].each { |it| texts << it[:text] if it[:text].is_a?(String) }
+          end
+          if b[:rows].is_a?(Array)
+            (Array(b[:header]) + b[:rows].flatten).each { |c| texts << c if c.is_a?(String) }
+          end
+          texts.each do |text|
+            text.scan(/<font((?:\s+\w+="[^"]+")+)\s*>/) do
+              families << Parser.parse_font_attrs(Regexp.last_match(1))[:face]
+            end
+            text.scan(/\{::font((?:\s+\w+="[^"]+")+)\}/) do
+              families << Parser.parse_font_attrs(Regexp.last_match(1))[:face]
+            end
+          end
+        end
+      end
+      families.compact.uniq
     end
 
     def find_font
@@ -455,6 +506,25 @@ module Przn
           else
             {text: content, size: default_pt, color: @fg_color}
           end
+        when :font
+          attrs = segment[2].is_a?(Hash) ? segment[2] : {}
+          run = {text: content, size: default_pt, color: @fg_color}
+          if attrs[:face] && @registered_inline_fonts&.key?(attrs[:face])
+            run[:font] = attrs[:face]
+          end
+          if attrs[:size] && (scale = Parser::SIZE_SCALES[attrs[:size]])
+            run[:size] = @scale_to_pt[scale]
+          end
+          if attrs[:color]
+            run[:color] = if (hex = COLOR_MAP[attrs[:color]])
+                            hex
+                          elsif attrs[:color].match?(/\A[0-9a-fA-F]{6}\z/)
+                            attrs[:color].upcase
+                          else
+                            @fg_color
+                          end
+          end
+          run
         when :bold
           {text: content, size: default_pt, color: @fg_color, styles: [:bold]}
         when :italic

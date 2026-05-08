@@ -222,6 +222,21 @@ module Przn
       Slide.new(blocks)
     end
 
+    # HTML4-style <font face="..." size="..." color="..."> attributes.
+    # Kramdown's {::font name="..."} legacy spelling for the family is also
+    # accepted and folded into :face so the renderer has one shape to handle.
+    def parse_font_attrs(str)
+      attrs = {}
+      str.scan(/(\w+)="([^"]+)"/) do |key, value|
+        case key
+        when 'face', 'name' then attrs[:face]  = value
+        when 'size'         then attrs[:size]  = value
+        when 'color'        then attrs[:color] = value
+        end
+      end
+      attrs
+    end
+
     def parse_image_attrs(str, attrs)
       str = str.sub(/\A:?\s*/, '')
       str.scan(/([\w-]+)=['"]([^'"]*)['"]/) do |key, value|
@@ -250,6 +265,10 @@ module Przn
           segments << [:tag, scanner[2], scanner[1]]
         elsif scanner.scan(/<(size|color)=([^>\s]+)>(.*?)<\/\1>/)
           segments << [:tag, scanner[3], scanner[2]]
+        elsif scanner.scan(/<font((?:\s+\w+="[^"]+")+)\s*>(.*?)<\/font>/)
+          segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
+        elsif scanner.scan(/\{::font((?:\s+\w+="[^"]+")+)\}(.*?)\{:\/font\}/)
+          segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
         elsif scanner.scan(/\{::note\}(.*?)\{:\/note\}/)
           segments << [:note, scanner[1]]
         elsif scanner.scan(/<note>(.*?)<\/note>/)

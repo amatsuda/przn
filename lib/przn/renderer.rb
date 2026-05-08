@@ -446,6 +446,18 @@ module Przn
       end
     end
 
+    # Render a <font face="..." size="..." color="..."> run. The face goes out
+    # via OSC 66 f= (Echoes extension); the size resolves through the same
+    # SIZE_SCALES table that <size=N> uses; the color wraps in the same ANSI
+    # escape that <color=NAME> uses.
+    def render_font_segment(content, attrs, para_scale)
+      scale = (attrs[:size] && Parser::SIZE_SCALES[attrs[:size]]) || para_scale
+      base = KittyText.sized(content, s: scale, f: attrs[:face])
+      color = attrs[:color]
+      return base unless color
+      "#{color_code(color)}#{base}#{ANSI[:reset]}"
+    end
+
     def render_segments_scaled(segments, para_scale)
       segments.map { |segment|
         type = segment[0]
@@ -460,6 +472,7 @@ module Przn
           else
             KittyText.sized(content, s: para_scale)
           end
+        when :font          then render_font_segment(content, segment[2] || {}, para_scale)
         when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
         when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
         when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale)}#{ANSI[:reset]}"
@@ -521,8 +534,15 @@ module Przn
     end
 
     def effective_seg_scale(seg, para_scale)
-      return para_scale unless seg[0] == :tag
-      Parser::SIZE_SCALES[seg[2]] || para_scale
+      case seg[0]
+      when :tag
+        Parser::SIZE_SCALES[seg[2]] || para_scale
+      when :font
+        size = seg[2].is_a?(Hash) ? seg[2][:size] : nil
+        (size && Parser::SIZE_SCALES[size]) || para_scale
+      else
+        para_scale
+      end
     end
 
     def segments_visible_cells(segments, para_scale)

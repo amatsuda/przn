@@ -308,6 +308,31 @@ class ParserTest < Test::Unit::TestCase
       result = Przn::Parser.parse_inline('<size=3>X</color>')
       assert_equal :text, result[0][0]
     end
+
+    test "parses <font face=\"...\">...</font> with spaces in family" do
+      assert_equal [[:font, "Title", {face: "Helvetica Neue"}]],
+                   Przn::Parser.parse_inline('<font face="Helvetica Neue">Title</font>')
+    end
+
+    test "parses {::font name=\"...\"}...{:/font} (folds name= into :face)" do
+      assert_equal [[:font, "Title", {face: "Helvetica Neue"}]],
+                   Przn::Parser.parse_inline('{::font name="Helvetica Neue"}Title{:/font}')
+    end
+
+    test "font tag mixes with surrounding plain text" do
+      result = Przn::Parser.parse_inline('hi <font face="Menlo">code</font> there')
+      assert_equal [[:text, "hi "], [:font, "code", {face: "Menlo"}], [:text, " there"]], result
+    end
+
+    test "parses <font face=\"...\" size=\"...\" color=\"...\"> with all three attrs" do
+      result = Przn::Parser.parse_inline('<font face="Menlo" size="3" color="red">code</font>')
+      assert_equal [[:font, "code", {face: "Menlo", size: "3", color: "red"}]], result
+    end
+
+    test "<font> attribute order doesn't matter" do
+      result = Przn::Parser.parse_inline('<font size="3" face="Menlo">x</font>')
+      assert_equal [[:font, "x", {face: "Menlo", size: "3"}]], result
+    end
   end
 
   sub_test_case "XML-style block alignment" do
