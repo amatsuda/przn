@@ -25,13 +25,20 @@ Out-of-range numbers are clamped to the last slide, so `@9999` jumps to the end.
 
 ### PDF export
 
+Two flavors:
+
 ```
-przn --export your_slides.md
+przn --export your_slides.md                       # Prawn (default)
 przn --export pdf your_slides.md
 przn --export pdf -o output.pdf your_slides.md
+
+przn --export screenshot your_slides.md            # screen capture (Echoes)
+przn --export screenshot -o output.pdf your_slides.md
 ```
 
-Requires a TrueType font (with `glyf` outlines) for proper rendering. Prawn does not support CFF-based fonts (most `.otf` files). Fonts are auto-detected in this order: NotoSansJP TTF, HackGen, Arial Unicode.
+**`--export pdf`** uses Prawn to render the deck directly into a vector PDF. Text stays selectable and files are small. Requires a TrueType font (with `glyf` outlines) for proper rendering — Prawn does not support CFF-based fonts (most `.otf` files). Fonts are auto-detected in this order: NotoSansJP TTF, HackGen, Arial Unicode.
+
+**`--export screenshot`** drives the live renderer for each slide and asks the terminal to save the rendered pane as a one-page **vector PDF**, then concatenates the per-slide PDFs into a single multi-page PDF. Output is an exact match of what's on screen — gradients, proportional fonts, OSC 66 sized text, custom bullets, all show up exactly as you'd see them — but vector, so the file stays small, scales infinitely, and text remains selectable. Requires running inside a terminal that implements the OSC 7772 `capture` command to a `.pdf` path (currently [Echoes](https://github.com/amatsuda/echoes)). The slides flicker through the visible pane during export.
 
 ### Key bindings
 
