@@ -256,7 +256,13 @@ Self-closing presentation flow marker, consumed at parse time:
 
 ## Theming
 
-Pass a YAML file via `--theme path/to/theme.yml`. All keys are optional — anything you don't set falls back to the defaults baked in at `default_theme.yml`.
+Theme resolution:
+
+1. **`theme.yml` in the deck's directory** — loaded automatically if present. No flag needed.
+2. **`--theme path/to/your.yml`** — overrides step 1 with any other file you point to.
+3. **`default_theme.yml`** (the file bundled with the gem) — used when neither of the above is found.
+
+All keys are optional — anything you don't set falls back to the bundled defaults.
 
 ```yaml
 font:

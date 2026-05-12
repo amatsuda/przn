@@ -1,6 +1,8 @@
-# Default przn theme
+# Default przn theme. Used when there's neither a `theme.yml` alongside the
+# deck nor a `--theme path/to/file.yml` flag.
 #
-# Copy this file and pass your copy via --theme to customize.
+# To customize: drop a `theme.yml` next to your deck (loaded automatically),
+# or pass `--theme path/to/your.yml` to override that.
 # All keys are optional — unspecified values fall back to these defaults.
 
 font:

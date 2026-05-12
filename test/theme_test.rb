@@ -86,6 +86,27 @@ class ThemeTest < Test::Unit::TestCase
         Przn::Theme.load("/nonexistent/theme.yml")
       end
     end
+  end
+
+  sub_test_case ".auto_discover" do
+    test "loads a sibling theme.yml when one exists next to the deck" do
+      write_theme <<~YAML
+        bullet:
+          text: "●"
+      YAML
+      deck = File.join(@tmpdir, "deck.md")
+      File.write(deck, "# T\n")
+
+      theme = Przn::Theme.auto_discover(near: deck)
+      assert_equal "●", theme.bullet[:text]
+    end
+
+    test "returns nil when no theme.yml is alongside the deck" do
+      deck = File.join(@tmpdir, "deck.md")
+      File.write(deck, "# T\n")
+
+      assert_nil Przn::Theme.auto_discover(near: deck)
+    end
 
     test "user file overrides bullet.text" do
       write_theme <<~YAML

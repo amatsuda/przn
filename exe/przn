@@ -42,7 +42,11 @@ unless file
   exit 1
 end
 
-theme = options[:theme] ? Przn::Theme.load(options[:theme]) : nil
+theme = if options[:theme]
+  Przn::Theme.load(options[:theme])
+else
+  Przn::Theme.auto_discover(near: file)
+end
 
 case options[:export]
 when 'pdf'

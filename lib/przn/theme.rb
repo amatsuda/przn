@@ -27,6 +27,15 @@ module Przn
       new(load_yaml(DEFAULT_PATH))
     end
 
+    # Look for a sibling `theme.yml` next to the given file and load it if
+    # present, so a deck can ship its theme alongside the markdown without
+    # the user having to pass `--theme` explicitly. Returns nil if no file
+    # is found.
+    def self.auto_discover(near:)
+      candidate = File.join(File.dirname(File.expand_path(near)), 'theme.yml')
+      File.exist?(candidate) ? load(candidate) : nil
+    end
+
     def self.load_yaml(path)
       data = YAML.safe_load_file(path, symbolize_names: true) || {}
       {
