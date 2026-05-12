@@ -26,23 +26,29 @@ module Przn
     Controller.new(presentation, terminal, renderer)
   end
 
+  # Default PDF export: drives the live renderer, asks the terminal to save
+  # each rendered slide as a one-page vector PDF via OSC 7772 `capture`,
+  # then concatenates the per-slide PDFs into a single multi-page PDF.
+  # Requires Echoes (or any terminal that implements the same capture
+  # command); use `export_pdf_prawn` instead for environments where that's
+  # not possible (CI, headless).
   def self.export_pdf(file, output, theme: nil)
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     base_dir = File.dirname(File.expand_path(file))
-    PdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
+    ScreenshotPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
     puts "Generated: #{output}"
   end
 
-  # Pixel-faithful PDF: drives the live renderer, asks Echoes to save each
-  # rendered slide as a PNG via OSC 7772 `capture`, and combines the PNGs
-  # into a single PDF. Requires Echoes (or any other terminal that
-  # implements the same capture command).
-  def self.export_pdf_screenshot(file, output, theme: nil)
+  # Legacy PDF export via Prawn — renders the deck directly into a vector
+  # PDF without touching the terminal. Diverges from what's on screen for
+  # any feature the live renderer adds (OSC 66 sized text, OSC 7772
+  # backgrounds, proportional fonts) but works headlessly.
+  def self.export_pdf_prawn(file, output, theme: nil)
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     base_dir = File.dirname(File.expand_path(file))
-    ScreenshotPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
+    PdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
     puts "Generated: #{output}"
   end
 end

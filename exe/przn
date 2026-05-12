@@ -8,7 +8,7 @@ require 'optparse'
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: przn [options] <presentation.md>"
-  opts.on('--export [FORMAT]', 'Export to a format (pdf | screenshot; default: pdf)') { |v|
+  opts.on('--export [FORMAT]', 'Export to a format (pdf | prawn; default: pdf)') { |v|
     if v && v.end_with?('.md')
       ARGV.unshift(v)
       options[:export] = 'pdf'
@@ -48,9 +48,9 @@ case options[:export]
 when 'pdf'
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
   Przn.export_pdf(file, output, theme: theme)
-when 'screenshot'
+when 'prawn'
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
-  Przn.export_pdf_screenshot(file, output, theme: theme)
+  Przn.export_pdf_prawn(file, output, theme: theme)
 else
   Przn.start(file, theme: theme, start_at: start_at).run
 end
