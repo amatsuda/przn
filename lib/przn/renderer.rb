@@ -101,7 +101,7 @@ module Przn
     # Other terminals ignore the OSC code, so this is a no-op outside Echoes.
     def apply_slide_background(slide)
       block = slide.blocks.find { |b| b[:type] == :bg }
-      attrs = block ? block[:attrs] : (@theme.bg || {})
+      attrs = block ? block[:attrs] : (@theme.background || {})
 
       @terminal.write "\e]7772;bg-clear\a"
       return if attrs.empty?

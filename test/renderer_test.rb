@@ -167,19 +167,19 @@ class RendererTest < Test::Unit::TestCase
     end
 
     test "body segments pick up theme.font.family as f=" do
-      theme = Przn::Theme.new(colors: {}, font: {family: "Helvetica Neue"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {family: "Helvetica Neue"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]])
       assert(out.include?("f=Helvetica Neue"), "expected f= in output: #{out.inspect}")
     end
 
     test "no f= emitted when neither default_face nor theme.font.family is set" do
-      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]])
       assert(!out.include?(":f="), "did not expect any f= in output: #{out.inspect}")
     end
 
     test "explicit default_face beats theme.font.family" do
-      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]], default_face: "HeadingFont")
       assert(out.include?("f=HeadingFont"))
       assert(!out.include?("f=BodyFont"))
@@ -189,20 +189,20 @@ class RendererTest < Test::Unit::TestCase
       # h1 takes this path when title.family is unset: it shouldn't silently
       # fall back to theme.font.family, so the title can render in the
       # terminal's default font even when body text is themed.
-      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]], default_face: nil)
       assert(!out.include?("f="), "expected no f= when default_face is explicitly nil: #{out.inspect}")
     end
 
     test "inline <font face=\"...\"> wins over both" do
-      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {family: "BodyFont"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:font, "x", {face: "Inline"}]])
       assert(out.include?("f=Inline"))
       assert(!out.include?("f=BodyFont"))
     end
 
     test "default_h threads through every OSC 66 emit (used by h1 to center proportional fonts)" do
-      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, background: {}, title: {})
       segments = [[:text, "hi"], [:bold, "yo"], [:font, "x", {face: "Inter"}]]
       out = render_with_theme(theme, segments, default_h: 2)
       assert_equal 3, out.scan(":h=2").size, "expected h=2 on every OSC 66 segment: #{out.inspect}"
@@ -215,26 +215,26 @@ class RendererTest < Test::Unit::TestCase
     end
 
     test "named font.color wraps the rendered body in the corresponding ANSI code" do
-      theme = Przn::Theme.new(colors: {}, font: {color: "red"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {color: "red"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]])
       assert(out.start_with?("\e[31m"), "expected leading red SGR: #{out.inspect}")
       assert(out.end_with?("\e[0m"), "expected trailing reset: #{out.inspect}")
     end
 
     test "hex font.color emits a 24-bit ANSI escape" do
-      theme = Przn::Theme.new(colors: {}, font: {color: "ff5555"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {color: "ff5555"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]])
       assert(out.start_with?("\e[38;2;255;85;85m"), "expected 24-bit fg open: #{out.inspect}")
     end
 
     test "no body color emitted when font.color is unset" do
-      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "hi"]])
       assert(!out.include?("\e[3"), "did not expect a foreground SGR: #{out.inspect}")
     end
 
     test "inline color tag overrides body color; body color re-opens after the reset" do
-      theme = Przn::Theme.new(colors: {}, font: {color: "white"}, bullet: "・", bullet_size: nil, bg: {}, title: {})
+      theme = Przn::Theme.new(colors: {}, font: {color: "white"}, bullet: "・", bullet_size: nil, background: {}, title: {})
       out = render_with_theme(theme, [[:text, "a"], [:tag, "B", "red"], [:text, "c"]])
       # white SGR (37) opens, red (31) overrides for the tag, reset+white re-opens after.
       red_idx   = out.index("\e[31m")

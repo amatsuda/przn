@@ -55,7 +55,7 @@ module Przn
       @presentation = presentation
       @base_dir = base_dir
       @theme = theme || Theme.default
-      @bg_color = @theme.bg && @theme.bg[:color]
+      @bg_color = @theme.background && @theme.background[:color]
       @fg_color = @theme.font[:color] || "000000"
       @code_bg = @theme.colors[:code_bg]
       @dim_color = @theme.colors[:dim]

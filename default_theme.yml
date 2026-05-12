@@ -24,7 +24,7 @@ bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = t
 # Default slide background, applied when a slide has no <bg .../> directive.
 # Echoes-only (OSC 7772). Use either `color` (solid) or `from`/`to`/`angle`
 # (linear gradient). Both unset = no background override.
-bg:
+background:
   color:                # solid color, e.g. "#1a1a2e"
   from:                 # gradient endpoint, e.g. "#1a1a2e"
   to:                   # gradient endpoint, e.g. "#16213e"

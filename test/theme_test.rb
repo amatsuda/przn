@@ -37,8 +37,8 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil Przn::Theme.default.bullet_size
     end
 
-    test "default bg is empty (renderer emits no override)" do
-      assert_equal({}, Przn::Theme.default.bg)
+    test "default background is empty (renderer emits no override)" do
+      assert_equal({}, Przn::Theme.default.background)
     end
 
     test "default title is empty (renderer uses h1 defaults; no OSC 66 f=, no color)" do
@@ -122,24 +122,24 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil Przn::Theme.load(theme_path).bullet_size
     end
 
-    test "user file sets a solid bg color" do
+    test "user file sets a solid background color" do
       write_theme <<~YAML
-        bg:
+        background:
           color: "#1a1a2e"
       YAML
 
-      assert_equal({color: "#1a1a2e"}, Przn::Theme.load(theme_path).bg)
+      assert_equal({color: "#1a1a2e"}, Przn::Theme.load(theme_path).background)
     end
 
-    test "user file sets a gradient bg" do
+    test "user file sets a gradient background" do
       write_theme <<~YAML
-        bg:
+        background:
           from: "#1a1a2e"
           to:   "#16213e"
           angle: 90
       YAML
 
-      bg = Przn::Theme.load(theme_path).bg
+      bg = Przn::Theme.load(theme_path).background
       assert_equal "#1a1a2e", bg[:from]
       assert_equal "#16213e", bg[:to]
       assert_equal 90,        bg[:angle]
