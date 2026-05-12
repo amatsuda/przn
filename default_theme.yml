@@ -4,9 +4,6 @@
 # All keys are optional — unspecified values fall back to these defaults.
 
 colors:
-  background: "000000"
-  foreground: "ffffff"
-  heading:              # falls back to foreground
   code_bg: "313244"
   dim: "6c7086"
   inline_code: "a6e3a1"

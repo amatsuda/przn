@@ -180,17 +180,17 @@ class PdfExporterTest < Test::Unit::TestCase
 
     test "plain text" do
       result = build("hello")
-      assert_equal [{text: "hello", size: 18, color: default_theme.colors[:foreground]}], result
+      assert_equal [{text: "hello", size: 18, color: "000000"}], result
     end
 
     test "bold" do
       result = build("**bold**")
-      assert_equal [{text: "bold", size: 18, color: default_theme.colors[:foreground], styles: [:bold]}], result
+      assert_equal [{text: "bold", size: 18, color: "000000", styles: [:bold]}], result
     end
 
     test "italic" do
       result = build("*italic*")
-      assert_equal [{text: "italic", size: 18, color: default_theme.colors[:foreground], styles: [:italic]}], result
+      assert_equal [{text: "italic", size: 18, color: "000000", styles: [:italic]}], result
     end
 
     test "color tag" do
@@ -223,11 +223,10 @@ class PdfExporterTest < Test::Unit::TestCase
   sub_test_case "theme" do
     test "export with custom theme produces valid PDF" do
       theme = Przn::Theme.new(
-        colors: {
-          background: 'ff0000', foreground: '00ff00', heading: '0000ff',
-          code_bg: '111111', dim: '222222', inline_code: '333333',
-        },
-        font: {family: nil},
+        colors: {code_bg: '111111', dim: '222222', inline_code: '333333'},
+        font: {family: nil, color: '00ff00'},
+        bullet: '・', bullet_size: nil,
+        bg: {color: 'ff0000'}, title: {},
       )
       path = export("# Hello\n\nWorld\n\n```ruby\nputs 1\n```\n", theme: theme)
       assert_pdf path
@@ -240,11 +239,9 @@ class PdfExporterTest < Test::Unit::TestCase
 
     test "build_formatted_text uses theme colors" do
       theme = Przn::Theme.new(
-        colors: {
-          background: '000000', foreground: 'ffffff', heading: nil,
-          code_bg: '111111', dim: '222222', inline_code: '333333',
-        },
-        font: {family: nil},
+        colors: {code_bg: '111111', dim: '222222', inline_code: '333333'},
+        font: {family: nil, color: 'ffffff'},
+        bullet: '・', bullet_size: nil, bg: {}, title: {},
       )
       presentation = Przn::Parser.parse("# dummy\n")
       exporter = Przn::PdfExporter.new(presentation, theme: theme)

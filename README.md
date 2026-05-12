@@ -262,6 +262,7 @@ Pass a YAML file via `--theme path/to/theme.yml`. All keys are optional — anyt
 font:
   family:                 # body text font; terminal: OSC 66 f=, PDF: Prawn font
   size: 18                # base PDF font size in pt
+  color:                  # body text color; named ANSI or 6-digit hex
 
 title:                    # h1 typography (slide titles)
   family:                 # font family
@@ -272,9 +273,6 @@ bullet: "・"              # unordered-list marker; also h2–h6 prefix
 bullet_size:              # OSC 66 scale (1–7) for the bullet glyph
 
 colors:
-  background: "000000"
-  foreground: "ffffff"
-  heading:                # falls back to foreground
   code_bg: "313244"
   dim: "6c7086"
   inline_code: "a6e3a1"
@@ -288,10 +286,11 @@ bg:                       # default slide background (Echoes OSC 7772)
 
 Notes:
 
+- **`font.color`** — deck-wide default text color (terminal: ANSI fg; PDF: Prawn fg). Inline `<color=...>` / `<font color="...">` runs still win per-segment.
 - **`bullet`** / **`bullet_size`** — `bullet` is the character; `bullet_size` is the OSC 66 scale used to render it. When smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line.
 - **`font.family`** — applied to body text (terminal: via OSC 66 `f=`, requires Echoes; PDF: registered via fontconfig). Inline `<font face="...">` runs override it per-segment.
 - **`title`** — h1 typography. Each attribute is independent from `font`: `title.family` does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block. h2–h6 stay body text.
-- **`bg`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide.
+- **`bg`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `bg.color` when set; otherwise it leaves the page Prawn's default (white).
 
 ## License
 

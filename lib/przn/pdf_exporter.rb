@@ -55,12 +55,11 @@ module Przn
       @presentation = presentation
       @base_dir = base_dir
       @theme = theme || Theme.default
-      @bg_color = @theme.colors[:background]
-      @fg_color = @theme.font[:color] || @theme.colors[:foreground]
+      @bg_color = @theme.bg && @theme.bg[:color]
+      @fg_color = @theme.font[:color] || "000000"
       @code_bg = @theme.colors[:code_bg]
       @dim_color = @theme.colors[:dim]
       @inline_code_color = @theme.colors[:inline_code]
-      @heading_color = @theme.colors[:heading] || @fg_color
       base = (@theme.font[:size] || DEFAULT_FONT_SIZE).to_f
       ratio = base / DEFAULT_FONT_SIZE
       @scale_to_pt = DEFAULT_SCALE_TO_PT.transform_values { |v| v * ratio }
@@ -288,6 +287,8 @@ module Przn
     end
 
     def draw_background(pdf)
+      return unless @bg_color
+
       pdf.canvas do
         pdf.fill_color @bg_color
         pdf.fill_rectangle [0, PAGE_HEIGHT], PAGE_WIDTH, PAGE_HEIGHT
@@ -321,7 +322,7 @@ module Przn
         y - h - heading_margin(pt)
       else
         pt = @scale_to_pt[DEFAULT_SCALE]
-        prefix = [{text: bullet, size: pt, color: @heading_color, styles: [:bold]}]
+        prefix = [{text: bullet, size: pt, color: @fg_color, styles: [:bold]}]
         formatted = prefix + build_formatted_text(text, pt)
         h = render_formatted(pdf, formatted, at: [margin_x, y], width: content_width)
         y - h - 4

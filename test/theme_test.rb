@@ -16,11 +16,11 @@ class ThemeTest < Test::Unit::TestCase
   sub_test_case ".default" do
     test "returns theme with colors from default_theme.yml" do
       theme = Przn::Theme.default
-      assert_equal '000000', theme.colors[:background]
-      assert_equal 'ffffff', theme.colors[:foreground]
       assert_equal '313244', theme.colors[:code_bg]
       assert_equal '6c7086', theme.colors[:dim]
       assert_equal 'a6e3a1', theme.colors[:inline_code]
+      assert_nil theme.colors[:background]
+      assert_nil theme.colors[:foreground]
       assert_nil theme.colors[:heading]
     end
 
@@ -50,29 +50,27 @@ class ThemeTest < Test::Unit::TestCase
     test "reads YAML and overrides specified values" do
       write_theme <<~YAML
         colors:
-          background: "ff0000"
-          foreground: "00ff00"
+          code_bg: "ff0000"
+          dim: "00ff00"
         font:
           family: "HackGen"
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal 'ff0000', theme.colors[:background]
-      assert_equal '00ff00', theme.colors[:foreground]
+      assert_equal 'ff0000', theme.colors[:code_bg]
+      assert_equal '00ff00', theme.colors[:dim]
       assert_equal 'HackGen', theme.font[:family]
     end
 
     test "unspecified values fall back to defaults" do
       write_theme <<~YAML
         colors:
-          background: "ff0000"
+          dim: "ff0000"
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal 'ff0000', theme.colors[:background]
-      assert_equal @defaults.colors[:foreground], theme.colors[:foreground]
+      assert_equal 'ff0000', theme.colors[:dim]
       assert_equal @defaults.colors[:code_bg], theme.colors[:code_bg]
-      assert_equal @defaults.colors[:dim], theme.colors[:dim]
       assert_equal @defaults.colors[:inline_code], theme.colors[:inline_code]
       assert_nil theme.font[:family]
     end
@@ -81,8 +79,8 @@ class ThemeTest < Test::Unit::TestCase
       write_theme ""
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal @defaults.colors[:background], theme.colors[:background]
-      assert_equal @defaults.colors[:foreground], theme.colors[:foreground]
+      assert_equal @defaults.colors[:code_bg], theme.colors[:code_bg]
+      assert_equal @defaults.colors[:dim], theme.colors[:dim]
     end
 
     test "missing file raises error" do
