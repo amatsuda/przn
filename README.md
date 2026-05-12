@@ -273,16 +273,16 @@ bullet:                   # unordered-list marker; also h2–h6 prefix
   text: "・"              # the glyph
   size:                   # OSC 66 scale (1–7) for the bullet; default = body text's scale
 
-colors:
-  code_bg: "313244"
-  dim: "6c7086"
-  inline_code: "a6e3a1"
-
 background:               # default slide background (Echoes OSC 7772)
   color:                  # solid, e.g. "#1a1a2e"
   from:                   # gradient endpoint
   to:                     # gradient endpoint
   angle:                  # gradient angle in degrees
+
+colors:
+  code_bg: "313244"
+  dim: "6c7086"
+  inline_code: "a6e3a1"
 ```
 
 Notes:

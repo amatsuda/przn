@@ -3,11 +3,6 @@
 # Copy this file and pass your copy via --theme to customize.
 # All keys are optional — unspecified values fall back to these defaults.
 
-colors:
-  code_bg: "313244"
-  dim: "6c7086"
-  inline_code: "a6e3a1"
-
 font:
   family:               # body text font; terminal: OSC 66 f= (Echoes); PDF: Prawn font (auto-detected if blank)
   size: 18              # base font size in pt for PDF export
@@ -31,3 +26,8 @@ background:
   to:                   # gradient endpoint, e.g. "#16213e"
   angle:                # gradient angle in degrees (0 = left→right, 90 = bottom→top)
   type:                 # gradient type; defaults to "linear"
+
+colors:
+  code_bg: "313244"
+  dim: "6c7086"
+  inline_code: "a6e3a1"
