@@ -6,7 +6,7 @@ module Przn
   class Theme
     DEFAULT_PATH = File.expand_path('../../../default_theme.yml', __FILE__)
 
-    attr_reader :colors, :font, :bullet, :bullet_size, :background, :title
+    attr_reader :colors, :font, :bullet, :background, :title
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -16,8 +16,7 @@ module Przn
       merged = {
         colors: defaults[:colors].merge(overrides[:colors] || {}),
         font: defaults[:font].merge(overrides[:font] || {}),
-        bullet: overrides[:bullet] || defaults[:bullet],
-        bullet_size: overrides[:bullet_size] || defaults[:bullet_size],
+        bullet: defaults[:bullet].merge(overrides[:bullet] || {}),
         background: defaults[:background].merge(overrides[:background] || {}),
         title: defaults[:title].merge(overrides[:title] || {}),
       }
@@ -33,8 +32,7 @@ module Przn
       {
         colors: data[:colors] || {},
         font: data[:font] || {},
-        bullet: data[:bullet],
-        bullet_size: data[:bullet_size],
+        bullet: (data[:bullet] || {}).compact,
         background: (data[:background] || {}).compact,
         title: (data[:title] || {}).compact,
       }
@@ -45,7 +43,6 @@ module Przn
       @colors = config[:colors]
       @font = config[:font]
       @bullet = config[:bullet]
-      @bullet_size = config[:bullet_size]
       @background = config[:background]
       @title = config[:title]
     end

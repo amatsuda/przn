@@ -609,7 +609,7 @@ module Przn
     end
 
     def bullet
-      @font_registered ? @theme.bullet : "-"
+      @font_registered ? @theme.bullet[:text] : "-"
     end
 
   end

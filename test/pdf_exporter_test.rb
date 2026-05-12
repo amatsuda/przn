@@ -225,7 +225,7 @@ class PdfExporterTest < Test::Unit::TestCase
       theme = Przn::Theme.new(
         colors: {code_bg: '111111', dim: '222222', inline_code: '333333'},
         font: {family: nil, color: '00ff00'},
-        bullet: '・', bullet_size: nil,
+        bullet: {text: '・'},
         background: {color: 'ff0000'}, title: {},
       )
       path = export("# Hello\n\nWorld\n\n```ruby\nputs 1\n```\n", theme: theme)
@@ -241,7 +241,7 @@ class PdfExporterTest < Test::Unit::TestCase
       theme = Przn::Theme.new(
         colors: {code_bg: '111111', dim: '222222', inline_code: '333333'},
         font: {family: nil, color: 'ffffff'},
-        bullet: '・', bullet_size: nil, background: {}, title: {},
+        bullet: {text: '・'}, background: {}, title: {},
       )
       presentation = Przn::Parser.parse("# dummy\n")
       exporter = Przn::PdfExporter.new(presentation, theme: theme)

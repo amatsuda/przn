@@ -18,8 +18,9 @@ title:                  # h1 typography (slide titles); each attribute is indepe
   size:                 # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default x-large (4)
   color:                # named ANSI or 6-digit hex; falls back to the terminal's default fg when unset
 
-bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix
-bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = the body text's scale
+bullet:                 # unordered-list marker; also h2–h6 heading prefix
+  text: "・"            # the glyph
+  size:                 # OSC 66 scale (1–7) for the bullet; default = body text's scale
 
 # Default slide background, applied when a slide has no <bg .../> directive.
 # Echoes-only (OSC 7772). Use either `color` (solid) or `from`/`to`/`angle`

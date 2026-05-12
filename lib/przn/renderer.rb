@@ -141,7 +141,7 @@ module Przn
         row + 4
       else
         left = content_left(width)
-        prefix = @theme.bullet
+        prefix = @theme.bullet[:text]
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
         segments = Parser.parse_inline(text)
@@ -207,7 +207,7 @@ module Przn
       block[:items].each do |item|
         depth = item[:depth] || 0
         indent = "  " * depth
-        prefix = "#{indent}#{@theme.bullet}"
+        prefix = "#{indent}#{@theme.bullet[:text]}"
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
 
@@ -467,7 +467,7 @@ module Przn
     # centered. Plain `s=N` for a smaller bullet would top-align it inside
     # the row, which looks wrong against the larger body text.
     def render_bullet(prefix)
-      size = @theme.bullet_size
+      size = @theme.bullet[:size]
       if size && size < DEFAULT_SCALE
         KittyText.sized(prefix, s: DEFAULT_SCALE, n: size, d: DEFAULT_SCALE, v: 2)
       else

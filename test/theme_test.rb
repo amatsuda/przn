@@ -29,12 +29,10 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil theme.font[:family]
     end
 
-    test "returns theme with default bullet" do
-      assert_equal "・", Przn::Theme.default.bullet
-    end
-
-    test "returns nil bullet_size by default (renderer falls back to body scale)" do
-      assert_nil Przn::Theme.default.bullet_size
+    test "returns theme with default bullet text and unset size" do
+      bullet = Przn::Theme.default.bullet
+      assert_equal "・", bullet[:text]
+      assert_nil bullet[:size]
     end
 
     test "default background is empty (renderer emits no override)" do
@@ -89,37 +87,35 @@ class ThemeTest < Test::Unit::TestCase
       end
     end
 
-    test "user file overrides the bullet" do
+    test "user file overrides bullet.text" do
       write_theme <<~YAML
-        bullet: "●"
+        bullet:
+          text: "●"
       YAML
 
-      assert_equal "●", Przn::Theme.load(theme_path).bullet
+      bullet = Przn::Theme.load(theme_path).bullet
+      assert_equal "●", bullet[:text]
+      assert_nil bullet[:size]
     end
 
-    test "unspecified bullet falls back to default" do
+    test "user file overrides bullet.size, keeps default text" do
+      write_theme <<~YAML
+        bullet:
+          size: 1
+      YAML
+
+      bullet = Przn::Theme.load(theme_path).bullet
+      assert_equal "・", bullet[:text]
+      assert_equal 1, bullet[:size]
+    end
+
+    test "unspecified bullet falls back to all defaults" do
       write_theme <<~YAML
         colors:
-          background: "ff0000"
+          code_bg: "ff0000"
       YAML
 
       assert_equal @defaults.bullet, Przn::Theme.load(theme_path).bullet
-    end
-
-    test "user file overrides bullet_size" do
-      write_theme <<~YAML
-        bullet_size: 1
-      YAML
-
-      assert_equal 1, Przn::Theme.load(theme_path).bullet_size
-    end
-
-    test "unspecified bullet_size falls back to default (nil)" do
-      write_theme <<~YAML
-        bullet: "●"
-      YAML
-
-      assert_nil Przn::Theme.load(theme_path).bullet_size
     end
 
     test "user file sets a solid background color" do
