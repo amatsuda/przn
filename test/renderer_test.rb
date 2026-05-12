@@ -209,6 +209,43 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case "render_segments_scaled body color (theme.font.color)" do
+    def render_with_theme(theme, segments, para_scale = 2)
+      Przn::Renderer.new(nil, theme: theme).send(:render_segments_scaled, segments, para_scale)
+    end
+
+    test "named font.color wraps the rendered body in the corresponding ANSI code" do
+      theme = Przn::Theme.new(colors: {}, font: {color: "red"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]])
+      assert(out.start_with?("\e[31m"), "expected leading red SGR: #{out.inspect}")
+      assert(out.end_with?("\e[0m"), "expected trailing reset: #{out.inspect}")
+    end
+
+    test "hex font.color emits a 24-bit ANSI escape" do
+      theme = Przn::Theme.new(colors: {}, font: {color: "ff5555"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]])
+      assert(out.start_with?("\e[38;2;255;85;85m"), "expected 24-bit fg open: #{out.inspect}")
+    end
+
+    test "no body color emitted when font.color is unset" do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "hi"]])
+      assert(!out.include?("\e[3"), "did not expect a foreground SGR: #{out.inspect}")
+    end
+
+    test "inline color tag overrides body color; body color re-opens after the reset" do
+      theme = Przn::Theme.new(colors: {}, font: {color: "white"}, bullet: "・", bullet_size: nil, bg: {}, heading_face: nil)
+      out = render_with_theme(theme, [[:text, "a"], [:tag, "B", "red"], [:text, "c"]])
+      # white SGR (37) opens, red (31) overrides for the tag, reset+white re-opens after.
+      red_idx   = out.index("\e[31m")
+      white_idx = out.index("\e[37m")
+      assert_not_nil red_idx
+      assert_not_nil white_idx
+      assert_operator white_idx, :<, red_idx, "body color should open before the inline color: #{out.inspect}"
+      assert(out.count("\e[37m") >= 2, "expected body color to re-open after the inline reset: #{out.inspect}")
+    end
+  end
+
   sub_test_case "effective_seg_scale" do
     test "returns para_scale for non-tag segments" do
       assert_equal 2, @renderer.send(:effective_seg_scale, [:text, "hi"], 2)

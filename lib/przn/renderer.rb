@@ -500,7 +500,8 @@ module Przn
     def render_segments_scaled(segments, para_scale, default_face: :body, default_h: nil)
       f = default_face == :body ? @theme.font[:family] : default_face
       h = default_h
-      segments.map { |segment|
+      body_open = @theme.font[:color] ? color_code(@theme.font[:color]) : ""
+      inner = segments.map { |segment|
         type = segment[0]
         content = segment[1]
         case type
@@ -509,19 +510,20 @@ module Przn
           if (scale = Parser::SIZE_SCALES[tag_name])
             KittyText.sized(content, s: scale, f: f, h: h)
           elsif Parser::NAMED_COLORS.key?(tag_name)
-            "#{color_code(tag_name)}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+            "#{color_code(tag_name)}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
           else
             KittyText.sized(content, s: para_scale, f: f, h: h)
           end
-        when :font          then render_font_segment(content, segment[2] || {}, para_scale, default_face: f, default_h: h)
-        when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
-        when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
-        when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
-        when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
-        when :code          then "#{ANSI[:gray_bg]}#{KittyText.sized(" #{content} ", s: para_scale, f: f, h: h)}#{ANSI[:reset]}"
+        when :font          then "#{render_font_segment(content, segment[2] || {}, para_scale, default_face: f, default_h: h)}#{(segment[2] || {})[:color] ? body_open : ''}"
+        when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :code          then "#{ANSI[:gray_bg]}#{KittyText.sized(" #{content} ", s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
         when :text          then KittyText.sized(content, s: para_scale, f: f, h: h)
         end
       }.join
+      body_open.empty? ? inner : "#{body_open}#{inner}#{ANSI[:reset]}"
     end
 
     def render_inline_scaled(text, para_scale)

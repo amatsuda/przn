@@ -14,6 +14,7 @@ colors:
 font:
   family:               # body text font; terminal: OSC 66 f= (Echoes); PDF: Prawn font (auto-detected if blank)
   size: 18              # base font size in pt for PDF export
+  color:                # body text color (terminal: ANSI fg, PDF: Prawn fg); named ANSI or 6-digit hex
 
 bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix
 bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = the body text's scale

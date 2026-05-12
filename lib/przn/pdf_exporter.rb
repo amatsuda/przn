@@ -56,7 +56,7 @@ module Przn
       @base_dir = base_dir
       @theme = theme || Theme.default
       @bg_color = @theme.colors[:background]
-      @fg_color = @theme.colors[:foreground]
+      @fg_color = @theme.font[:color] || @theme.colors[:foreground]
       @code_bg = @theme.colors[:code_bg]
       @dim_color = @theme.colors[:dim]
       @inline_code_color = @theme.colors[:inline_code]
