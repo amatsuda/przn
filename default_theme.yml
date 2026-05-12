@@ -16,10 +16,13 @@ font:
   size: 18              # base font size in pt for PDF export
   color:                # body text color (terminal: ANSI fg, PDF: Prawn fg); named ANSI or 6-digit hex
 
+title:                  # h1 typography (slide titles); each attribute is independent of `font`
+  family:               # font family (terminal: OSC 66 f=, requires Echoes)
+  size:                 # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default x-large (4)
+  color:                # named ANSI or 6-digit hex; falls back to the terminal's default fg when unset
+
 bullet: "・"            # used as the unordered-list marker and the h2–h6 heading prefix
 bullet_size:            # OSC 66 scale (1–7) for the bullet glyph; default = the body text's scale
-
-heading_face:           # font family for h1 (slide titles); inline <font face="..."> still wins per-run
 
 # Default slide background, applied when a slide has no <bg .../> directive.
 # Echoes-only (OSC 7772). Use either `color` (solid) or `from`/`to`/`angle`

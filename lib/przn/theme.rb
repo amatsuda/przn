@@ -6,7 +6,7 @@ module Przn
   class Theme
     DEFAULT_PATH = File.expand_path('../../../default_theme.yml', __FILE__)
 
-    attr_reader :colors, :font, :bullet, :bullet_size, :bg, :heading_face
+    attr_reader :colors, :font, :bullet, :bullet_size, :bg, :title
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -19,7 +19,7 @@ module Przn
         bullet: overrides[:bullet] || defaults[:bullet],
         bullet_size: overrides[:bullet_size] || defaults[:bullet_size],
         bg: defaults[:bg].merge(overrides[:bg] || {}),
-        heading_face: overrides[:heading_face] || defaults[:heading_face],
+        title: defaults[:title].merge(overrides[:title] || {}),
       }
       new(merged)
     end
@@ -36,7 +36,7 @@ module Przn
         bullet: data[:bullet],
         bullet_size: data[:bullet_size],
         bg: (data[:bg] || {}).compact,
-        heading_face: data[:heading_face],
+        title: (data[:title] || {}).compact,
       }
     end
     private_class_method :load_yaml
@@ -47,7 +47,7 @@ module Przn
       @bullet = config[:bullet]
       @bullet_size = config[:bullet_size]
       @bg = config[:bg]
-      @heading_face = config[:heading_face]
+      @title = config[:title]
     end
   end
 end

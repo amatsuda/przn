@@ -41,8 +41,8 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal({}, Przn::Theme.default.bg)
     end
 
-    test "default heading_face is nil (renderer omits OSC 66 f=)" do
-      assert_nil Przn::Theme.default.heading_face
+    test "default title is empty (renderer uses h1 defaults; no OSC 66 f=, no color)" do
+      assert_equal({}, Przn::Theme.default.title)
     end
   end
 
@@ -147,12 +147,18 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 90,        bg[:angle]
     end
 
-    test "user file overrides heading_face" do
+    test "user file sets a title family / size / color" do
       write_theme <<~YAML
-        heading_face: "Helvetica Neue"
+        title:
+          family: "Helvetica Neue"
+          size: "7"
+          color: "ff5555"
       YAML
 
-      assert_equal "Helvetica Neue", Przn::Theme.load(theme_path).heading_face
+      title = Przn::Theme.load(theme_path).title
+      assert_equal "Helvetica Neue", title[:family]
+      assert_equal "7",              title[:size]
+      assert_equal "ff5555",         title[:color]
     end
   end
 

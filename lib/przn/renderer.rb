@@ -123,8 +123,10 @@ module Przn
       text = block[:content]
 
       if block[:level] == 1
-        scale = KittyText::HEADING_SCALES[1]
-        face = @theme.heading_face
+        title = @theme.title || {}
+        scale = (title[:size] && Parser::SIZE_SCALES[title[:size].to_s]) || KittyText::HEADING_SCALES[1]
+        face = title[:family]
+        color = title[:color]
         max_w = max_text_width(width, 0, scale)
         segments = Parser.parse_inline(text)
         wrapped = wrap_segments(segments, max_w, scale)
@@ -133,7 +135,7 @@ module Przn
           vis = segments_visible_cells(line_segs, scale)
           pad = [(width - vis) / 2, 0].max
           @terminal.move_to(row, pad + 1)
-          @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2)}#{ANSI[:reset]}"
+          @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2, default_color: color)}#{ANSI[:reset]}"
           row += scale
         end
         row + 4
@@ -485,22 +487,24 @@ module Przn
       "#{color_code(color)}#{base}#{ANSI[:reset]}"
     end
 
-    # `default_face:` lets a caller (currently h1 rendering) override every
-    # OSC 66 emit's `f=` attribute. When unset, body text falls back to
-    # `theme.font.family`. To opt out of that body fallback (so a heading can
-    # render in the terminal's default font when its own `heading_face` is
-    # unset), pass `default_face:` explicitly — even `nil` is honored.
-    # Inline `<font face="...">` runs still win for their own segments.
+    # `default_face:` / `default_color:` let a caller (currently h1 rendering)
+    # override the OSC 66 `f=` and the ANSI fg for every emit on the line.
+    # When unset, body text falls back to `theme.font.family` / `theme.font.color`.
+    # To opt out of that body fallback (so a heading can render in the
+    # terminal's defaults even when body text is themed), pass the keyword
+    # explicitly — even `nil` is honored. Inline `<font face/color>` and
+    # `<color=...>` runs still win for their own segments.
     #
     # `default_h:` threads an OSC 66 `h=` (horizontal alignment) into every
-    # emit on the line. h1 uses h=2 so a proportional `heading_face` is
+    # emit on the line. h1 uses h=2 so a proportional `title.family` is
     # centered within the reserved cell block — without it the glyphs left-
     # align inside the block and the visible text drifts left of the center
     # column we computed.
-    def render_segments_scaled(segments, para_scale, default_face: :body, default_h: nil)
+    def render_segments_scaled(segments, para_scale, default_face: :body, default_h: nil, default_color: :body)
       f = default_face == :body ? @theme.font[:family] : default_face
       h = default_h
-      body_open = @theme.font[:color] ? color_code(@theme.font[:color]) : ""
+      c = default_color == :body ? @theme.font[:color] : default_color
+      body_open = c ? color_code(c) : ""
       inner = segments.map { |segment|
         type = segment[0]
         content = segment[1]
