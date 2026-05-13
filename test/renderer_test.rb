@@ -58,7 +58,7 @@ class RendererTest < Test::Unit::TestCase
       segments = [
         [:text, 'hello '],
         [:tag, 'WORLD', 'x-large'],
-        [:text, ' after'],
+        [:text, ' after']
       ]
       lines = wrap(segments, 20, 2)
       assert_equal 2, lines.size
@@ -72,7 +72,7 @@ class RendererTest < Test::Unit::TestCase
         [:tag, 'BIG', 'x-large'],     # s=4
         [:text, ' mid '],
         [:tag, 'small-ish', 'small'], # s=2 (== para_scale)
-        [:text, ' end of paragraph'],
+        [:text, ' end of paragraph']
       ]
       max_width = 12
       para_scale = 2
@@ -268,7 +268,7 @@ class RendererTest < Test::Unit::TestCase
       segments = [
         [:text, 'ab'],                 # 2 chars * 2 = 4
         [:tag, 'CDE', 'x-large'],      # 3 chars * 4 = 12
-        [:bold, 'f'],                  # 1 char * 2 = 2
+        [:bold, 'f']                  # 1 char * 2 = 2
       ]
       assert_equal 18, @renderer.send(:segments_visible_cells, segments, 2)
     end
@@ -459,7 +459,7 @@ class RendererTest < Test::Unit::TestCase
     test 'uploads PNG image blocks and flushes the terminal' do
       slide = slide_with([
         {type: :heading, level: 1, content: 'Hi'},
-        {type: :image, path: @png.path, attrs: {}},
+        {type: :image, path: @png.path, attrs: {}}
       ])
       @renderer.preload(slide)
       assert_equal 1, @term.writes.size

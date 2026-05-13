@@ -24,7 +24,7 @@ module PrawnCJKLineWrap
       "[#{CJK_CHARS}]",
       "[#{ews}]+",
       "#{ehy}+[^#{ebc}]*",
-      eshy.to_s,
+      eshy.to_s
     ]
 
     Regexp.new(patterns.join('|'))
@@ -85,7 +85,7 @@ module Przn
       -> { Dir.glob('/usr/share/fonts/**/NotoSansJP-Regular.ttf').first },
       -> { File.join(Dir.home, 'Library/Fonts/HackGen-Regular.ttf') },
       -> { '/Library/Fonts/Arial Unicode.ttf' },
-      -> { '/System/Library/Fonts/Supplemental/Arial Unicode.ttf' },
+      -> { '/System/Library/Fonts/Supplemental/Arial Unicode.ttf' }
     ].freeze
 
     FALLBACK_FONT_FAMILIES = %w[NotoSansCJK NotoSansJP HackGen].freeze
