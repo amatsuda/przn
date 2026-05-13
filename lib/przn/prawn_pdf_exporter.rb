@@ -96,7 +96,7 @@ module Przn
 
       pdf = Prawn::Document.new(
         page_size: [PAGE_WIDTH, PAGE_HEIGHT],
-        margin: 0,
+        margin: 0
       )
 
       register_fonts(pdf)
