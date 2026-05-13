@@ -3,6 +3,7 @@
 require "test_helper"
 require "tempfile"
 require "hexapdf"
+require_relative '../lib/przn/screenshot_pdf_exporter'
 
 class ScreenshotPdfExporterTest < Test::Unit::TestCase
   # Mocks Echoes: when it sees the OSC 7772 `capture <path>` command, it

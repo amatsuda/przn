@@ -50,6 +50,8 @@ end
 
 case options[:export]
 when 'pdf'
+  require_relative '../lib/przn/screenshot_pdf_exporter'
+
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
   Przn.export_pdf(file, output, theme: theme)
 when 'prawn'

@@ -4,6 +4,20 @@ require 'tmpdir'
 require 'fileutils'
 
 module Przn
+  # Default PDF export: drives the live renderer, asks the terminal to save
+  # each rendered slide as a one-page vector PDF via OSC 7772 `capture`,
+  # then concatenates the per-slide PDFs into a single multi-page PDF.
+  # Requires Echoes (or any terminal that implements the same capture
+  # command); use `export_pdf_prawn` instead for environments where that's
+  # not possible (CI, headless).
+  def self.export_pdf(file, output, theme: nil)
+    markdown = File.read(file)
+    presentation = Parser.parse(markdown)
+    base_dir = File.dirname(File.expand_path(file))
+    ScreenshotPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
+    puts "Generated: #{output}"
+  end
+
   # Renders each slide live to the user's terminal, asks the terminal to save
   # the current pane as a vector PDF via Echoes' OSC 7772 `capture` command,
   # then concatenates the per-slide PDFs into a single multi-page PDF.
