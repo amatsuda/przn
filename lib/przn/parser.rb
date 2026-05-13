@@ -283,13 +283,13 @@ module Przn
           segments << [:note, scanner[1]]
         elsif scanner.scan(/<note>(.*?)<\/note>/)
           segments << [:note, scanner[1]]
-        elsif scanner.scan(/\{::wait\/\}/) || scanner.scan(/<wait\s*\/>/)
+        elsif scanner.scan('{::wait/}') || scanner.scan(/<wait\s*\/>/)
           # skip wait markers in inline text
-        elsif scanner.scan(/&lt;/)
+        elsif scanner.scan('&lt;')
           segments << [:text, '<']
-        elsif scanner.scan(/&gt;/)
+        elsif scanner.scan('&gt;')
           segments << [:text, '>']
-        elsif scanner.scan(/&amp;/)
+        elsif scanner.scan('&amp;')
           segments << [:text, '&']
         elsif scanner.scan(/`([^`]+)`/)
           segments << [:code, scanner[1]]
