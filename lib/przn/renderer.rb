@@ -152,7 +152,7 @@ module Przn
           if li == 0
             @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
-            @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           end
           row += DEFAULT_SCALE
         end
@@ -219,7 +219,7 @@ module Przn
           if li == 0
             @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
-            @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           end
           row += DEFAULT_SCALE
         end
@@ -245,7 +245,7 @@ module Przn
           if li == 0
             @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
-            @terminal.write "#{KittyText.sized(" " * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           end
           row += DEFAULT_SCALE
         end
