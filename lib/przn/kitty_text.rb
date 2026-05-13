@@ -5,7 +5,7 @@ module Przn
     HEADING_SCALES = {
       1 => 4,
       2 => 3,
-      3 => 2,
+      3 => 2
     }.freeze
 
     module_function

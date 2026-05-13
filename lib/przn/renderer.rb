@@ -10,7 +10,7 @@ module Przn
       dim:           "\e[2m",
       cyan:          "\e[36m",
       gray_bg:       "\e[48;5;236m",
-      reset:         "\e[0m",
+      reset:         "\e[0m"
     }.freeze
 
     DEFAULT_SCALE = 2

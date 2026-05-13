@@ -14,7 +14,7 @@ module Przn
       'xx-large' => 5,
       'xxx-large' => 6,
       'xxxx-large' => 7,
-      '1' => 1, '2' => 2, '3' => 3, '4' => 4, '5' => 5, '6' => 6, '7' => 7,
+      '1' => 1, '2' => 2, '3' => 3, '4' => 4, '5' => 5, '6' => 6, '7' => 7
     }.freeze
 
     NAMED_COLORS = {
@@ -22,7 +22,7 @@ module Przn
       'magenta' => 35, 'cyan' => 36, 'white' => 37,
       'bright_red' => 91, 'bright_green' => 92, 'bright_yellow' => 93,
       'bright_blue' => 94, 'bright_magenta' => 95, 'bright_cyan' => 96,
-      'bright_white' => 97,
+      'bright_white' => 97
     }.freeze
 
     module_function

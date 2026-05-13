@@ -50,7 +50,7 @@ module Przn
     DEFAULT_FONT_SIZE = 18
     DEFAULT_SCALE_TO_PT = {
       1 => 10, 2 => 18, 3 => 24, 4 => 32,
-      5 => 40, 6 => 48, 7 => 56,
+      5 => 40, 6 => 48, 7 => 56
     }.freeze
 
     DEFAULT_SCALE = Renderer::DEFAULT_SCALE
@@ -60,7 +60,7 @@ module Przn
       'magenta' => 'FF79C6', 'cyan' => '8BE9FD', 'white' => 'F8F8F2',
       'bright_red' => 'FF6E6E', 'bright_green' => '69FF94', 'bright_yellow' => 'FFFFA5',
       'bright_blue' => 'D6ACFF', 'bright_magenta' => 'FF92DF', 'bright_cyan' => 'A4FFFF',
-      'bright_white' => 'FFFFFF',
+      'bright_white' => 'FFFFFF'
     }.freeze
 
     def initialize(presentation, base_dir: '.', theme: nil)
@@ -120,7 +120,7 @@ module Przn
           'CJK' => {
             normal: {file: font_path, font: 0},
             bold:   {file: font_path.sub('W3', 'W6').then { |p| File.exist?(p) ? p : font_path }, font: 0},
-            italic: {file: font_path, font: 0},
+            italic: {file: font_path, font: 0}
           }
         )
       else
@@ -129,7 +129,7 @@ module Przn
           'CJK' => {
             normal: font_path,
             bold:   bold_path,
-            italic: font_path,
+            italic: font_path
           }
         )
       end
@@ -156,7 +156,7 @@ module Przn
         pdf.font_families.update(family => {
           normal: path,
           bold: bold_path,
-          italic: path,
+          italic: path
         })
         @registered_inline_fonts[family] = true
       rescue

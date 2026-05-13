@@ -18,7 +18,7 @@ module Przn
         font: defaults[:font].merge(overrides[:font] || {}),
         bullet: defaults[:bullet].merge(overrides[:bullet] || {}),
         background: defaults[:background].merge(overrides[:background] || {}),
-        title: defaults[:title].merge(overrides[:title] || {}),
+        title: defaults[:title].merge(overrides[:title] || {})
       }
       new(merged)
     end
@@ -43,7 +43,7 @@ module Przn
         font: data[:font] || {},
         bullet: (data[:bullet] || {}).compact,
         background: (data[:background] || {}).compact,
-        title: (data[:title] || {}).compact,
+        title: (data[:title] || {}).compact
       }
     end
     private_class_method :load_yaml
