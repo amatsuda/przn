@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "tmpdir"
+require_relative '../lib/przn/prawn_pdf_exporter'
 
 class PrawnPdfExporterTest < Test::Unit::TestCase
   def setup

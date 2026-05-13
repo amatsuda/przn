@@ -53,6 +53,8 @@ when 'pdf'
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
   Przn.export_pdf(file, output, theme: theme)
 when 'prawn'
+  require_relative '../lib/przn/prawn_pdf_exporter'
+
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
   Przn.export_pdf_prawn(file, output, theme: theme)
 else

@@ -9,7 +9,6 @@ require_relative "przn/presentation"
 require_relative "przn/terminal"
 require_relative "przn/renderer"
 require_relative "przn/controller"
-require_relative "przn/prawn_pdf_exporter"
 require_relative "przn/screenshot_pdf_exporter"
 require_relative "przn/theme"
 
@@ -37,18 +36,6 @@ module Przn
     presentation = Parser.parse(markdown)
     base_dir = File.dirname(File.expand_path(file))
     ScreenshotPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
-    puts "Generated: #{output}"
-  end
-
-  # Legacy PDF export via Prawn — renders the deck directly into a vector
-  # PDF without touching the terminal. Diverges from what's on screen for
-  # any feature the live renderer adds (OSC 66 sized text, OSC 7772
-  # backgrounds, proportional fonts) but works headlessly.
-  def self.export_pdf_prawn(file, output, theme: nil)
-    markdown = File.read(file)
-    presentation = Parser.parse(markdown)
-    base_dir = File.dirname(File.expand_path(file))
-    PrawnPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
     puts "Generated: #{output}"
   end
 end
