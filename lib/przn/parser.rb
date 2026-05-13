@@ -35,7 +35,7 @@ module Przn
     # Split on h1 headings (Rabbit-compatible)
     def split_slides(markdown)
       chunks = []
-      current = +""
+      current = +''
       in_fence = false
 
       markdown.each_line do |line|
@@ -155,7 +155,7 @@ module Przn
               items << {text: Regexp.last_match(2), depth: depth}
             elsif lines[i].match(/\A {2,}(\S.*)/)
               # Continuation line
-              items.last[:text] << " " << Regexp.last_match(1) if items.last
+              items.last[:text] << ' ' << Regexp.last_match(1) if items.last
             else
               break
             end
@@ -189,7 +189,7 @@ module Przn
             attr_str = rest.sub(/\A\{:?\s*/, '')
             while !attr_str.include?('}') && (i + 1) < lines.size
               i += 1
-              attr_str << " " << lines[i].strip
+              attr_str << ' ' << lines[i].strip
             end
             attr_str = attr_str.sub(/\}\s*\z/, '')
             parse_image_attrs(attr_str, attrs)
@@ -286,11 +286,11 @@ module Przn
         elsif scanner.scan(/\{::wait\/\}/) || scanner.scan(/<wait\s*\/>/)
           # skip wait markers in inline text
         elsif scanner.scan(/&lt;/)
-          segments << [:text, "<"]
+          segments << [:text, '<']
         elsif scanner.scan(/&gt;/)
-          segments << [:text, ">"]
+          segments << [:text, '>']
         elsif scanner.scan(/&amp;/)
-          segments << [:text, "&"]
+          segments << [:text, '&']
         elsif scanner.scan(/`([^`]+)`/)
           segments << [:code, scanner[1]]
         elsif scanner.scan(/\*\*(.+?)\*\*/)

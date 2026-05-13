@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "przn"
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+require 'przn'
 
-require "test-unit"
+require 'test-unit'

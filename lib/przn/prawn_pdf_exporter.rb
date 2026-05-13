@@ -68,7 +68,7 @@ module Przn
       @base_dir = base_dir
       @theme = theme || Theme.default
       @bg_color = @theme.background && @theme.background[:color]
-      @fg_color = @theme.font[:color] || "000000"
+      @fg_color = @theme.font[:color] || '000000'
       @code_bg = @theme.colors[:code_bg]
       @dim_color = @theme.colors[:dim]
       @inline_code_color = @theme.colors[:inline_code]
@@ -621,7 +621,7 @@ module Przn
     end
 
     def bullet
-      @font_registered ? @theme.bullet[:text] : "-"
+      @font_registered ? @theme.bullet[:text] : '-'
     end
 
   end

@@ -7,7 +7,7 @@ require 'optparse'
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: przn [options] <presentation.md>"
+  opts.banner = 'Usage: przn [options] <presentation.md>'
   opts.on('--export [FORMAT]', 'Export to a format (pdf | prawn; default: pdf)') { |v|
     if v && v.end_with?('.md')
       ARGV.unshift(v)
@@ -24,7 +24,7 @@ end.parse!
 if options[:generate_theme]
   content = File.read(Przn::Theme::DEFAULT_PATH).sub(/\A(#[^\n]*\n)+\n/, '')
   File.write('theme.yml', content)
-  puts "Generated: theme.yml"
+  puts 'Generated: theme.yml'
   exit
 end
 
@@ -38,7 +38,7 @@ end
 
 file = ARGV[0]
 unless file
-  $stderr.puts "Usage: przn [options] <presentation.md> [@N]"
+  $stderr.puts 'Usage: przn [options] <presentation.md> [@N]'
   exit 1
 end
 

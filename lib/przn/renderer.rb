@@ -206,7 +206,7 @@ module Przn
       left = content_left(width)
       block[:items].each do |item|
         depth = item[:depth] || 0
-        indent = "  " * depth
+        indent = '  ' * depth
         prefix = "#{indent}#{@theme.bullet[:text]}"
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
@@ -232,7 +232,7 @@ module Przn
       left = content_left(width)
       block[:items].each_with_index do |item, i|
         depth = item[:depth] || 0
-        indent = "  " * depth
+        indent = '  ' * depth
         prefix = "#{indent}#{i + 1}. "
         prefix_w = display_width(prefix)
         max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
@@ -281,7 +281,7 @@ module Przn
 
     def render_blockquote(block, width, row)
       left = content_left(width)
-      prefix = "| "
+      prefix = '| '
       prefix_w = display_width(prefix)
       max_w = max_text_width(width, left + 1, DEFAULT_SCALE) - prefix_w
 
@@ -292,7 +292,7 @@ module Przn
 
         wrapped.each_with_index do |line_segs, li|
           @terminal.move_to(row, left + 1)
-          p = li == 0 ? prefix : " " * prefix_w
+          p = li == 0 ? prefix : ' ' * prefix_w
           @terminal.write "#{ANSI[:dim]}#{KittyText.sized(p, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
           row += DEFAULT_SCALE
         end
@@ -316,7 +316,7 @@ module Przn
         @terminal.move_to(row, left)
         line = cells.each_with_index.map { |cell, ci|
           pad_to_width(cell, col_widths[ci] || 0)
-        }.join("  |  ")
+        }.join('  |  ')
         if ri == 0
           @terminal.write "#{ANSI[:bold]}#{KittyText.sized(line, s: DEFAULT_SCALE)}#{ANSI[:reset]}"
         else
@@ -326,7 +326,7 @@ module Przn
 
         if ri == 0
           @terminal.move_to(row, left)
-          @terminal.write KittyText.sized(col_widths.map { |w| "-" * w }.join("--+--"), s: DEFAULT_SCALE)
+          @terminal.write KittyText.sized(col_widths.map { |w| '-' * w }.join('--+--'), s: DEFAULT_SCALE)
           row += DEFAULT_SCALE
         end
       end
@@ -504,7 +504,7 @@ module Przn
       f = default_face == :body ? @theme.font[:family] : default_face
       h = default_h
       c = default_color == :body ? @theme.font[:color] : default_color
-      body_open = c ? color_code(c) : ""
+      body_open = c ? color_code(c) : ''
       inner = segments.map { |segment|
         type = segment[0]
         content = segment[1]
@@ -545,7 +545,7 @@ module Przn
       used = 0
 
       segments.each do |seg|
-        content = seg[1] || ""
+        content = seg[1] || ''
         next if content.empty?
 
         seg_scale = effective_seg_scale(seg, para_scale)
@@ -594,7 +594,7 @@ module Przn
 
     def segments_visible_cells(segments, para_scale)
       segments.sum { |seg|
-        content = seg[1] || ""
+        content = seg[1] || ''
         display_width(content) * effective_seg_scale(seg, para_scale)
       }
     end
@@ -636,7 +636,7 @@ module Przn
 
     def pad_to_width(text, target_width)
       current = display_width(text)
-      text + " " * [target_width - current, 0].max
+      text + ' ' * [target_width - current, 0].max
     end
 
     def max_inline_scale(text)
@@ -669,7 +669,7 @@ module Przn
         r, g, b = color.scan(/../).map { |h| h.to_i(16) }
         "\e[38;2;#{r};#{g};#{b}m"
       else
-        ""
+        ''
       end
     end
 
@@ -711,7 +711,7 @@ module Przn
         .gsub(/\*(.+?)\*/, '\1')
         .gsub(/~~(.+?)~~/, '\1')
         .gsub(/`([^`]+)`/, '\1')
-        .gsub(/&(lt|gt|amp);/) { |_| {"lt" => "<", "gt" => ">", "amp" => "&"}[$1] }
+        .gsub(/&(lt|gt|amp);/) { |_| {'lt' => '<', 'gt' => '>', 'amp' => '&'}[$1] }
     end
 
     def calculate_height(blocks, width)

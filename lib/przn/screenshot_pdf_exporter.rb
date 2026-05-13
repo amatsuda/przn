@@ -67,7 +67,7 @@ module Przn
       @terminal.enter_alt_screen
       @terminal.hide_cursor
       @presentation.slides.each_with_index do |slide, i|
-        pdf_path = File.join(dir, format("slide-%04d.pdf", i))
+        pdf_path = File.join(dir, format('slide-%04d.pdf', i))
         @renderer.render(slide, current: i, total: @presentation.total)
         request_capture(pdf_path)
         wait_for_capture(pdf_path)
@@ -91,7 +91,7 @@ module Przn
       until File.exist?(path) && File.size?(path).to_i.positive?
         if Time.now > deadline
           raise "Capture timed out for #{path}. " \
-                "Is Echoes running and recent enough to honor OSC 7772 `capture` to a .pdf path?"
+                'Is Echoes running and recent enough to honor OSC 7772 `capture` to a .pdf path?'
         end
         sleep POLL_INTERVAL
       end
@@ -100,7 +100,7 @@ module Przn
     end
 
     def merge_pdfs(pdf_paths, output_path)
-      raise "No slides captured" if pdf_paths.empty?
+      raise 'No slides captured' if pdf_paths.empty?
 
       output = HexaPDF::Document.new
       pdf_paths.each do |path|

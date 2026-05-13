@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "test_helper"
-require "tmpdir"
+require 'test_helper'
+require 'tmpdir'
 require_relative '../lib/przn/prawn_pdf_exporter'
 
 class PrawnPdfExporterTest < Test::Unit::TestCase
@@ -21,10 +21,10 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
   end
 
   def assert_pdf(path, page_count: nil)
-    assert File.exist?(path), "PDF file should exist"
-    assert File.size(path) > 0, "PDF file should not be empty"
+    assert File.exist?(path), 'PDF file should exist'
+    assert File.size(path) > 0, 'PDF file should not be empty'
     content = File.read(path, mode: 'rb')
-    assert content.start_with?('%PDF'), "File should be a valid PDF"
+    assert content.start_with?('%PDF'), 'File should be a valid PDF'
     if page_count
       # Count page objects in PDF
       pages = content.scan(/\/Type\s*\/Page[^s]/).size
@@ -32,143 +32,143 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "basic export" do
-    test "generates a valid PDF file" do
+  sub_test_case 'basic export' do
+    test 'generates a valid PDF file' do
       path = export("# Hello\n\nWorld\n")
       assert_pdf path
     end
 
-    test "generates one page per slide" do
+    test 'generates one page per slide' do
       md = "# Slide 1\n\ncontent\n\n# Slide 2\n\ncontent\n\n# Slide 3\n\ncontent\n"
       path = export(md)
       assert_pdf path, page_count: 3
     end
 
-    test "single slide produces one page" do
+    test 'single slide produces one page' do
       path = export("# Only Slide\n\nHello\n")
       assert_pdf path, page_count: 1
     end
   end
 
-  sub_test_case "block types" do
-    test "exports headings" do
+  sub_test_case 'block types' do
+    test 'exports headings' do
       path = export("# Title\n\n## Sub-heading\n")
       assert_pdf path
     end
 
-    test "exports paragraphs" do
+    test 'exports paragraphs' do
       path = export("# Slide\n\nA paragraph of text.\n")
       assert_pdf path
     end
 
-    test "exports code blocks" do
+    test 'exports code blocks' do
       path = export("# Code\n\n```ruby\nputs 'hello'\n```\n")
       assert_pdf path
     end
 
-    test "exports unordered lists" do
+    test 'exports unordered lists' do
       path = export("# Lists\n\n- item 1\n- item 2\n- item 3\n")
       assert_pdf path
     end
 
-    test "exports nested unordered lists" do
+    test 'exports nested unordered lists' do
       path = export("# Lists\n\n- top\n  - nested\n    - deep\n")
       assert_pdf path
     end
 
-    test "exports ordered lists" do
+    test 'exports ordered lists' do
       path = export("# Lists\n\n1. one\n2. two\n3. three\n")
       assert_pdf path
     end
 
-    test "exports definition lists" do
+    test 'exports definition lists' do
       path = export("# Defs\n\nterm\n:   definition\n")
       assert_pdf path
     end
 
-    test "exports blockquotes" do
+    test 'exports blockquotes' do
       path = export("# Quote\n\n> quoted text\n> more text\n")
       assert_pdf path
     end
 
-    test "exports tables" do
+    test 'exports tables' do
       path = export("# Table\n\n| H1 | H2 |\n|---|---|\n| a | b |\n")
       assert_pdf path
     end
 
-    test "exports blank lines" do
+    test 'exports blank lines' do
       path = export("# Slide\n\ntext\n\nmore text\n")
       assert_pdf path
     end
   end
 
-  sub_test_case "inline formatting" do
-    test "exports bold text" do
+  sub_test_case 'inline formatting' do
+    test 'exports bold text' do
       path = export("# Slide\n\nThis is **bold** text.\n")
       assert_pdf path
     end
 
-    test "exports italic text" do
+    test 'exports italic text' do
       path = export("# Slide\n\nThis is *italic* text.\n")
       assert_pdf path
     end
 
-    test "exports strikethrough text" do
+    test 'exports strikethrough text' do
       path = export("# Slide\n\nThis is ~~deleted~~ text.\n")
       assert_pdf path
     end
 
-    test "exports inline code" do
+    test 'exports inline code' do
       path = export("# Slide\n\nThis is `code` text.\n")
       assert_pdf path
     end
 
-    test "exports notes" do
+    test 'exports notes' do
       path = export("# Slide\n\nVisible {::note}(note){:/note} text.\n")
       assert_pdf path
     end
   end
 
-  sub_test_case "tags" do
-    test "exports size tags" do
+  sub_test_case 'tags' do
+    test 'exports size tags' do
       path = export("# Slide\n\n{::tag name=\"x-large\"}Big{:/tag}\n")
       assert_pdf path
     end
 
-    test "exports color tags" do
+    test 'exports color tags' do
       path = export("# Slide\n\nnormal and {::tag name=\"red\"}red{:/tag} mixed\n")
       assert_pdf path
     end
   end
 
-  sub_test_case "alignment" do
-    test "exports centered text" do
+  sub_test_case 'alignment' do
+    test 'exports centered text' do
       path = export("# Slide\n\n{:.center}\ncentered\n")
       assert_pdf path
     end
 
-    test "exports right-aligned text" do
+    test 'exports right-aligned text' do
       path = export("# Slide\n\n{:.right}\nright\n")
       assert_pdf path
     end
   end
 
-  sub_test_case "images" do
-    test "skips missing images gracefully" do
+  sub_test_case 'images' do
+    test 'skips missing images gracefully' do
       path = export("# Slide\n\n![](nonexistent.png)\n")
       assert_pdf path
     end
 
-    test "embeds existing PNG image" do
+    test 'embeds existing PNG image' do
       png_path = File.join(@tmpdir, 'test.png')
       create_minimal_png(png_path)
       path = export("# Slide\n\n![](test.png)\n", base_dir: @tmpdir)
       assert_pdf path
-      assert File.size(path) > 500, "PDF with image should be larger"
+      assert File.size(path) > 500, 'PDF with image should be larger'
     end
   end
 
-  sub_test_case "build_formatted_text" do
+  sub_test_case 'build_formatted_text' do
     def build(text, pt = 18)
       presentation = Przn::Parser.parse("# dummy\n")
       exporter = Przn::PrawnPdfExporter.new(presentation)
@@ -179,50 +179,50 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
       @default_theme ||= Przn::Theme.default
     end
 
-    test "plain text" do
-      result = build("hello")
-      assert_equal [{text: "hello", size: 18, color: "000000"}], result
+    test 'plain text' do
+      result = build('hello')
+      assert_equal [{text: 'hello', size: 18, color: '000000'}], result
     end
 
-    test "bold" do
-      result = build("**bold**")
-      assert_equal [{text: "bold", size: 18, color: "000000", styles: [:bold]}], result
+    test 'bold' do
+      result = build('**bold**')
+      assert_equal [{text: 'bold', size: 18, color: '000000', styles: [:bold]}], result
     end
 
-    test "italic" do
-      result = build("*italic*")
-      assert_equal [{text: "italic", size: 18, color: "000000", styles: [:italic]}], result
+    test 'italic' do
+      result = build('*italic*')
+      assert_equal [{text: 'italic', size: 18, color: '000000', styles: [:italic]}], result
     end
 
-    test "color tag" do
+    test 'color tag' do
       result = build('{::tag name="red"}text{:/tag}')
       assert_equal 1, result.size
       assert_equal 'FF5555', result[0][:color]
     end
 
-    test "size tag" do
+    test 'size tag' do
       result = build('{::tag name="x-large"}big{:/tag}')
       assert_equal 1, result.size
       assert_equal Przn::PrawnPdfExporter::DEFAULT_SCALE_TO_PT[4], result[0][:size]
     end
 
-    test "inline code" do
-      result = build("`code`")
+    test 'inline code' do
+      result = build('`code`')
       assert_equal 1, result.size
-      assert_equal " code ", result[0][:text]
+      assert_equal ' code ', result[0][:text]
       assert_equal default_theme.colors[:inline_code], result[0][:color]
     end
 
-    test "note" do
-      result = build("{::note}note{:/note}")
+    test 'note' do
+      result = build('{::note}note{:/note}')
       assert_equal 1, result.size
       assert_equal default_theme.colors[:dim], result[0][:color]
       assert_operator result[0][:size], :<, 18
     end
   end
 
-  sub_test_case "theme" do
-    test "export with custom theme produces valid PDF" do
+  sub_test_case 'theme' do
+    test 'export with custom theme produces valid PDF' do
       theme = Przn::Theme.new(
         colors: {code_bg: '111111', dim: '222222', inline_code: '333333'},
         font: {family: nil, color: '00ff00'},
@@ -233,12 +233,12 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
       assert_pdf path
     end
 
-    test "export with default theme still works" do
+    test 'export with default theme still works' do
       path = export("# Hello\n\nWorld\n", theme: Przn::Theme.default)
       assert_pdf path
     end
 
-    test "build_formatted_text uses theme colors" do
+    test 'build_formatted_text uses theme colors' do
       theme = Przn::Theme.new(
         colors: {code_bg: '111111', dim: '222222', inline_code: '333333'},
         font: {family: nil, color: 'ffffff'},
@@ -247,70 +247,70 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
       presentation = Przn::Parser.parse("# dummy\n")
       exporter = Przn::PrawnPdfExporter.new(presentation, theme: theme)
 
-      result = exporter.send(:build_formatted_text, "hello", 18)
+      result = exporter.send(:build_formatted_text, 'hello', 18)
       assert_equal 'ffffff', result[0][:color]
 
-      result = exporter.send(:build_formatted_text, "`code`", 18)
+      result = exporter.send(:build_formatted_text, '`code`', 18)
       assert_equal '333333', result[0][:color]
 
-      result = exporter.send(:build_formatted_text, "{::note}note{:/note}", 18)
+      result = exporter.send(:build_formatted_text, '{::note}note{:/note}', 18)
       assert_equal '222222', result[0][:color]
     end
   end
 
-  sub_test_case "fc_find" do
+  sub_test_case 'fc_find' do
     def exporter
       @exporter ||= Przn::PrawnPdfExporter.new(Przn::Parser.parse("# dummy\n"))
     end
 
-    test "returns nil for non-existent family" do
-      assert_nil exporter.send(:fc_find, "NonExistentFontFamily12345")
+    test 'returns nil for non-existent family' do
+      assert_nil exporter.send(:fc_find, 'NonExistentFontFamily12345')
     end
 
-    test "prefers Regular style by default" do
-      path = exporter.send(:fc_find, "PlemolJP35 Console NF")
+    test 'prefers Regular style by default' do
+      path = exporter.send(:fc_find, 'PlemolJP35 Console NF')
       return unless path  # skip if font not installed
 
       assert_match(/-Regular\b/, File.basename(path))
     end
 
-    test "prefers Bold style when requested" do
-      path = exporter.send(:fc_find, "PlemolJP35 Console NF", style: 'Bold')
+    test 'prefers Bold style when requested' do
+      path = exporter.send(:fc_find, 'PlemolJP35 Console NF', style: 'Bold')
       return unless path  # skip if font not installed
 
       assert_match(/-Bold\b/, File.basename(path))
     end
 
-    test "returns .ttf or .ttc only" do
-      path = exporter.send(:fc_find, "PlemolJP35 Console NF")
+    test 'returns .ttf or .ttc only' do
+      path = exporter.send(:fc_find, 'PlemolJP35 Console NF')
       return unless path
 
       assert path.end_with?('.ttf', '.ttc'), "Expected .ttf or .ttc, got #{path}"
     end
 
-    test "falls back to first path when no style match" do
+    test 'falls back to first path when no style match' do
       # Noto Emoji has no -Regular variant in filename; should still return a path
-      path = exporter.send(:fc_find, "Noto Emoji")
+      path = exporter.send(:fc_find, 'Noto Emoji')
       return unless path
 
       assert path.end_with?('.ttf', '.ttc')
     end
   end
 
-  sub_test_case "find_emoji_font" do
+  sub_test_case 'find_emoji_font' do
     def exporter
       @exporter ||= Przn::PrawnPdfExporter.new(Przn::Parser.parse("# dummy\n"))
     end
 
-    test "returns a font with glyf outlines" do
+    test 'returns a font with glyf outlines' do
       path = exporter.send(:find_emoji_font)
       return unless path  # skip if no emoji font installed
 
       ttf = TTFunk::File.open(path)
-      assert ttf.directory.tables.key?('glyf'), "Emoji font should have glyf outlines"
+      assert ttf.directory.tables.key?('glyf'), 'Emoji font should have glyf outlines'
     end
 
-    test "does not return Apple Color Emoji" do
+    test 'does not return Apple Color Emoji' do
       path = exporter.send(:find_emoji_font)
       return unless path
 
@@ -318,51 +318,51 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case "CJK line wrapping" do
-    test "exports long Japanese text without error" do
-      long_text = "これは長い日本語のテキストで、行の折り返しが正しく動作するかテストしています。"
+  sub_test_case 'CJK line wrapping' do
+    test 'exports long Japanese text without error' do
+      long_text = 'これは長い日本語のテキストで、行の折り返しが正しく動作するかテストしています。'
       path = export("# スライド\n\n#{long_text}\n")
       assert_pdf path
     end
 
-    test "scan_pattern tokenizes CJK characters individually" do
+    test 'scan_pattern tokenizes CJK characters individually' do
       # Ensure Prawn is loaded and patched
       require 'prawn'
       Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
 
       lw = Prawn::Text::Formatted::LineWrap.new
-      tokens = lw.tokenize("Hello世界Test")
-      assert_equal ["Hello", "世", "界", "Test"], tokens
+      tokens = lw.tokenize('Hello世界Test')
+      assert_equal ['Hello', '世', '界', 'Test'], tokens
     end
 
-    test "scan_pattern keeps ASCII words intact" do
+    test 'scan_pattern keeps ASCII words intact' do
       require 'prawn'
       Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
 
       lw = Prawn::Text::Formatted::LineWrap.new
-      tokens = lw.tokenize("hello world")
-      assert_equal ["hello", " ", "world"], tokens
+      tokens = lw.tokenize('hello world')
+      assert_equal ['hello', ' ', 'world'], tokens
     end
 
-    test "scan_pattern splits pure CJK into individual characters" do
+    test 'scan_pattern splits pure CJK into individual characters' do
       require 'prawn'
       Prawn::Text::Formatted::LineWrap.prepend(PrawnCJKLineWrap) unless Prawn::Text::Formatted::LineWrap < PrawnCJKLineWrap
 
       lw = Prawn::Text::Formatted::LineWrap.new
-      tokens = lw.tokenize("日本語")
-      assert_equal ["日", "本", "語"], tokens
+      tokens = lw.tokenize('日本語')
+      assert_equal ['日', '本', '語'], tokens
     end
   end
 
-  sub_test_case "emoji export" do
-    test "exports slide with emoji" do
+  sub_test_case 'emoji export' do
+    test 'exports slide with emoji' do
       path = export("# Hello 🎉\n\nWorld 🚀\n")
       assert_pdf path
     end
   end
 
-  sub_test_case "full sample files" do
-    test "exports sample/sample.md" do
+  sub_test_case 'full sample files' do
+    test 'exports sample/sample.md' do
       sample = File.join(File.dirname(__dir__), 'sample', 'sample.md')
       return unless File.exist?(sample)
 

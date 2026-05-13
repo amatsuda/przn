@@ -42,7 +42,7 @@ module Przn
         # GIF
         f.seek(0)
         sig = f.read(6)
-        if sig&.start_with?("GIF8")
+        if sig&.start_with?('GIF8')
           w = f.read(2)&.unpack1('v')
           h = f.read(2)&.unpack1('v')
           return [w, h] if w && h

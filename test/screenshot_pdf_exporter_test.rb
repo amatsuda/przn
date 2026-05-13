@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "test_helper"
-require "tempfile"
-require "hexapdf"
+require 'test_helper'
+require 'tempfile'
+require 'hexapdf'
 require_relative '../lib/przn/screenshot_pdf_exporter'
 
 class ScreenshotPdfExporterTest < Test::Unit::TestCase
@@ -23,7 +23,7 @@ class ScreenshotPdfExporterTest < Test::Unit::TestCase
     attr_reader :captures
 
     def initialize
-      @writes = +""
+      @writes = +''
       @captures = []
     end
 
@@ -54,7 +54,7 @@ class ScreenshotPdfExporterTest < Test::Unit::TestCase
         path = m[1]
         File.binwrite(path, PDF_PAGE)
         @captures << path
-        @writes = @writes.sub(m[0], "")
+        @writes = @writes.sub(m[0], '')
       end
     end
   end
@@ -64,23 +64,23 @@ class ScreenshotPdfExporterTest < Test::Unit::TestCase
     Przn::Parser.parse(bodies.join("\n"))
   end
 
-  test "captures one PDF per slide and merges them into a multi-page PDF" do
+  test 'captures one PDF per slide and merges them into a multi-page PDF' do
     presentation = make_deck(3)
     fake = FakeEchoes.new
-    exporter = Przn::ScreenshotPdfExporter.new(presentation, base_dir: ".", theme: Przn::Theme.default, terminal: fake)
+    exporter = Przn::ScreenshotPdfExporter.new(presentation, base_dir: '.', theme: Przn::Theme.default, terminal: fake)
 
-    Tempfile.create(["przn-screenshot", ".pdf"]) do |out|
+    Tempfile.create(['przn-screenshot', '.pdf']) do |out|
       exporter.export(out.path)
       assert_equal 3, fake.captures.size
-      assert(File.size?(out.path).to_i.positive?, "expected non-empty PDF")
-      assert_equal "%PDF", File.binread(out.path, 4)
+      assert(File.size?(out.path).to_i.positive?, 'expected non-empty PDF')
+      assert_equal '%PDF', File.binread(out.path, 4)
 
       merged = HexaPDF::Document.open(out.path)
-      assert_equal 3, merged.pages.count, "merged PDF should have one page per slide"
+      assert_equal 3, merged.pages.count, 'merged PDF should have one page per slide'
     end
   end
 
-  test "raises when the terminal never produces the requested PDF (capture not implemented)" do
+  test 'raises when the terminal never produces the requested PDF (capture not implemented)' do
     silent = Object.new
     %i[clear hide_cursor show_cursor enter_alt_screen leave_alt_screen flush].each { |m| silent.define_singleton_method(m) {} }
     silent.define_singleton_method(:write) { |_| }
@@ -90,13 +90,13 @@ class ScreenshotPdfExporterTest < Test::Unit::TestCase
     silent.define_singleton_method(:cell_pixel_size) { [10, 20] }
 
     presentation = make_deck(1)
-    exporter = Przn::ScreenshotPdfExporter.new(presentation, base_dir: ".", theme: Przn::Theme.default, terminal: silent)
+    exporter = Przn::ScreenshotPdfExporter.new(presentation, base_dir: '.', theme: Przn::Theme.default, terminal: silent)
 
     # Shrink the timeout so the test doesn't hang for 10s.
     Przn::ScreenshotPdfExporter.send(:remove_const, :CAPTURE_TIMEOUT)
     Przn::ScreenshotPdfExporter.const_set(:CAPTURE_TIMEOUT, 0.2)
     begin
-      Tempfile.create(["przn-screenshot", ".pdf"]) do |out|
+      Tempfile.create(['przn-screenshot', '.pdf']) do |out|
         assert_raise(RuntimeError) { exporter.export(out.path) }
       end
     ensure

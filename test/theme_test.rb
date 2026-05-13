@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "test_helper"
-require "tmpdir"
+require 'test_helper'
+require 'tmpdir'
 
 class ThemeTest < Test::Unit::TestCase
   def setup
@@ -13,8 +13,8 @@ class ThemeTest < Test::Unit::TestCase
     FileUtils.remove_entry @tmpdir
   end
 
-  sub_test_case ".default" do
-    test "returns theme with colors from default_theme.yml" do
+  sub_test_case '.default' do
+    test 'returns theme with colors from default_theme.yml' do
       theme = Przn::Theme.default
       assert_equal '313244', theme.colors[:code_bg]
       assert_equal '6c7086', theme.colors[:dim]
@@ -24,28 +24,28 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil theme.colors[:heading]
     end
 
-    test "returns theme with default font" do
+    test 'returns theme with default font' do
       theme = Przn::Theme.default
       assert_nil theme.font[:family]
     end
 
-    test "returns theme with default bullet text and unset size" do
+    test 'returns theme with default bullet text and unset size' do
       bullet = Przn::Theme.default.bullet
-      assert_equal "・", bullet[:text]
+      assert_equal '・', bullet[:text]
       assert_nil bullet[:size]
     end
 
-    test "default background is empty (renderer emits no override)" do
+    test 'default background is empty (renderer emits no override)' do
       assert_equal({}, Przn::Theme.default.background)
     end
 
-    test "default title is empty (renderer uses h1 defaults; no OSC 66 f=, no color)" do
+    test 'default title is empty (renderer uses h1 defaults; no OSC 66 f=, no color)' do
       assert_equal({}, Przn::Theme.default.title)
     end
   end
 
-  sub_test_case ".load" do
-    test "reads YAML and overrides specified values" do
+  sub_test_case '.load' do
+    test 'reads YAML and overrides specified values' do
       write_theme <<~YAML
         colors:
           code_bg: "ff0000"
@@ -60,7 +60,7 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 'HackGen', theme.font[:family]
     end
 
-    test "unspecified values fall back to defaults" do
+    test 'unspecified values fall back to defaults' do
       write_theme <<~YAML
         colors:
           dim: "ff0000"
@@ -73,64 +73,64 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil theme.font[:family]
     end
 
-    test "empty file falls back to all defaults" do
-      write_theme ""
+    test 'empty file falls back to all defaults' do
+      write_theme ''
 
       theme = Przn::Theme.load(theme_path)
       assert_equal @defaults.colors[:code_bg], theme.colors[:code_bg]
       assert_equal @defaults.colors[:dim], theme.colors[:dim]
     end
 
-    test "missing file raises error" do
+    test 'missing file raises error' do
       assert_raise(ArgumentError) do
-        Przn::Theme.load("/nonexistent/theme.yml")
+        Przn::Theme.load('/nonexistent/theme.yml')
       end
     end
   end
 
-  sub_test_case ".auto_discover" do
-    test "loads a sibling theme.yml when one exists next to the deck" do
+  sub_test_case '.auto_discover' do
+    test 'loads a sibling theme.yml when one exists next to the deck' do
       write_theme <<~YAML
         bullet:
           text: "●"
       YAML
-      deck = File.join(@tmpdir, "deck.md")
+      deck = File.join(@tmpdir, 'deck.md')
       File.write(deck, "# T\n")
 
       theme = Przn::Theme.auto_discover(near: deck)
-      assert_equal "●", theme.bullet[:text]
+      assert_equal '●', theme.bullet[:text]
     end
 
-    test "returns nil when no theme.yml is alongside the deck" do
-      deck = File.join(@tmpdir, "deck.md")
+    test 'returns nil when no theme.yml is alongside the deck' do
+      deck = File.join(@tmpdir, 'deck.md')
       File.write(deck, "# T\n")
 
       assert_nil Przn::Theme.auto_discover(near: deck)
     end
 
-    test "user file overrides bullet.text" do
+    test 'user file overrides bullet.text' do
       write_theme <<~YAML
         bullet:
           text: "●"
       YAML
 
       bullet = Przn::Theme.load(theme_path).bullet
-      assert_equal "●", bullet[:text]
+      assert_equal '●', bullet[:text]
       assert_nil bullet[:size]
     end
 
-    test "user file overrides bullet.size, keeps default text" do
+    test 'user file overrides bullet.size, keeps default text' do
       write_theme <<~YAML
         bullet:
           size: 1
       YAML
 
       bullet = Przn::Theme.load(theme_path).bullet
-      assert_equal "・", bullet[:text]
+      assert_equal '・', bullet[:text]
       assert_equal 1, bullet[:size]
     end
 
-    test "unspecified bullet falls back to all defaults" do
+    test 'unspecified bullet falls back to all defaults' do
       write_theme <<~YAML
         colors:
           code_bg: "ff0000"
@@ -139,16 +139,16 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal @defaults.bullet, Przn::Theme.load(theme_path).bullet
     end
 
-    test "user file sets a solid background color" do
+    test 'user file sets a solid background color' do
       write_theme <<~YAML
         background:
           color: "#1a1a2e"
       YAML
 
-      assert_equal({color: "#1a1a2e"}, Przn::Theme.load(theme_path).background)
+      assert_equal({color: '#1a1a2e'}, Przn::Theme.load(theme_path).background)
     end
 
-    test "user file sets a gradient background" do
+    test 'user file sets a gradient background' do
       write_theme <<~YAML
         background:
           from: "#1a1a2e"
@@ -157,12 +157,12 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       bg = Przn::Theme.load(theme_path).background
-      assert_equal "#1a1a2e", bg[:from]
-      assert_equal "#16213e", bg[:to]
+      assert_equal '#1a1a2e', bg[:from]
+      assert_equal '#16213e', bg[:to]
       assert_equal 90,        bg[:angle]
     end
 
-    test "user file sets a title family / size / color" do
+    test 'user file sets a title family / size / color' do
       write_theme <<~YAML
         title:
           family: "Helvetica Neue"
@@ -171,9 +171,9 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       title = Przn::Theme.load(theme_path).title
-      assert_equal "Helvetica Neue", title[:family]
-      assert_equal "7",              title[:size]
-      assert_equal "ff5555",         title[:color]
+      assert_equal 'Helvetica Neue', title[:family]
+      assert_equal '7',              title[:size]
+      assert_equal 'ff5555',         title[:color]
     end
   end
 

@@ -1,18 +1,18 @@
 # frozen_string_literal: true
 
-require "test_helper"
-require "tempfile"
+require 'test_helper'
+require 'tempfile'
 
 class PrznTest < Test::Unit::TestCase
-  test "VERSION" do
+  test 'VERSION' do
     assert do
       ::Przn.const_defined?(:VERSION)
     end
   end
 
-  sub_test_case ".start" do
+  sub_test_case '.start' do
     def with_deck(content)
-      f = Tempfile.new(["start_test", ".md"])
+      f = Tempfile.new(['start_test', '.md'])
       f.write(content)
       f.flush
       yield f.path
@@ -20,7 +20,7 @@ class PrznTest < Test::Unit::TestCase
       f&.close!
     end
 
-    test "start_at: positions the presentation at the given 1-based slide" do
+    test 'start_at: positions the presentation at the given 1-based slide' do
       deck = "# One\n\n# Two\n\n# Three\n\n# Four\n"
       with_deck(deck) do |path|
         controller = Przn.start(path, start_at: 3)
@@ -29,7 +29,7 @@ class PrznTest < Test::Unit::TestCase
       end
     end
 
-    test "start_at: clamps past the last slide" do
+    test 'start_at: clamps past the last slide' do
       deck = "# One\n\n# Two\n"
       with_deck(deck) do |path|
         controller = Przn.start(path, start_at: 99)
@@ -38,7 +38,7 @@ class PrznTest < Test::Unit::TestCase
       end
     end
 
-    test "without start_at the presentation begins at slide 1" do
+    test 'without start_at the presentation begins at slide 1' do
       deck = "# One\n\n# Two\n"
       with_deck(deck) do |path|
         controller = Przn.start(path)

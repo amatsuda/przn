@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require_relative "przn/version"
-require_relative "przn/kitty_text"
-require_relative "przn/image_util"
-require_relative "przn/slide"
-require_relative "przn/parser"
-require_relative "przn/presentation"
-require_relative "przn/terminal"
-require_relative "przn/renderer"
-require_relative "przn/controller"
-require_relative "przn/screenshot_pdf_exporter"
-require_relative "przn/theme"
+require_relative 'przn/version'
+require_relative 'przn/kitty_text'
+require_relative 'przn/image_util'
+require_relative 'przn/slide'
+require_relative 'przn/parser'
+require_relative 'przn/presentation'
+require_relative 'przn/terminal'
+require_relative 'przn/renderer'
+require_relative 'przn/controller'
+require_relative 'przn/screenshot_pdf_exporter'
+require_relative 'przn/theme'
 
 module Przn
   class Error < StandardError; end
