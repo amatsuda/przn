@@ -3,7 +3,7 @@
 require "test_helper"
 require "tmpdir"
 
-class PdfExporterTest < Test::Unit::TestCase
+class PrawnPdfExporterTest < Test::Unit::TestCase
   def setup
     @tmpdir = Dir.mktmpdir
   end
@@ -15,7 +15,7 @@ class PdfExporterTest < Test::Unit::TestCase
   def export(markdown, base_dir: '.', theme: nil)
     presentation = Przn::Parser.parse(markdown)
     output = File.join(@tmpdir, 'test.pdf')
-    Przn::PdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
+    Przn::PrawnPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
     output
   end
 
@@ -170,7 +170,7 @@ class PdfExporterTest < Test::Unit::TestCase
   sub_test_case "build_formatted_text" do
     def build(text, pt = 18)
       presentation = Przn::Parser.parse("# dummy\n")
-      exporter = Przn::PdfExporter.new(presentation)
+      exporter = Przn::PrawnPdfExporter.new(presentation)
       exporter.send(:build_formatted_text, text, pt)
     end
 
@@ -202,7 +202,7 @@ class PdfExporterTest < Test::Unit::TestCase
     test "size tag" do
       result = build('{::tag name="x-large"}big{:/tag}')
       assert_equal 1, result.size
-      assert_equal Przn::PdfExporter::DEFAULT_SCALE_TO_PT[4], result[0][:size]
+      assert_equal Przn::PrawnPdfExporter::DEFAULT_SCALE_TO_PT[4], result[0][:size]
     end
 
     test "inline code" do
@@ -244,7 +244,7 @@ class PdfExporterTest < Test::Unit::TestCase
         bullet: {text: '・'}, background: {}, title: {},
       )
       presentation = Przn::Parser.parse("# dummy\n")
-      exporter = Przn::PdfExporter.new(presentation, theme: theme)
+      exporter = Przn::PrawnPdfExporter.new(presentation, theme: theme)
 
       result = exporter.send(:build_formatted_text, "hello", 18)
       assert_equal 'ffffff', result[0][:color]
@@ -259,7 +259,7 @@ class PdfExporterTest < Test::Unit::TestCase
 
   sub_test_case "fc_find" do
     def exporter
-      @exporter ||= Przn::PdfExporter.new(Przn::Parser.parse("# dummy\n"))
+      @exporter ||= Przn::PrawnPdfExporter.new(Przn::Parser.parse("# dummy\n"))
     end
 
     test "returns nil for non-existent family" do
@@ -298,7 +298,7 @@ class PdfExporterTest < Test::Unit::TestCase
 
   sub_test_case "find_emoji_font" do
     def exporter
-      @exporter ||= Przn::PdfExporter.new(Przn::Parser.parse("# dummy\n"))
+      @exporter ||= Przn::PrawnPdfExporter.new(Przn::Parser.parse("# dummy\n"))
     end
 
     test "returns a font with glyf outlines" do

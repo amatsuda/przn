@@ -9,7 +9,7 @@ require_relative "przn/presentation"
 require_relative "przn/terminal"
 require_relative "przn/renderer"
 require_relative "przn/controller"
-require_relative "przn/pdf_exporter"
+require_relative "przn/prawn_pdf_exporter"
 require_relative "przn/screenshot_pdf_exporter"
 require_relative "przn/theme"
 
@@ -48,7 +48,7 @@ module Przn
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     base_dir = File.dirname(File.expand_path(file))
-    PdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
+    PrawnPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
     puts "Generated: #{output}"
   end
 end

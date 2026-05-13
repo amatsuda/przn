@@ -32,7 +32,7 @@ module PrawnCJKLineWrap
 end
 
 module Przn
-  class PdfExporter
+  class PrawnPdfExporter
     PAGE_WIDTH  = 960
     PAGE_HEIGHT = 540
     DEFAULT_FONT_SIZE = 18
