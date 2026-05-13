@@ -159,7 +159,7 @@ module Przn
           italic: path
         })
         @registered_inline_fonts[family] = true
-      rescue
+      rescue StandardError
         next
       end
     end
@@ -230,7 +230,7 @@ module Przn
         'Emoji' => { normal: emoji_path, bold: emoji_path, italic: emoji_path }
       )
       pdf.fallback_fonts = ['Emoji']
-    rescue
+    rescue StandardError
       nil
     end
 
@@ -243,7 +243,7 @@ module Przn
         # Only use fonts with glyf outlines (not SBIX/COLR bitmap-only fonts)
         ttf = TTFunk::File.open(path)
         return path if ttf.directory.tables.key?('glyf')
-      rescue
+      rescue StandardError
         next
       end
       nil

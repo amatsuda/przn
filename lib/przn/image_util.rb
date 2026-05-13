@@ -49,7 +49,7 @@ module Przn
         end
       end
       nil
-    rescue
+    rescue StandardError
       nil
     end
 
