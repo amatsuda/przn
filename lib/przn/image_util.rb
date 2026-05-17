@@ -62,7 +62,9 @@ module Przn
     end
 
     def kitty_terminal?
-      ENV['TERM'] == 'xterm-kitty' || ENV['TERM_PROGRAM'] == 'kitty'
+      ENV['TERM'] == 'xterm-kitty' ||
+        ENV['TERM_PROGRAM'] == 'kitty' ||
+        ENV['TERM_PROGRAM'] == 'Echoes'
     end
 
     PNG_MAGIC = "\x89PNG\r\n\x1a\n".b.freeze
