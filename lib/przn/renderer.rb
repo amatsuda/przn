@@ -15,6 +15,13 @@ module Przn
 
     DEFAULT_SCALE = 2
 
+    # Default `relative_height` (as a percent of terminal height) applied to
+    # image blocks that don't carry an explicit one. Caps how much of the
+    # screen a single image can occupy; the rest leaves predictable margin
+    # for the slide footer and avoids placement-clearing edge cases in some
+    # terminals when an image lands right against the bottom row.
+    DEFAULT_IMAGE_RELATIVE_HEIGHT_PERCENT = 70
+
     def initialize(terminal, base_dir: '.', theme: nil)
       @terminal = terminal
       @base_dir = base_dir
@@ -347,10 +354,16 @@ module Przn
       left = content_left(width)
       available_cols = width - left * 2
 
-      if (rh = block[:attrs]['relative_height'])
-        target_rows = (@terminal.height * rh.to_i / 100.0).to_i
-        available_rows = [target_rows, available_rows].min
-      end
+      # Cap the default vertical area to 70 % of the screen, matching what
+      # `{:relative_height="70"}` would do explicitly. Large images that
+      # extend to within a couple of rows of the screen edge render
+      # unreliably in some terminals — they're known-good at 70 %, and
+      # smaller images sit well within this cap so they're unaffected.
+      # An explicit `relative_height` still overrides.
+      default_rh = DEFAULT_IMAGE_RELATIVE_HEIGHT_PERCENT
+      rh = block[:attrs]['relative_height'] || default_rh
+      target_rows = (@terminal.height * rh.to_i / 100.0).to_i
+      available_rows = [target_rows, available_rows].min
 
       # Calculate target cell size maintaining aspect ratio
       img_cell_w = img_w.to_f / cell_w
