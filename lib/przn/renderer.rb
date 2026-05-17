@@ -38,7 +38,7 @@ module Przn
       @mutex = Mutex.new
     end
 
-    def render(slide, current:, total:)
+    def render(slide, current:, total:, started_at: nil)
       @mutex.synchronize do
         @terminal.clear
         apply_slide_background(slide)
@@ -63,9 +63,13 @@ module Przn
           end
         end
 
-        status = " #{current + 1} / #{total} "
-        @terminal.move_to(h, w - status.size)
-        @terminal.write "#{ANSI[:dim]}#{status}#{ANSI[:reset]}"
+        if @theme.rabbit
+          draw_runner_bar(h, w, current, total, started_at)
+        else
+          status = " #{current + 1} / #{total} "
+          @terminal.move_to(h, w - status.size)
+          @terminal.write "#{ANSI[:dim]}#{status}#{ANSI[:reset]}"
+        end
 
         @terminal.flush
       end
@@ -131,6 +135,60 @@ module Przn
       type = attrs[:type] || 'linear'
       angle = attrs[:angle] || 0
       @terminal.write "\e]7772;bg-gradient;type=#{type}:angle=#{angle}:colors=#{colors.join(',')}\a"
+    end
+
+    # Bottom-row progress indicator (Rabbit-style):
+    #
+    #   1                   🐢                🐇                   9
+    #   └ current slide #   └ elapsed time    └ slide progress     └ goal (total slides)
+    #
+    # The anchor numbers (current at the left, total at the right) sit on the
+    # very bottom row; the emojis render at OSC 66 scale 2 and are anchored at
+    # row `h-1` so their bottom half lands on row `h` next to the numbers,
+    # making them visibly twice as large as the labels without needing more
+    # vertical screen real-estate. The turtle is hidden when
+    # `theme.rabbit.duration` is unset / unparseable. `flip=h` mirrors each
+    # glyph horizontally on terminals that honor it (Echoes); others ignore
+    # the parameter and the emojis face left.
+    EMOJI_RUNNER_CELLS = 4 # 🐇/🐢 are 2 source cells wide, rendered at s=2 → 4 cells
+
+    def draw_runner_bar(h, w, current, total, started_at)
+      left  = (current + 1).to_s
+      right = total.to_s
+      track_left  = left.size + 2          # 1 cell gap after the left number
+      track_right = w - right.size - 1     # 1 cell gap before the right number
+      return if track_right - track_left < EMOJI_RUNNER_CELLS
+
+      @terminal.move_to(h, 1)
+      @terminal.write "#{ANSI[:dim]}#{left}#{ANSI[:reset]}"
+      @terminal.move_to(h, w - right.size + 1)
+      @terminal.write "#{ANSI[:dim]}#{right}#{ANSI[:reset]}"
+
+      rabbit_row = [h - 1, 1].max
+      rabbit_col = runner_col(current, [total - 1, 1].max, track_left, track_right)
+      @terminal.move_to(rabbit_row, rabbit_col)
+      @terminal.write KittyText.sized('🐇', s: 2, flip: 'h')
+
+      duration_s = Theme.parse_duration(@theme.rabbit[:duration])
+      return unless started_at && duration_s && duration_s.positive?
+
+      elapsed = Time.now - started_at
+      frac = (elapsed / duration_s).clamp(0.0, 1.0)
+      span = (track_right - (EMOJI_RUNNER_CELLS - 1)) - track_left
+      turtle_col = track_left + (frac * [span, 0].max).round
+      @terminal.move_to(rabbit_row, turtle_col)
+      @terminal.write KittyText.sized('🐢', s: 2, flip: 'h')
+    end
+
+    # Linear-interpolate a runner's column inside the track. `step` is 0..max
+    # (e.g. current slide index 0..total-1), and the returned column leaves
+    # enough room for an emoji `EMOJI_RUNNER_CELLS` cells wide before the
+    # right-anchor number.
+    def runner_col(step, max, track_left, track_right)
+      return track_left if max <= 0
+      span = (track_right - (EMOJI_RUNNER_CELLS - 1)) - track_left
+      span = 0 if span < 0
+      track_left + (step.to_f / max * span).round
     end
 
     def render_heading(block, width, row)

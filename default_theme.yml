@@ -33,3 +33,11 @@ colors:
   code_bg: "313244"
   dim: "6c7086"
   inline_code: "a6e3a1"
+
+# Bottom-of-screen progress indicator (a nod to the Rabbit presentation tool).
+# Without this key, przn shows a simple " N / M " counter at the bottom-right.
+# To opt in: uncomment the block. The 🐇 rabbit anchors slide progress between
+# the left (current) and right (total) numbers. Set `duration:` to enable the
+# 🐢 turtle tracking elapsed time against the goal.
+# rabbit:
+#   duration:           # "30m", "1h30m", "1800s", or plain integer seconds

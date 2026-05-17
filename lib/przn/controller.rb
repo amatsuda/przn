@@ -11,6 +11,7 @@ module Przn
     end
 
     def run
+      @started_at = Time.now
       @terminal.enter_alt_screen
       @terminal.hide_cursor
       render_current
@@ -53,9 +54,15 @@ module Przn
       @renderer.render(
         @presentation.current_slide,
         current: @presentation.current,
-        total: @presentation.total
+        total: @presentation.total,
+        started_at: @started_at
       )
-      AudienceLink.send(@audience_link, type: "goto", index: @presentation.current) if @audience_link
+      if @audience_link
+        AudienceLink.send(@audience_link,
+                          type: "goto",
+                          index: @presentation.current,
+                          started_at: @started_at.to_f)
+      end
       schedule_preload
     end
 

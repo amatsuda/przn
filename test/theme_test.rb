@@ -42,6 +42,38 @@ class ThemeTest < Test::Unit::TestCase
     test 'default title is empty (renderer uses h1 defaults; no OSC 66 f=, no color)' do
       assert_equal({}, Przn::Theme.default.title)
     end
+
+    test 'rabbit is nil by default (renderer falls back to simple N / M footer)' do
+      assert_nil Przn::Theme.default.rabbit
+    end
+  end
+
+  sub_test_case '.parse_duration' do
+    test 'parses minutes' do
+      assert_equal 1800, Przn::Theme.parse_duration('30m')
+    end
+
+    test 'parses hours + minutes' do
+      assert_equal 5400, Przn::Theme.parse_duration('1h30m')
+    end
+
+    test 'parses hours + minutes + seconds' do
+      assert_equal 3723, Przn::Theme.parse_duration('1h2m3s')
+    end
+
+    test 'parses plain integer string as seconds' do
+      assert_equal 45, Przn::Theme.parse_duration('45')
+    end
+
+    test 'parses bare integer / numeric as seconds' do
+      assert_equal 45, Przn::Theme.parse_duration(45)
+    end
+
+    test 'returns nil for nil / empty / garbage' do
+      assert_nil Przn::Theme.parse_duration(nil)
+      assert_nil Przn::Theme.parse_duration('')
+      assert_nil Przn::Theme.parse_duration('garbage')
+    end
   end
 
   sub_test_case '.load' do
@@ -174,6 +206,15 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 'Helvetica Neue', title[:family]
       assert_equal '7',              title[:size]
       assert_equal 'ff5555',         title[:color]
+    end
+
+    test 'user file sets rabbit.duration' do
+      write_theme <<~YAML
+        rabbit:
+          duration: "30m"
+      YAML
+
+      assert_equal '30m', Przn::Theme.load(theme_path).rabbit[:duration]
     end
   end
 

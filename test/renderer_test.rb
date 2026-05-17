@@ -383,6 +383,104 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'draw_runner_bar' do
+    class RunnerFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    FakeTheme = Struct.new(:rabbit, :font, :background, :title, :bullet, :colors)
+
+    def fake_theme(rabbit: {})
+      FakeTheme.new(rabbit, {}, {}, {}, {text: '・'}, {})
+    end
+
+    test 'anchors current slide number at column 1' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: fake_theme)
+      r.send(:draw_runner_bar, 30, 80, 2, 9, nil)  # slide 3 of 9
+      first_move = term.ops.find { |op, *| op == :move_to }
+      assert_equal [:move_to, 30, 1], first_move
+      first_write = term.ops.find { |op, *| op == :write }
+      assert(first_write[1].include?('3'),
+             "expected current slide # at left: #{term.ops.inspect}")
+    end
+
+    test 'anchors total slide count at the right edge' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: fake_theme)
+      r.send(:draw_runner_bar, 30, 80, 2, 9, nil)
+      # second move should be to (h, w - right.size + 1) where right = "9" (1 char) → col 80
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 30, 80]
+    end
+
+    test 'rabbit at far left on first slide; far right on last slide' do
+      term1 = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term1, theme: fake_theme).send(:draw_runner_bar, 30, 80, 0, 10, nil)
+      rabbit_move_1 = term1.ops.each_cons(2).find { |(_, *), (op, s)| op == :write && s.is_a?(String) && s.include?('🐇') }
+      rabbit_col_1 = rabbit_move_1[0][2]
+
+      term2 = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term2, theme: fake_theme).send(:draw_runner_bar, 30, 80, 9, 10, nil)
+      rabbit_move_2 = term2.ops.each_cons(2).find { |(_, *), (op, s)| op == :write && s.is_a?(String) && s.include?('🐇') }
+      rabbit_col_2 = rabbit_move_2[0][2]
+
+      assert_operator rabbit_col_2, :>, rabbit_col_1,
+                      "last-slide rabbit (col #{rabbit_col_2}) should be right of first-slide rabbit (col #{rabbit_col_1})"
+    end
+
+    test 'turtle is absent when rabbit.duration is nil' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: fake_theme).send(:draw_runner_bar, 30, 80, 4, 9, Time.now - 5)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(!writes.include?('🐢'), "expected no turtle: #{writes.inspect}")
+    end
+
+    test 'turtle present when rabbit.duration is set' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: fake_theme(rabbit: {duration: '60s'}))
+        .send(:draw_runner_bar, 30, 80, 4, 9, Time.now - 30)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(writes.include?('🐢'), "expected turtle in output: #{writes.inspect}")
+    end
+
+    test 'rabbit OSC 66 emit includes flip=h' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: fake_theme).send(:draw_runner_bar, 30, 80, 2, 9, nil)
+      rabbit_write = term.ops.find { |op, s| op == :write && s.is_a?(String) && s.include?('🐇') }[1]
+      assert(rabbit_write.include?('flip=h'),
+             "expected flip=h in rabbit OSC 66: #{rabbit_write.inspect}")
+    end
+
+    test 'render writes the simple N / M footer when theme.rabbit is nil' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term)  # Theme.default: rabbit is nil
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(joined.include?(' 1 / 9 '), "expected simple footer: #{joined.inspect}")
+      assert(!joined.include?('🐇'), "did not expect rabbit emoji: #{joined.inspect}")
+    end
+
+    test 'render switches to the runner bar when theme.rabbit is present (even if empty)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term, theme: fake_theme(rabbit: {}))
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(joined.include?('🐇'), "expected rabbit in runner bar: #{joined.inspect}")
+      assert(!joined.include?(' 1 / 9 '), "did not expect simple N/M footer: #{joined.inspect}")
+    end
+  end
+
   sub_test_case 'ensure_kitty_uploaded' do
     class FakeTerm
       attr_reader :writes

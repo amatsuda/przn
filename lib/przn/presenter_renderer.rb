@@ -13,8 +13,8 @@ module Przn
       @started_at = Time.now
     end
 
-    def render(slide, current:, total:)
-      super(slide, current: current, total: total)
+    def render(slide, current:, total:, started_at: nil)
+      super(slide, current: current, total: total, started_at: started_at)
       @mutex.synchronize { draw_presenter_strip(current, total) }
     end
 
@@ -29,12 +29,25 @@ module Przn
       elapsed = format_elapsed(Time.now - @started_at)
       footer = "Slide #{current + 1} / #{total}   #{elapsed}"
 
-      @terminal.move_to(h - 2, 1)
+      # When the theme opts into the rabbit/turtle indicator, the parent
+      # renderer has already drawn it on rows h-1 and h. Lift the strip up
+      # so it doesn't clobber the runner bar; the indicator itself replaces
+      # the strip's own footer line (slide #, elapsed time are visible there
+      # anyway via rabbit position and turtle position).
+      rabbit_mode = !@theme.rabbit.nil?
+      notes_row = rabbit_mode ? h - 3 : h - 2
+      next_row  = rabbit_mode ? h - 2 : h - 1
+
+      @terminal.move_to(notes_row, 1)
       @terminal.write "#{ANSI[:dim]}Notes: #{truncate_to_width(notes_text, [w - 8, 1].max)}#{ANSI[:reset]}"
-      @terminal.move_to(h - 1, 1)
+      @terminal.move_to(next_row, 1)
       @terminal.write "#{ANSI[:dim]}Next:  #{truncate_to_width(next_title || '—', [w - 8, 1].max)}#{ANSI[:reset]}"
-      @terminal.move_to(h, 1)
-      @terminal.write "#{ANSI[:dim]}#{truncate_to_width(footer, w)}#{ANSI[:reset]}"
+
+      unless rabbit_mode
+        @terminal.move_to(h, 1)
+        @terminal.write "#{ANSI[:dim]}#{truncate_to_width(footer, w)}#{ANSI[:reset]}"
+      end
+
       @terminal.flush
     end
 

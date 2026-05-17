@@ -44,13 +44,18 @@ module Przn
     terminal.enter_alt_screen
     terminal.hide_cursor
     begin
-      render = ->(idx) {
+      render = ->(idx, started_at) {
         presentation.go_to(idx)
-        renderer.render(presentation.current_slide, current: presentation.current, total: presentation.total)
+        renderer.render(presentation.current_slide,
+                        current: presentation.current,
+                        total: presentation.total,
+                        started_at: started_at)
       }
-      render.call(0)
+      render.call(0, nil)
       AudienceLink.serve(socket) do |msg|
-        render.call(msg[:index]) if msg[:type] == "goto" && msg[:index].is_a?(Integer)
+        next unless msg[:type] == "goto" && msg[:index].is_a?(Integer)
+        started_at = msg[:started_at] ? Time.at(msg[:started_at]) : nil
+        render.call(msg[:index], started_at)
       end
     ensure
       terminal.write "\e]7772;bg-clear\a"
