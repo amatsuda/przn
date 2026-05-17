@@ -22,10 +22,17 @@ module Przn
     # terminals when an image lands right against the bottom row.
     DEFAULT_IMAGE_RELATIVE_HEIGHT_PERCENT = 70
 
-    def initialize(terminal, base_dir: '.', theme: nil)
+    # `mode:` controls whether `{::note}` / `<note>` segments are rendered:
+    #   :solo      — dim-inline (today's behavior), default for stand-alone runs.
+    #   :audience  — stripped from output; the projector view never shows notes.
+    #   :presenter — dim-inline (so the presenter sees them in context) and
+    #                ALSO aggregated separately for the side panel via
+    #                Slide#notes; this renderer just keeps the inline copy.
+    def initialize(terminal, base_dir: '.', theme: nil, mode: :solo)
       @terminal = terminal
       @base_dir = base_dir
       @theme = theme || Theme.default
+      @mode = mode
       @image_cache = {}
       @kitty_uploads = {}
       @mutex = Mutex.new
@@ -532,7 +539,7 @@ module Przn
             KittyText.sized(content, s: para_scale, f: f, h: h)
           end
         when :font          then "#{render_font_segment(content, segment[2] || {}, para_scale, default_face: f, default_h: h)}#{(segment[2] || {})[:color] ? body_open : ''}"
-        when :note          then "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :note          then @mode == :audience ? "" : "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
         when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
         when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
         when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"

@@ -209,6 +209,23 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'render_segments_scaled audience mode' do
+    test 'strips :note segments when mode is :audience' do
+      r = Przn::Renderer.new(nil, mode: :audience)
+      out = r.send(:render_segments_scaled, [[:text, 'hi '], [:note, 'secret'], [:text, ' there']], 2)
+      assert(!out.include?('secret'), "expected note content stripped: #{out.inspect}")
+      assert(out.include?('hi'))
+      assert(out.include?('there'))
+    end
+
+    test 'renders :note segments dim-inline when mode is :solo (default)' do
+      r = Przn::Renderer.new(nil)
+      out = r.send(:render_segments_scaled, [[:note, 'side']], 2)
+      assert(out.include?('side'), "expected note rendered: #{out.inspect}")
+      assert(out.start_with?(Przn::Renderer::ANSI[:dim]))
+    end
+  end
+
   sub_test_case 'render_segments_scaled body color (theme.font.color)' do
     def render_with_theme(theme, segments, para_scale = 2)
       Przn::Renderer.new(nil, theme: theme).send(:render_segments_scaled, segments, para_scale)

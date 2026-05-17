@@ -2,10 +2,11 @@
 
 module Przn
   class Controller
-    def initialize(presentation, terminal, renderer)
+    def initialize(presentation, terminal, renderer, audience_link: nil)
       @presentation = presentation
       @terminal = terminal
       @renderer = renderer
+      @audience_link = audience_link
       @preload_gen = 0
     end
 
@@ -37,6 +38,10 @@ module Przn
     ensure
       @preload_gen += 1
       @preload_thread&.join
+      if @audience_link
+        AudienceLink.send(@audience_link, type: "quit")
+        @audience_link.close
+      end
       @terminal.write "\e]7772;bg-clear\a"
       @terminal.show_cursor
       @terminal.leave_alt_screen
@@ -50,6 +55,7 @@ module Przn
         current: @presentation.current,
         total: @presentation.total
       )
+      AudienceLink.send(@audience_link, type: "goto", index: @presentation.current) if @audience_link
       schedule_preload
     end
 

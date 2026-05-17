@@ -19,6 +19,9 @@ OptionParser.new do |opts|
   opts.on('-o', '--output FILE', 'Output file path for export') { |v| options[:output] = v }
   opts.on('--theme FILE', 'Theme file (YAML)') { |v| options[:theme] = v }
   opts.on('--generate-theme', 'Generate theme.yml in current directory') { options[:generate_theme] = true }
+  opts.on('--present', 'Open the deck in presenter mode (auto-spawns an audience window on the secondary display)') { options[:present] = true }
+  opts.on('--audience', 'Run as the audience receiver (spawned by --present; expects --socket)') { options[:audience] = true }
+  opts.on('--socket PATH', 'Unix socket path used by --present/--audience to coordinate') { |v| options[:socket] = v }
 end.parse!
 
 if options[:generate_theme]
@@ -60,5 +63,15 @@ when 'prawn'
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
   Przn.export_pdf_prawn(file, output, theme: theme)
 else
-  Przn.start(file, theme: theme, start_at: start_at).run
+  if options[:audience]
+    unless options[:socket]
+      $stderr.puts 'przn: --audience requires --socket PATH'
+      exit 1
+    end
+    Przn.audience(file, socket: options[:socket], theme: theme)
+  elsif options[:present]
+    Przn.present(file, theme: theme, theme_path: options[:theme]).run
+  else
+    Przn.start(file, theme: theme, start_at: start_at).run
+  end
 end
