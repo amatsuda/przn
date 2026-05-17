@@ -40,6 +40,14 @@ This is **bold**, this is *italic*, and this is `inline code`.
 
 normal and {::tag name="red"}red text{:/tag} mixed
 
+# Image (PNG)
+
+![](doge.png){:relative_height="70"}
+
+# Image (JPG)
+
+![](doge.jpg){:relative_height="70"}
+
 # Thank You!
 
 That's all! Enjoy!
