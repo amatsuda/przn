@@ -23,6 +23,23 @@ przn your_slides.md @42
 
 Out-of-range numbers are clamped to the last slide, so `@9999` jumps to the end.
 
+### Extended-display presenter mode
+
+```
+przn --present your_slides.md
+```
+
+On a setup with a secondary display (projector / external monitor) and running inside [Echoes](https://github.com/amatsuda/echoes), `--present` auto-spawns an **audience window** on the second display showing the clean current slide, while the laptop pane becomes the **presenter view**:
+
+- Current slide rendered as normal
+- Speaker notes (`{::note}` / `<note>` markup) shown in a side strip — stripped from the audience view
+- Next slide's title hint
+- Elapsed-time clock (or, when `rabbit:` is themed, the runner-bar visualization)
+
+If only one display is attached or Echoes isn't the host terminal, `--present` falls back to today's mirror mode with a one-line warning on stderr.
+
+Implementation: the two `przn` processes coordinate over a Unix socket. The presenter forwards every slide navigation as a `goto` message; the audience renders and otherwise stays silent. Notes are not transmitted to the audience side.
+
 ### PDF export
 
 Two flavors:
@@ -285,6 +302,9 @@ background:               # default slide background (Echoes OSC 7772)
   to:                     # gradient endpoint
   angle:                  # gradient angle in degrees
 
+# rabbit:                 # opt into the 🐇 / 🐢 bottom progress indicator
+#   duration: "30m"       # "1h30m", "1800s", or plain integer seconds; turtle hides when unset
+
 colors:
   code_bg: "313244"
   dim: "6c7086"
@@ -298,6 +318,7 @@ Notes:
 - **`font.family`** — applied to body text (terminal: via OSC 66 `f=`, requires Echoes; PDF: registered via fontconfig). Inline `<font face="...">` runs override it per-segment.
 - **`title`** — h1 typography. Each attribute is independent from `font`: `title.family` does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block. h2–h6 stay body text.
 - **`background`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
+- **`rabbit`** — opt-in Rabbit-style bottom-row progress indicator. With the key absent, przn shows the simple `N / M` counter at the bottom-right. With the key present, the bottom row becomes: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress. Set `rabbit.duration` to also show 🐢 tracking elapsed time against the goal; without a duration the turtle stays hidden. Inside [Echoes](https://github.com/amatsuda/echoes) the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
 
 ## License
 
