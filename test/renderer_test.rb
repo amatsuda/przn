@@ -5,7 +5,16 @@ require 'tempfile'
 
 class RendererTest < Test::Unit::TestCase
   def setup
+    # Several assertions look for the OSC 7772 ;multicell extension params
+    # (`f=`, `flip=`) which `KittyText.sized` only emits inside Echoes.
+    # Pin the env here so the suite is deterministic on non-Echoes hosts.
+    @prev_term_program = ENV['TERM_PROGRAM']
+    ENV['TERM_PROGRAM'] = 'Echoes'
     @renderer = Przn::Renderer.new(nil)
+  end
+
+  def teardown
+    ENV['TERM_PROGRAM'] = @prev_term_program
   end
 
   # Helper: invoke the private wrap_segments
@@ -452,12 +461,14 @@ class RendererTest < Test::Unit::TestCase
       assert(writes.include?('🐢'), "expected turtle in output: #{writes.inspect}")
     end
 
-    test 'rabbit OSC 66 emit includes flip=h' do
+    test 'rabbit emit carries flip=h (via OSC 7772 ;multicell inside Echoes)' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: fake_theme).send(:draw_runner_bar, 30, 80, 2, 9, nil)
       rabbit_write = term.ops.find { |op, s| op == :write && s.is_a?(String) && s.include?('🐇') }[1]
       assert(rabbit_write.include?('flip=h'),
-             "expected flip=h in rabbit OSC 66: #{rabbit_write.inspect}")
+             "expected flip=h in rabbit emit: #{rabbit_write.inspect}")
+      assert(rabbit_write.include?('7772;multicell'),
+             "expected OSC 7772 ;multicell frame (Echoes-private): #{rabbit_write.inspect}")
     end
 
     test 'render writes the simple N / M footer when theme.rabbit is nil' do
