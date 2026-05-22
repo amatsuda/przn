@@ -268,7 +268,7 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 <img src="doge.png" relative_height="70"/>
 
 <img src="doge.png" x="5"   y="3"   relative_height="40"/>
-<img src="doge.png" x="50%" y="50%" relative_height="40"/>
+<img src="doge.png" x="50%" y="50%" height="40%"/>
 ```
 
 - `src` is required; `alt` and `title` are accepted and ignored at render time (kept for accessibility / future use).
