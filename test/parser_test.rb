@@ -412,6 +412,37 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Image: <img src=".../>' do
+    test 'self-closing XML form desugars to the same :image block as ![](path)' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="doge.png"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_not_nil img
+      assert_equal 'doge.png', img[:path]
+      assert_equal '',         img[:alt]
+      assert_nil               img[:title]
+      assert_equal({},         img[:attrs])
+    end
+
+    test 'alt / title attributes are lifted off :attrs onto the block' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="doge.png" alt="a doge" title="hover"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal 'a doge', img[:alt]
+      assert_equal 'hover',  img[:title]
+      assert_equal({},       img[:attrs])
+    end
+
+    test 'remaining attributes pass through with string keys (matching ![]{:...} parse)' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="doge.png" relative_height="70"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal '70', img[:attrs]['relative_height']
+    end
+
+    test 'missing src is ignored (no :image block emitted)' do
+      slide = Przn::Parser.parse(%(# t\n\n<img alt="oops"/>\n)).slides[0]
+      assert_nil slide.blocks.find { |b| b[:type] == :image }
+    end
+  end
+
   sub_test_case 'Absolute-position text: <at x y>...</at>' do
     test 'XML form parses x/y and content' do
       slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5">hello</at>\n)).slides[0]

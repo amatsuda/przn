@@ -48,6 +48,10 @@ normal and {::tag name="red"}red text{:/tag} mixed
 
 ![](doge.jpg){:relative_height="70"}
 
+# Image (XML form)
+
+<img src="doge.png" relative_height="70"/>
+
 # Absolute-position text
 
 <at x="10" y="10">top-left ish</at>

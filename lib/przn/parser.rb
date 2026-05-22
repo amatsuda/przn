@@ -185,6 +185,21 @@ module Przn
           i -= 1
           blocks << {type: :ordered_list, items: items}
 
+        # Image, XML form: <img src="path" alt="..." title="..." {:attrs}/>
+        # Equivalent to the markdown `![alt](src "title"){:attrs}` form below
+        # — emits the same `:image` block so the renderer handles both
+        # identically. `src` is required; all other attributes pass through
+        # to `block[:attrs]` (string-keyed, matching markdown's IAL parse) so
+        # `relative_height`, `width`, etc. work the same way.
+        when /\A\s*<img((?:\s+\w+="[^"]+")+)\s*\/>\s*\z/
+          raw = parse_xml_attrs(Regexp.last_match(1))
+          path = raw.delete(:src)
+          if path
+            alt = raw.delete(:alt).to_s
+            title = raw.delete(:title)
+            blocks << {type: :image, path: path, alt: alt, title: title, attrs: raw.transform_keys(&:to_s)}
+          end
+
         # Image: ![alt](path "title"){:attrs}
         when /\A!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]*)")?\)(.*)/
           alt = Regexp.last_match(1)
