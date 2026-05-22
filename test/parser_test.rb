@@ -412,6 +412,32 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Absolute-position text: <at x y>...</at>' do
+    test 'XML form parses x/y and content' do
+      slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5">hello</at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      assert_not_nil block
+      assert_equal '10',    block[:attrs][:x]
+      assert_equal '5',     block[:attrs][:y]
+      assert_equal 'hello', block[:content]
+    end
+
+    test 'kramdown form parses x/y and content' do
+      slide = Przn::Parser.parse(%(# t\n\n{::at x="10" y="5"}hello{:/at}\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      assert_not_nil block
+      assert_equal '10',    block[:attrs][:x]
+      assert_equal '5',     block[:attrs][:y]
+      assert_equal 'hello', block[:content]
+    end
+
+    test 'inner markup is preserved verbatim in content (renderer parses it inline)' do
+      slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5"><size=3>BIG</size></at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      assert_equal '<size=3>BIG</size>', block[:content]
+    end
+  end
+
   sub_test_case 'Rabbit: inline - mixed' do
     test 'parses mixed inline formatting' do
       result = Przn::Parser.parse_inline('hello *world* and **bold**')

@@ -235,6 +235,25 @@ content...
 
 The previous slide's background is cleared on every navigation, and on `przn` exit, so your shell isn't left tinted.
 
+### Absolute-position text
+
+Place text at an arbitrary `(column, row)` on the slide, escaping the normal top-down paragraph flow:
+
+```markdown
+# Layout test
+
+<at x="10" y="5">top-left ish</at>
+<at x="40" y="15"><size=3>BIG</size></at>
+<at x="80" y="25"><color=red>warn</color></at>
+
+{::at x="10" y="20"}same thing, kramdown form{:/at}
+```
+
+- `x` / `y` are **1-based terminal cells**, matching the cursor-position escape (`\e[y;xH`). `x="1" y="1"` is the very top-left of the slide pane.
+- Content is parsed inline, so all the usual styling works inside an `<at>` — `<size>`, `<color>`, `<font>`, `**bold**`, `*italic*`, etc.
+- The block doesn't take up vertical space in the slide's layout — paragraphs around it render in their normal positions and the absolute placement layers on top. Useful for overlaying labels on a `<bg .../>` gradient or pinning annotations to specific cells.
+- Bad coordinates (missing / non-positive) are silently ignored.
+
 ### Comments
 
 ```markdown

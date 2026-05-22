@@ -492,6 +492,41 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'render_at: absolute-position text' do
+    test 'moves cursor to (y, x) and writes the inline-parsed content' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: 'hello'}
+      Przn::Renderer.new(term).send(:render_at, block)
+
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 10]
+
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(writes.include?('hello'), "expected content in writes: #{writes.inspect}")
+    end
+
+    test 'inner inline markup is honored (size, color, ...)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: '<size=3>BIG</size>'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(writes.include?('BIG'),  "expected 'BIG' in writes: #{writes.inspect}")
+      assert(writes.include?('s=3'),  "expected <size=3> to translate to s=3 in OSC 66: #{writes.inspect}")
+    end
+
+    test 'silently skips when x or y is missing / non-positive' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {y: '5'}, content: 'x'})
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '0', y: '5'}, content: 'x'})
+      assert_equal [], term.ops, "expected no writes when coords are bad: #{term.ops.inspect}"
+    end
+
+    test 'does not advance the slide layout row (block_height is 0)' do
+      r = Przn::Renderer.new(nil)
+      assert_equal 0, r.send(:block_height, {type: :at, attrs: {x: '10', y: '5'}, content: 'x'}, 80)
+    end
+  end
+
   sub_test_case 'ensure_kitty_uploaded' do
     class FakeTerm
       attr_reader :writes

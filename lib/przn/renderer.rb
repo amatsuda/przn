@@ -109,6 +109,7 @@ module Przn
       when :image           then render_image(block, width, row)
       when :blank           then row + DEFAULT_SCALE
       when :bg              then row
+      when :at              then render_at(block); row
       else row + 1
       end
     end
@@ -135,6 +136,23 @@ module Przn
       type = attrs[:type] || 'linear'
       angle = attrs[:angle] || 0
       @terminal.write "\e]7772;bg-gradient;type=#{type}:angle=#{angle}:colors=#{colors.join(',')}\a"
+    end
+
+    # Place text at an absolute (column, row) on the slide, escaping the
+    # normal top-down paragraph flow. Coordinates are 1-based terminal cells
+    # to match the CSI cursor-position escape. Content is parsed inline so
+    # `<size>`, `<color>`, `<font>`, **bold**, etc. all work inside `<at>`.
+    # The block contributes 0 to the slide's layout height so it doesn't
+    # push subsequent content down.
+    def render_at(block)
+      attrs = block[:attrs] || {}
+      x = attrs[:x].to_i
+      y = attrs[:y].to_i
+      return if x < 1 || y < 1
+
+      segments = Parser.parse_inline(block[:content].to_s)
+      @terminal.move_to(y, x)
+      @terminal.write render_segments_scaled(segments, DEFAULT_SCALE)
     end
 
     # Bottom-row progress indicator (Rabbit-style):
@@ -834,6 +852,8 @@ module Przn
       when :align
         0
       when :bg
+        0
+      when :at
         0
       when :blank
         s

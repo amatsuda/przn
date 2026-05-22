@@ -82,6 +82,15 @@ module Przn
         when /\A\s*<bg((?:\s+\w+="[^"]+")*)\s*\/>\s*\z/
           blocks << {type: :bg, attrs: parse_xml_attrs(Regexp.last_match(1))}
 
+        # Absolute-position text:
+        #   <at x="N" y="N">content</at>
+        #   {::at x="N" y="N"}content{:/at}
+        # Content can include inline markup (size, color, font, bold, …).
+        when /\A\s*<at((?:\s+\w+="[^"]+")+)\s*>(.*)<\/at>\s*\z/
+          blocks << {type: :at, attrs: parse_xml_attrs(Regexp.last_match(1)), content: Regexp.last_match(2)}
+        when /\A\s*\{::at((?:\s+\w+="[^"]+")+)\}(.*)\{:\/at\}\s*\z/
+          blocks << {type: :at, attrs: parse_xml_attrs(Regexp.last_match(1)), content: Regexp.last_match(2)}
+
         # Fenced code block
         when /\A\s*```(\w*)\s*\z/
           lang = Regexp.last_match(1)
