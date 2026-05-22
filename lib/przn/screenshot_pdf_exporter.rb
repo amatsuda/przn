@@ -76,6 +76,7 @@ module Przn
       paths
     ensure
       @terminal.write "#{OSC};bg-clear#{BEL}"
+      @terminal.write ImageUtil.kitty_clear_all if ImageUtil.kitty_terminal?
       @terminal.show_cursor
       @terminal.leave_alt_screen
       @terminal.flush

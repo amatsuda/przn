@@ -74,4 +74,10 @@ class ImageUtilTest < Test::Unit::TestCase
       assert_equal "\e_Ga=p,i=7,c=30,r=12,q=2\e\\", out
     end
   end
+
+  sub_test_case 'kitty_clear_all' do
+    test 'emits an APC sequence with action=d that frees both placements and storage' do
+      assert_equal "\e_Ga=d,d=A,q=2\e\\", Przn::ImageUtil.kitty_clear_all
+    end
+  end
 end

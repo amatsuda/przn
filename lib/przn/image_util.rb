@@ -91,6 +91,16 @@ module Przn
       "\e_Ga=p,i=#{image_id},c=#{cols},r=#{rows},q=2\e\\"
     end
 
+    # Kitty Graphics Protocol: delete every placement and free the
+    # stored image data. Used on quit so previously-rendered images
+    # don't leak through onto the user's restored shell screen
+    # (placements aren't tied to the alt-screen buffer in most
+    # kitty-protocol implementations, so leaving the alt screen
+    # alone isn't enough to hide them). `q=2` suppresses the OK reply.
+    def kitty_clear_all
+      "\e_Ga=d,d=A,q=2\e\\"
+    end
+
     # Sixel via img2sixel
     def sixel_available?
       @sixel_available = system('command -v img2sixel > /dev/null 2>&1') if @sixel_available.nil?

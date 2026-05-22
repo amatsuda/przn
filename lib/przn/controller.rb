@@ -44,6 +44,7 @@ module Przn
         @audience_link.close
       end
       @terminal.write "\e]7772;bg-clear\a"
+      @terminal.write ImageUtil.kitty_clear_all if ImageUtil.kitty_terminal?
       @terminal.show_cursor
       @terminal.leave_alt_screen
     end
