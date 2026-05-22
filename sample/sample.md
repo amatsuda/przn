@@ -52,6 +52,11 @@ normal and {::tag name="red"}red text{:/tag} mixed
 
 <img src="doge.png" relative_height="70"/>
 
+# Image (absolute position)
+
+<img src="doge.png" x="5"   y="3"   relative_height="40"/>
+<img src="doge.png" x="50%" y="50%" relative_height="40"/>
+
 # Absolute-position text
 
 <at x="10" y="10">top-left ish</at>

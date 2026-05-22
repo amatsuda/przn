@@ -554,6 +554,66 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'render_image: x/y absolute positioning' do
+    def setup
+      @png = Tempfile.new(['render_img_xy', '.png'])
+      @png.binmode
+      @png.write("\x89PNG\r\n\x1a\n".b)
+      @png.flush
+
+      # Pretend the file is a 200x200 PNG on a kitty-graphics terminal,
+      # so render_image takes the kitty-place path instead of skipping.
+      @stubs = {
+        kitty_terminal?: Przn::ImageUtil.method(:kitty_terminal?),
+        png?:            Przn::ImageUtil.method(:png?),
+        image_size:      Przn::ImageUtil.method(:image_size),
+        kitty_place:     Przn::ImageUtil.method(:kitty_place),
+      }
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+      Przn::ImageUtil.define_singleton_method(:png?) { |_p| true }
+      Przn::ImageUtil.define_singleton_method(:image_size) { |_p| [200, 200] }
+      Przn::ImageUtil.define_singleton_method(:kitty_place) { |**_kw| 'IMG' }
+    end
+
+    def teardown
+      @stubs.each do |name, orig|
+        Przn::ImageUtil.singleton_class.remove_method(name)
+        Przn::ImageUtil.define_singleton_method(name, orig)
+      end
+      @png.close!
+    end
+
+    test 'x and y position the image at those 1-based cells and skip flow advance' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '10', 'y' => '5'}}
+      new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 10]
+      assert_equal 1, new_row, 'absolute placement must not advance the layout row'
+    end
+
+    test 'percent x/y resolve against terminal width / height' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '50%', 'y' => '50%'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 15, 40]
+    end
+
+    test 'block_height is 0 when x and y are set (layered, not in flow)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '10', 'y' => '5'}}
+      assert_equal 0, Przn::Renderer.new(term).send(:block_height, block, 80)
+    end
+
+    test 'without x and y, image stays horizontally centered and advances the flow' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {}}
+      new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      assert_operator new_row, :>, 5, 'flow-mode image should advance the layout row'
+    end
+  end
+
   sub_test_case 'ensure_kitty_uploaded' do
     class FakeTerm
       attr_reader :writes

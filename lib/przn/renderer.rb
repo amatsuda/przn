@@ -458,9 +458,19 @@ module Przn
       img_w, img_h = img_size
       cell_w, cell_h = @terminal.cell_pixel_size
 
-      available_rows = @terminal.height - row - 2
-      left = content_left(width)
-      available_cols = width - left * 2
+      attrs = block[:attrs] || {}
+      abs_x = resolve_at_coord(attrs['x'], @terminal.width)
+      abs_y = resolve_at_coord(attrs['y'], @terminal.height)
+      absolute = abs_x && abs_y
+
+      origin_row = absolute ? abs_y : row
+      available_rows = [@terminal.height - origin_row - 2, 1].max
+      if absolute
+        available_cols = [@terminal.width - abs_x + 1, 1].max
+      else
+        left = content_left(width)
+        available_cols = width - left * 2
+      end
 
       # Cap the default vertical area to 70 % of the screen, matching what
       # `{:relative_height="70"}` would do explicitly. Large images that
@@ -469,7 +479,7 @@ module Przn
       # smaller images sit well within this cap so they're unaffected.
       # An explicit `relative_height` still overrides.
       default_rh = DEFAULT_IMAGE_RELATIVE_HEIGHT_PERCENT
-      rh = block[:attrs]['relative_height'] || default_rh
+      rh = attrs['relative_height'] || default_rh
       target_rows = (@terminal.height * rh.to_i / 100.0).to_i
       available_rows = [target_rows, available_rows].min
 
@@ -482,24 +492,29 @@ module Przn
       target_cols = [target_cols, 1].max
       target_rows = [target_rows, 1].max
 
-      x = [(width - target_cols) / 2, 0].max
+      if absolute
+        y_cell, x_cell = abs_y, abs_x
+      else
+        y_cell = row
+        x_cell = [(width - target_cols) / 2, 0].max + 1
+      end
 
       if ImageUtil.kitty_terminal? && ImageUtil.png?(path)
         image_id = ensure_kitty_uploaded(path)
-        @terminal.move_to(row, x + 1)
+        @terminal.move_to(y_cell, x_cell)
         @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows)
       elsif ImageUtil.kitty_terminal?
-        data = cached_kitty_icat(path, cols: target_cols, rows: target_rows, x: x, y: row - 1)
+        data = cached_kitty_icat(path, cols: target_cols, rows: target_rows, x: x_cell - 1, y: y_cell - 1)
         @terminal.write data if data && !data.empty?
       elsif ImageUtil.sixel_available?
-        @terminal.move_to(row, x + 1)
+        @terminal.move_to(y_cell, x_cell)
         target_pixel_w = target_cols * cell_w
         target_pixel_h = target_rows * cell_h
         sixel = cached_sixel_encode(path, width: target_pixel_w, height: target_pixel_h)
         @terminal.write sixel if sixel && !sixel.empty?
       end
 
-      row + target_rows
+      absolute ? row : row + target_rows
     end
 
     def resolve_image_path(path)
@@ -873,7 +888,14 @@ module Przn
       when :table
         ((block[:header] ? 2 : 0) + block[:rows].size) * s
       when :image
-        image_block_height(block, width)
+        # Absolute-positioned images (`<img x y src/>`) layer on top of
+        # the slide and contribute 0 to the layout — same treatment as :at.
+        attrs = block[:attrs] || {}
+        if resolve_at_coord(attrs['x'], @terminal.width) && resolve_at_coord(attrs['y'], @terminal.height)
+          0
+        else
+          image_block_height(block, width)
+        end
       when :align
         0
       when :bg
