@@ -75,6 +75,8 @@ przn --export prawn -o output.pdf your_slides.md
 
 przn's Markdown format is compatible with [Rabbit](https://rabbit-shocker.org/)'s Markdown mode.
 
+> **HTML-ish tag attributes** — every `<tag attr=value>` block below (`<bg>`, `<at>`, `<img>`, `<font>`) accepts three value forms: double-quoted `attr="value"`, single-quoted `attr='value'`, and unquoted `attr=value` (HTML5-ish — anything that isn't whitespace, `=`, `<`, `>`, a quote, or backtick). Self-closing tags need a space before `/>` when the last attribute is unquoted (`<img src=foo.png />`).
+
 ### Slide splitting
 
 Slides are separated by `#` (h1) headings.

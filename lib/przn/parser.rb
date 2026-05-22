@@ -25,6 +25,15 @@ module Przn
       'bright_white' => 97
     }.freeze
 
+    # HTML-ish attribute, three accepted value forms:
+    #   key="value"   key='value'   key=bareword
+    # The unquoted token excludes whitespace, `=`, `<`, `>`, `"`, `'` and
+    # backtick, matching the spirit of HTML5's unquoted-attribute grammar.
+    # `/` is intentionally NOT excluded so paths like `src=path/to/file`
+    # work — which means self-closing tags need a space before `/>` when
+    # the last attribute is unquoted (`<img src=foo.png />`).
+    ATTR_RE_SRC = '\w+=(?:"[^"]*"|\'[^\']*\'|[^\s=<>"\'`]+)'
+
     module_function
 
     def parse(markdown)
@@ -79,16 +88,18 @@ module Przn
         # Slide background (Echoes OSC 7772):
         #   <bg color="#..."/>                              — solid (bg-color)
         #   <bg from="#..." to="#..." angle="N"/>           — linear gradient (bg-gradient)
-        when /\A\s*<bg((?:\s+\w+="[^"]+")*)\s*\/>\s*\z/
+        # Attribute values may be double-quoted, single-quoted, or
+        # unquoted (HTML5-ish — see ATTR_RE_SRC).
+        when %r{\A\s*<bg((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
           blocks << {type: :bg, attrs: parse_xml_attrs(Regexp.last_match(1))}
 
         # Absolute-position text:
         #   <at x="N" y="N">content</at>
         #   {::at x="N" y="N"}content{:/at}
         # Content can include inline markup (size, color, font, bold, …).
-        when /\A\s*<at((?:\s+\w+="[^"]+")+)\s*>(.*)<\/at>\s*\z/
+        when %r{\A\s*<at((?:\s+#{ATTR_RE_SRC})+)\s*>(.*)</at>\s*\z}o
           blocks << {type: :at, attrs: parse_xml_attrs(Regexp.last_match(1)), content: Regexp.last_match(2)}
-        when /\A\s*\{::at((?:\s+\w+="[^"]+")+)\}(.*)\{:\/at\}\s*\z/
+        when %r{\A\s*\{::at((?:\s+#{ATTR_RE_SRC})+)\}(.*)\{:/at\}\s*\z}o
           blocks << {type: :at, attrs: parse_xml_attrs(Regexp.last_match(1)), content: Regexp.last_match(2)}
 
         # Fenced code block
@@ -191,7 +202,7 @@ module Przn
         # identically. `src` is required; all other attributes pass through
         # to `block[:attrs]` (string-keyed, matching markdown's IAL parse) so
         # `relative_height`, `width`, etc. work the same way.
-        when /\A\s*<img((?:\s+\w+="[^"]+")+)\s*\/>\s*\z/
+        when %r{\A\s*<img((?:\s+#{ATTR_RE_SRC})+)\s*/>\s*\z}o
           raw = parse_xml_attrs(Regexp.last_match(1))
           path = raw.delete(:src)
           if path
@@ -264,12 +275,14 @@ module Przn
       attrs.slice(:face, :size, :color)
     end
 
-    # Generic attribute scanner — `key="value"` pairs, returned as a hash with
-    # symbolized keys. Doesn't validate which keys are allowed; callers slice.
+    # Generic attribute scanner — three value forms accepted:
+    #   key="value"   key='value'   key=bareword
+    # Returns a hash with symbolized keys. Doesn't validate which keys
+    # are allowed; callers slice.
     def parse_xml_attrs(str)
       attrs = {}
-      str.scan(/(\w+)="([^"]+)"/) do |key, value|
-        attrs[key.to_sym] = value
+      str.scan(/(\w+)=(?:"([^"]*)"|'([^']*)'|([^\s=<>"'`]+))/) do |key, dq, sq, uq|
+        attrs[key.to_sym] = dq || sq || uq
       end
       attrs
     end
@@ -318,9 +331,9 @@ module Przn
           segments << [:tag, scanner[2], scanner[1]]
         elsif scanner.scan(/<size=([^>\s]+)>(.*?)<\/size>/)
           segments << [:tag, scanner[2], scanner[1]]
-        elsif scanner.scan(/<font((?:\s+\w+="[^"]+")+)\s*>(.*?)<\/font>/)
+        elsif scanner.scan(%r{<font((?:\s+#{ATTR_RE_SRC})+)\s*>(.*?)</font>}o)
           segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
-        elsif scanner.scan(/\{::font((?:\s+\w+="[^"]+")+)\}(.*?)\{:\/font\}/)
+        elsif scanner.scan(%r{\{::font((?:\s+#{ATTR_RE_SRC})+)\}(.*?)\{:/font\}}o)
           segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
         elsif scanner.scan(/\{::note\}(.*?)\{:\/note\}/)
           segments << [:note, scanner[1]]

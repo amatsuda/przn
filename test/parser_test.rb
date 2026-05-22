@@ -356,6 +356,11 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:font, 'code', {face: 'Menlo', size: '3', color: 'red'}]], result
     end
 
+    test 'parses <font> with unquoted attribute values' do
+      result = Przn::Parser.parse_inline('<font face=Helvetica color=red>hi</font>')
+      assert_equal [[:font, 'hi', {face: 'Helvetica', color: 'red'}]], result
+    end
+
     test "<font> attribute order doesn't matter" do
       result = Przn::Parser.parse_inline('<font size="3" face="Menlo">x</font>')
       assert_equal [[:font, 'x', {face: 'Menlo', size: '3'}]], result
@@ -409,6 +414,28 @@ class ParserTest < Test::Unit::TestCase
       slide = Przn::Parser.parse(%(# t\n\n<bg from="#000" to="#fff" type="linear"/>\n)).slides[0]
       bg = slide.blocks.find { |b| b[:type] == :bg }
       assert_equal 'linear', bg[:attrs][:type]
+    end
+
+    test 'unquoted attribute values are accepted (HTML5-ish)' do
+      slide = Przn::Parser.parse(%(# t\n\n<bg from=#1a1a2e to=#16213e angle=90 />\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_equal '#1a1a2e', bg[:attrs][:from]
+      assert_equal '#16213e', bg[:attrs][:to]
+      assert_equal '90',      bg[:attrs][:angle]
+    end
+
+    test 'single-quoted attribute values are accepted' do
+      slide = Przn::Parser.parse(%(# t\n\n<bg color='#1a1a2e'/>\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_equal '#1a1a2e', bg[:attrs][:color]
+    end
+
+    test 'quoted and unquoted attributes can be mixed on the same tag' do
+      slide = Przn::Parser.parse(%(# t\n\n<bg from=#000 to='#fff' angle="45"/>\n)).slides[0]
+      bg = slide.blocks.find { |b| b[:type] == :bg }
+      assert_equal '#000', bg[:attrs][:from]
+      assert_equal '#fff', bg[:attrs][:to]
+      assert_equal '45',   bg[:attrs][:angle]
     end
   end
 
@@ -470,6 +497,13 @@ class ParserTest < Test::Unit::TestCase
       assert_equal '40', img[:attrs]['relative_height']
       assert_equal '60', img[:attrs]['relative_width']
     end
+
+    test 'unquoted attribute values work on <img> too' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src=doge.png height=70% />\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal 'doge.png', img[:path]
+      assert_equal '70', img[:attrs]['relative_height']
+    end
   end
 
   sub_test_case 'Absolute-position text: <at x y>...</at>' do
@@ -495,6 +529,14 @@ class ParserTest < Test::Unit::TestCase
       slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5"><size=3>BIG</size></at>\n)).slides[0]
       block = slide.blocks.find { |b| b[:type] == :at }
       assert_equal '<size=3>BIG</size>', block[:content]
+    end
+
+    test 'unquoted attribute values work on <at> too' do
+      slide = Przn::Parser.parse(%(# t\n\n<at x=10 y=50%>hi</at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      assert_equal '10',  block[:attrs][:x]
+      assert_equal '50%', block[:attrs][:y]
+      assert_equal 'hi',  block[:content]
     end
   end
 
