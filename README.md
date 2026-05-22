@@ -257,6 +257,26 @@ Place text at an arbitrary `(column, row)` on the slide, escaping the normal top
 - The block doesn't take up vertical space in the slide's layout — paragraphs around it render in their normal positions and the absolute placement layers on top. Useful for overlaying labels on a `<bg .../>` gradient or pinning annotations to specific cells.
 - Out-of-range coordinates clamp into the visible area; missing / unparseable coordinates skip silently.
 
+### Image
+
+Embed an image with the standard markdown form, or the `<img>` XML form when you want to absolute-position it. Both produce identical output — `<img>` just opens the door to extra attributes like `x` / `y`.
+
+```markdown
+![](doge.png){:relative_height="70"}
+<img src="doge.png" relative_height="70"/>
+
+<img src="doge.png" x="5"   y="3"   relative_height="40"/>
+<img src="doge.png" x="50%" y="50%" relative_height="40"/>
+```
+
+- `src` is required; `alt` and `title` are accepted and ignored at render time (kept for accessibility / future use).
+- `relative_height="N"` caps the image at N % of the terminal height (default 70). Aspect ratio is preserved.
+- `x` / `y` (optional) anchor the image's top-left at an absolute cell. Same two forms as [`<at>`](#absolute-position-text):
+  - **Plain integer** — 1-based terminal cells.
+  - **Percent** — resolves against the terminal's current width / height.
+  - With `x` and `y` set, the image layers on top of the slide and contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. Without `x` / `y`, the image stays horizontally centered and takes up its natural height in the flow.
+- Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.
+
 ### Comments
 
 ```markdown
