@@ -53,6 +53,7 @@ normal and {::tag name="red"}red text{:/tag} mixed
 <at x="10" y="10">top-left ish</at>
 <at x="40" y="15"><size=3>BIG</size></at>
 <at x="80" y="25"><color=red>warn</color></at>
+<at x="50%" y="50%">dead center</at>
 
 # Thank You!
 

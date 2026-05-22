@@ -514,11 +514,38 @@ class RendererTest < Test::Unit::TestCase
       assert(writes.include?('s=3'),  "expected <size=3> to translate to s=3 in OSC 66: #{writes.inspect}")
     end
 
-    test 'silently skips when x or y is missing / non-positive' do
+    test 'silently skips when x or y is missing or unparseable' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {y: '5'}, content: 'x'})
-      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '0', y: '5'}, content: 'x'})
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: 'huh', y: '5'}, content: 'x'})
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '', y: '5'}, content: 'x'})
       assert_equal [], term.ops, "expected no writes when coords are bad: #{term.ops.inspect}"
+    end
+
+    test 'percent coordinates resolve against terminal width / height' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '50%', y: '50%'}, content: 'mid'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 15, 40]  # round(0.5 * 30), round(0.5 * 80)
+    end
+
+    test 'percent coordinates clamp into the visible area' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '0%',   y: '0%'},   content: 'a'})
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '100%', y: '100%'}, content: 'b'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 1, 1]
+      assert_includes moves, [:move_to, 30, 80]
+    end
+
+    test 'out-of-range cell coordinates clamp into the visible area' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '0',   y: '5'},   content: 'a'})
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '999', y: '999'}, content: 'b'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 1]      # x=0 clamps to col 1
+      assert_includes moves, [:move_to, 30, 80]    # huge values clamp to the right edge
     end
 
     test 'does not advance the slide layout row (block_height is 0)' do

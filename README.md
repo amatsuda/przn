@@ -245,14 +245,17 @@ Place text at an arbitrary `(column, row)` on the slide, escaping the normal top
 <at x="10" y="5">top-left ish</at>
 <at x="40" y="15"><size=3>BIG</size></at>
 <at x="80" y="25"><color=red>warn</color></at>
+<at x="50%" y="50%">dead center</at>
 
 {::at x="10" y="20"}same thing, kramdown form{:/at}
 ```
 
-- `x` / `y` are **1-based terminal cells**, matching the cursor-position escape (`\e[y;xH`). `x="1" y="1"` is the very top-left of the slide pane.
+- `x` / `y` accept two forms:
+  - **Plain integer** — 1-based terminal cells, matching the cursor-position escape (`\e[y;xH`). `x="1" y="1"` is the very top-left of the slide pane.
+  - **Percent** (`x="50%"`, `y="100%"`) — resolves against the terminal's current width / height. Auto-adjusts when the pane is resized.
 - Content is parsed inline, so all the usual styling works inside an `<at>` — `<size>`, `<color>`, `<font>`, `**bold**`, `*italic*`, etc.
 - The block doesn't take up vertical space in the slide's layout — paragraphs around it render in their normal positions and the absolute placement layers on top. Useful for overlaying labels on a `<bg .../>` gradient or pinning annotations to specific cells.
-- Bad coordinates (missing / non-positive) are silently ignored.
+- Out-of-range coordinates clamp into the visible area; missing / unparseable coordinates skip silently.
 
 ### Comments
 

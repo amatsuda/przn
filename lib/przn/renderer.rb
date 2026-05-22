@@ -140,19 +140,44 @@ module Przn
 
     # Place text at an absolute (column, row) on the slide, escaping the
     # normal top-down paragraph flow. Coordinates are 1-based terminal cells
-    # to match the CSI cursor-position escape. Content is parsed inline so
+    # to match the CSI cursor-position escape. A trailing `%` interprets the
+    # value as a percentage of the terminal's width (for `x=`) or height
+    # (for `y=`) — `x="50%" y="50%"` lands at the middle of the pane,
+    # auto-resizing with the terminal. Content is parsed inline so
     # `<size>`, `<color>`, `<font>`, **bold**, etc. all work inside `<at>`.
     # The block contributes 0 to the slide's layout height so it doesn't
     # push subsequent content down.
     def render_at(block)
       attrs = block[:attrs] || {}
-      x = attrs[:x].to_i
-      y = attrs[:y].to_i
-      return if x < 1 || y < 1
+      x = resolve_at_coord(attrs[:x], @terminal.width)
+      y = resolve_at_coord(attrs[:y], @terminal.height)
+      return if x.nil? || y.nil?
 
       segments = Parser.parse_inline(block[:content].to_s)
       @terminal.move_to(y, x)
       @terminal.write render_segments_scaled(segments, DEFAULT_SCALE)
+    end
+
+    # Resolve an `<at>` coordinate string against the dimension it indexes.
+    # `"50%"` → halfway along `max`; plain integer string → that number of
+    # cells. Out-of-range values clamp into [1, max]. Returns nil when the
+    # input is missing or unparseable so the renderer skips silently.
+    def resolve_at_coord(raw, max)
+      return nil if raw.nil?
+
+      s = raw.to_s.strip
+      return nil if s.empty?
+
+      cells =
+        if s.end_with?('%')
+          pct = s.chomp('%').to_f
+          (pct / 100.0 * max).round
+        elsif s =~ /\A-?\d+\z/
+          s.to_i
+        end
+      return nil if cells.nil?
+
+      cells.clamp(1, max)
     end
 
     # Bottom-row progress indicator (Rabbit-style):
