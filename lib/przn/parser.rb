@@ -197,7 +197,9 @@ module Przn
           if path
             alt = raw.delete(:alt).to_s
             title = raw.delete(:title)
-            blocks << {type: :image, path: path, alt: alt, title: title, attrs: raw.transform_keys(&:to_s)}
+            attrs = raw.transform_keys(&:to_s)
+            normalize_image_attrs!(attrs)
+            blocks << {type: :image, path: path, alt: alt, title: title, attrs: attrs}
           end
 
         # Image: ![alt](path "title"){:attrs}
@@ -218,6 +220,7 @@ module Przn
             attr_str = attr_str.sub(/\}\s*\z/, '')
             parse_image_attrs(attr_str, attrs)
           end
+          normalize_image_attrs!(attrs)
           blocks << {type: :image, path: path, alt: alt, title: title, attrs: attrs}
 
         # Definition list: term on one line, :   definition on next
@@ -275,6 +278,22 @@ module Przn
       str = str.sub(/\A:?\s*/, '')
       str.scan(/([\w-]+)=['"]([^'"]*)['"]/) do |key, value|
         attrs[key.tr('-', '_')] = value
+      end
+    end
+
+    # Rewrite `height="N%"` / `width="N%"` into the canonical
+    # `relative_height="N"` / `relative_width="N"` the renderer reads.
+    # Values without a `%` suffix pass through unchanged (and are
+    # ignored downstream); an explicit `relative_*` already on the
+    # block wins so authors can mix forms without surprise.
+    def normalize_image_attrs!(attrs)
+      if (h = attrs['height']) && (m = h.match(/\A(\d+)%\z/))
+        attrs.delete('height')
+        attrs['relative_height'] ||= m[1]
+      end
+      if (w = attrs['width']) && (m = w.match(/\A(\d+)%\z/))
+        attrs.delete('width')
+        attrs['relative_width'] ||= m[1]
       end
     end
 

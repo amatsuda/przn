@@ -441,6 +441,35 @@ class ParserTest < Test::Unit::TestCase
       slide = Przn::Parser.parse(%(# t\n\n<img alt="oops"/>\n)).slides[0]
       assert_nil slide.blocks.find { |b| b[:type] == :image }
     end
+
+    test 'height="N%" / width="N%" are aliases for relative_height / relative_width' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="doge.png" height="40%" width="60%"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal '40', img[:attrs]['relative_height']
+      assert_equal '60', img[:attrs]['relative_width']
+      assert_nil img[:attrs]['height']
+      assert_nil img[:attrs]['width']
+    end
+
+    test 'explicit relative_height wins over the height="N%" alias' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="doge.png" height="40%" relative_height="70"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal '70', img[:attrs]['relative_height']
+    end
+
+    test 'height without a % suffix passes through (no alias rewrite)' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="doge.png" height="40"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal '40', img[:attrs]['height']
+      assert_nil img[:attrs]['relative_height']
+    end
+
+    test 'markdown form: height="N%" alias works in {:...} IAL too' do
+      slide = Przn::Parser.parse(%(# t\n\n![](pic.png){:height="40%" width="60%"}\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal '40', img[:attrs]['relative_height']
+      assert_equal '60', img[:attrs]['relative_width']
+    end
   end
 
   sub_test_case 'Absolute-position text: <at x y>...</at>' do

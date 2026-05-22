@@ -270,7 +270,8 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 ```
 
 - `src` is required; `alt` and `title` are accepted and ignored at render time (kept for accessibility / future use).
-- `relative_height="N"` caps the image at N % of the terminal height (default 70). Aspect ratio is preserved.
+- `relative_height="N"` caps the image at N % of the terminal height (default 70). Aspect ratio is preserved. `relative_width="N"` is the same for the horizontal dimension.
+- `height="N%"` / `width="N%"` are short-form aliases for `relative_height` / `relative_width` (both forms — `<img>` and `![]{:...}` — accept the alias). An explicit `relative_*` on the same block wins; a non-`%` value (`height="40"`) is left alone since pixel units aren't supported.
 - `x` / `y` (optional) anchor the image's top-left at an absolute cell. Same two forms as [`<at>`](#absolute-position-text):
   - **Plain integer** — 1-based terminal cells.
   - **Percent** — resolves against the terminal's current width / height.
