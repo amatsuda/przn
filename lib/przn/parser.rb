@@ -304,7 +304,21 @@ module Przn
         end
       end
 
-      segments
+      # Coalesce adjacent :text segments. The scanner has to bail to a
+      # single-character `.` when it sees `&` so the `&lt;` / `&gt;` /
+      # `&amp;` entity matches can run on the next iteration, which
+      # leaves a bare `&` as its own segment and fragments the
+      # surrounding text. Merging them back together means one OSC 66
+      # multicell sequence per typeset run — important for h1 titles
+      # under a proportional font, where Echoes pads each run
+      # independently and stray segments become visible gaps.
+      segments.each_with_object([]) do |seg, acc|
+        if seg[0] == :text && acc.last && acc.last[0] == :text
+          acc.last[1] = acc.last[1] + seg[1]
+        else
+          acc << seg
+        end
+      end
     end
   end
 end

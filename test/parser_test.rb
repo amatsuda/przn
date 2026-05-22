@@ -317,8 +317,18 @@ class ParserTest < Test::Unit::TestCase
 
     test '&lt;note&gt; renders as literal text, not the note tag' do
       result = Przn::Parser.parse_inline('&lt;note&gt;')
-      # No :note segment — it's three literal characters
-      assert_equal [[:text, '<'], [:text, 'note'], [:text, '>']], result
+      # No :note segment — and the three decoded text pieces coalesce
+      # back into a single text segment.
+      assert_equal [[:text, '<note>']], result
+    end
+
+    test 'bare & does not fragment the surrounding text into multiple segments' do
+      # h1 like `# A & Bのあとに日本語のテキスト` must stay as one :text run
+      # so the title becomes one OSC 66 multicell sequence — otherwise a
+      # proportional title font (with h=2) gets visible padding gaps
+      # around the `&`.
+      assert_equal [[:text, 'A & Bのあとに日本語のテキスト']],
+                   Przn::Parser.parse_inline('A & Bのあとに日本語のテキスト')
     end
 
     test 'rejects mismatched closing tag (left as plain text)' do
