@@ -55,11 +55,10 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal '50%', layouts['two-column'].find { |s| s.name == 'right' }.x
     end
 
-    test 'shipped `default` is a single full-width content slot from row 2' do
-      slots = Przn::Theme.default.layouts['default']
-      assert_equal 1, slots.size
-      assert_equal ['content', '1', '2', '100%', '100%'],
-                   [slots[0].name, slots[0].x, slots[0].y, slots[0].width, slots[0].height]
+    test 'shipped `default` mirrors `title-content` (centered title band + content below)' do
+      defaults = Przn::Theme.default.layouts
+      assert_equal defaults['title-content'].map(&:to_a),
+                   defaults['default'].map(&:to_a)
     end
 
     test 'shipped `cover` has a centered title slot and a bottom subtitle slot' do
@@ -67,6 +66,21 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal %w[title subtitle], slots.map(&:name)
       assert_equal '35%', slots[0].y
       assert_equal '80%', slots[1].y
+      assert_equal :center, slots[0].align
+      assert_equal :center, slots[1].align
+    end
+
+    test 'every built-in title slot opts into center alignment explicitly' do
+      layouts = Przn::Theme.default.layouts
+      %w[default cover title-only title-content two-column photo-caption].each do |name|
+        title = layouts[name].find { |s| s.name == 'title' }
+        assert_equal :center, title.align, "expected #{name}.title to have align: center"
+      end
+    end
+
+    test '`default` content slot has no alignment override (flush-left)' do
+      content = Przn::Theme.default.layouts['default'].find { |s| s.name == 'content' }
+      assert_nil content.align
     end
   end
 

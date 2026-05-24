@@ -310,22 +310,24 @@ right column content
 - bullet D
 ```
 
-**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, and `height`. Coordinates use the same convention as `<at>` and `<img x y>`: 1-based cells or `N%` of the terminal dimension. `%` values reflow on terminal resize.
+**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optionally `align` (`left` / `center` / `right`, default `left`). Coordinates use the same convention as `<at>` and `<img x y>`: 1-based cells or `N%` of the terminal dimension. `%` values reflow on terminal resize.
 
 ```yaml
 layouts:
   title-content:
-    - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
+    - {name: title,   x: 5, y: 3,  width: 90%, height: 6, align: center}
     - {name: content, x: 5, y: 10, width: 90%, height: 80%}
   two-column:
-    - {name: title, x: 5,   y: 3,  width: 90%, height: 6}
+    - {name: title, x: 5,   y: 3,  width: 90%, height: 6, align: center}
     - {name: left,  x: 5,   y: 10, width: 45%, height: 80%}
     - {name: right, x: 50%, y: 10, width: 45%, height: 80%}
 ```
 
+`align: center` on a slot is what makes h1 titles (and any other content in that slot) horizontally centered — there's no implicit "h1 always centers" magic. Per-block `<center>` / `{:.center}` directives still override the slot's default.
+
 **Built-in layouts** (shipped in `default_theme.yml`):
 
-- `default` — single full-width content slot from row 2. Theme-wide fallback for slides without an `{layout=...}` IAL; gives the same top-down flow you get when you write a plain Markdown deck.
+- `default` — theme-wide fallback for slides without an `{layout=...}` IAL. Shipped identical to `title-content`: centered title band across the top, content below. Override in your own `theme.yml` to give every plain slide a different layout.
 - `cover` — auto-applied to slide 0 when it has no `{layout=...}` IAL. Roughly emulates Keynote's "Title" slide: heading centered near the middle (slot `title`, y=35%), a smaller subtitle near the bottom (slot `subtitle`, y=80%). Put the deck title in the h1 and any author/date line in a paragraph after it.
 - `title-only` — one slot, vertically centered. For section dividers.
 - `title-content` — title across the top, content below.
@@ -334,13 +336,12 @@ layouts:
 
 Both `default` and `cover` are picked automatically when no IAL is set; `cover` only on slide 0, `default` everywhere else. To opt out of `cover` on slide 0, write `# Title {layout=default}` (or any other explicit layout) on the first slide. To remove the auto-cover behavior deck-wide, delete `cover` from your theme.
 
-**Theme-wide default.** Override `layouts.default` in your own `theme.yml` to apply a different layout to every plain slide — `title-content` is a common pick when you want every slide to have a heading band:
+**Theme-wide default.** Override `layouts.default` in your own `theme.yml` to apply a different layout to every plain slide. For example, a full-bleed single-slot layout instead of the shipped title-band default:
 
 ```yaml
 layouts:
   default:
-    - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
-    - {name: content, x: 5, y: 10, width: 90%, height: 80%}
+    - {name: content, x: 1, y: 2, width: 100%, height: 100%}
 ```
 
 A single slide can opt back out of the `default` layout with `{layout=none}`:

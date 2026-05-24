@@ -610,20 +610,19 @@ class RendererTest < Test::Unit::TestCase
       assert(!right_cols.empty?, "expected at least one move into the right slot: #{moves.inspect}")
     end
 
-    test 'a layout-less slide flows through the shipped `default` layout' do
+    test 'a layout-less slide flows through the shipped `default` layout (title band + content)' do
       md = "# Plain title\n\nbody\n"
       ps = Przn::Parser.parse(md)
       term = LayoutFakeTerm.new(w: 80, h: 30)
-      # current: 1 so slide 0's auto-cover doesn't kick in — we want to
-      # exercise the `default` layout here.
+      # current: 1 so slide 0's auto-cover doesn't kick in.
       Przn::Renderer.new(term, theme: Przn::Theme.default).render(ps.slides[0], current: 1, total: 2)
       moves = term.ops.select { |op, *| op == :move_to }
-      # `default` is `{x: 1, y: 2, width: 100%, height: 100%}` — first body
-      # move lands at row 2 in the left half of the screen.
-      first_body_move = moves.find { |_, r, _| r >= 2 && r <= 10 }
-      assert_not_nil first_body_move, "expected at least one move into the default slot: #{moves.inspect}"
-      assert_operator first_body_move[2], :<, 40,
-                      "expected default-slot content in the left half: #{moves.inspect}"
+      # default mirrors title-content: title at y=3 (centered band),
+      # content at y=10 (flush-left). Confirm both slots received moves.
+      title_move = moves.find { |_, r, _| r == 3 }
+      content_move = moves.find { |_, r, _| r >= 10 && r <= 14 }
+      assert_not_nil title_move, "expected the title at row 3: #{moves.inspect}"
+      assert_not_nil content_move, "expected the body at the content slot (>= row 10): #{moves.inspect}"
     end
 
     test 'slide 0 without an IAL auto-uses the shipped `cover` layout' do
@@ -638,6 +637,58 @@ class RendererTest < Test::Unit::TestCase
              "expected the h1 to land in the cover title slot near row 10: #{moves.inspect}")
       assert(!subtitle_moves.empty?,
              "expected the paragraph to land in the cover subtitle slot near row 24: #{moves.inspect}")
+    end
+
+    test 'slot align: center routes the h1 through compute_pad (and away from flush-left)' do
+      # Cover.title has align: center → h1 should land near the middle.
+      ops = render("# Centered\n", w: 80, h: 30)
+      moves = ops.select { |op, *| op == :move_to }
+      title_move = moves.find { |_, r, _| r >= 9 && r <= 13 }
+      assert_not_nil title_move, "expected the cover title move: #{moves.inspect}"
+      # "Centered" at scale 4 is roughly 32 cells; centered in 80 → pad ~24.
+      assert_operator title_move[2], :>, 15,
+                      "expected the title's column to be roughly centered, got: #{title_move[2]}"
+    end
+
+    test 'slot align: center centers content WITHIN the slot, not the whole screen' do
+      # Define a custom layout: slot positioned at right half of the screen,
+      # 30% wide, with align: center. The title should land roughly in the
+      # middle of cols 40-63 — not centered on the screen.
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('title', '50%', '5', '30%', '10', :center)
+      ]
+      ps = Przn::Parser.parse("# Hi\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      # current: 1 so the cover auto-pick doesn't override our default.
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      title_move = moves.find { |_, r, _| r == 5 }
+      assert_not_nil title_move, "expected move at row 5: #{moves.inspect}"
+      # Slot occupies cols 40-63 (24 wide). "Hi" at scale 4 ≈ 8 cells.
+      # Centered: pad = (24-8)/2 = 8, +1 = 9, + @x_offset (40-1=39) = 48.
+      assert_operator title_move[2], :>=, 40,
+                      "expected the title inside the right-half slot (>= col 40): #{title_move.inspect}"
+      assert_operator title_move[2], :<, 64,
+                      "expected the title NOT past the slot's right edge: #{title_move.inspect}"
+    ensure
+      theme.layouts['default'] = original
+    end
+
+    test '`default` body content (after the title band) lands flush-left at content_left + 1' do
+      md = "# Plain title\n\nbody\n"
+      ps = Przn::Parser.parse(md)
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      # current: 1 so slide 0's cover auto-pick doesn't fire.
+      Przn::Renderer.new(term, theme: Przn::Theme.default).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # `default`'s content slot is at x=5 width=90% (72 cells), no align.
+      # content_left(72) = 4, +1 = 5, + @x_offset (5-1=4) → col 9.
+      body_move = moves.find { |_, r, _| r >= 10 && r <= 14 }
+      assert_not_nil body_move, "expected the body at the content slot (>= row 10): #{moves.inspect}"
+      assert_operator body_move[2], :<, 20,
+                      "expected default's content slot to be flush-left, got col #{body_move[2]}"
     end
 
     test 'slide 0 with an explicit {layout=default} skips the cover auto-pick' do

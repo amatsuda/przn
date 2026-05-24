@@ -148,7 +148,7 @@ module Przn
             if block[:type] == :align
               pending_align = block[:align]
             else
-              row = render_block(block, w, row, align: pending_align)
+              row = render_block(block, w, row, align: pending_align || slot.align)
               pending_align = nil
             end
           end
@@ -190,7 +190,7 @@ module Przn
 
     def render_block(block, width, row, align: nil)
       case block[:type]
-      when :heading         then render_heading(block, width, row)
+      when :heading         then render_heading(block, width, row, align: align)
       when :paragraph       then render_paragraph(block, width, row, align: align)
       when :code_block      then render_code_block(block, width, row)
       when :unordered_list  then render_unordered_list(block, width, row)
@@ -327,7 +327,7 @@ module Przn
       track_left + (step.to_f / max * span).round
     end
 
-    def render_heading(block, width, row)
+    def render_heading(block, width, row, align: nil)
       text = block[:content]
 
       if block[:level] == 1
@@ -341,7 +341,7 @@ module Przn
 
         wrapped.each do |line_segs|
           vis = segments_visible_cells(line_segs, scale)
-          pad = [(width - vis) / 2, 0].max
+          pad = compute_pad(width, vis, align)
           term_move(row, pad + 1)
           @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2, default_color: color)}#{ANSI[:reset]}"
           row += scale

@@ -11,8 +11,11 @@ module Przn
     # in cells. All four are stored as the raw strings from the YAML
     # ("5", "50%", "90%") and resolved at render time against the
     # current terminal width / height by the same helper that handles
-    # `<at x y>` and `<img x y>` coords.
-    Slot = Struct.new(:name, :x, :y, :width, :height)
+    # `<at x y>` and `<img x y>` coords. `align` is the default
+    # horizontal alignment for blocks rendered into this slot (:left,
+    # :center, :right, or nil = :left); a per-block `<center>` /
+    # `{:.center}` still wins over the slot default.
+    Slot = Struct.new(:name, :x, :y, :width, :height, :align)
 
     attr_reader :colors, :font, :bullet, :background, :title, :rabbit, :layouts
 
@@ -104,7 +107,7 @@ module Przn
         next unless slot_list.is_a?(Array)
         out[name.to_s] = slot_list.map { |s|
           h = s.transform_keys(&:to_sym)
-          Slot.new(h[:name].to_s, h[:x].to_s, h[:y].to_s, h[:width].to_s, h[:height].to_s)
+          Slot.new(h[:name].to_s, h[:x].to_s, h[:y].to_s, h[:width].to_s, h[:height].to_s, h[:align]&.to_sym)
         }
       end
     end

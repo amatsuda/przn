@@ -51,9 +51,10 @@ colors:
 #
 # Two layouts have special semantics:
 #   `default` — theme-wide fallback for slides without an
-#               `{layout=...}` IAL. Shipped as a single full-width slot
-#               starting at row 2, matching the top-down flow you get
-#               in a plain Markdown deck.
+#               `{layout=...}` IAL. Shipped identical to
+#               `title-content`: centered title band across the top,
+#               content below. Override it in your own theme to give
+#               every plain slide a different layout.
 #   `cover`   — automatic for slide 0 when no IAL is set, roughly
 #               emulating Keynote's "Title" slide: big centered
 #               heading near the middle, smaller subtitle near the
@@ -62,20 +63,21 @@ colors:
 # Other named layouts are opt-in via `# Title {layout=name}`.
 layouts:
   default:
-    - {name: content, x: 1, y: 2, width: 100%, height: 100%}
+    - {name: title,   x: 5, y: 3,  width: 90%, height: 6, align: center}
+    - {name: content, x: 5, y: 10, width: 90%, height: 80%}
   cover:
-    - {name: title,    x: 1, y: 35%, width: 100%, height: 25%}
-    - {name: subtitle, x: 1, y: 80%, width: 100%, height: 15%}
+    - {name: title,    x: 1, y: 35%, width: 100%, height: 25%, align: center}
+    - {name: subtitle, x: 1, y: 80%, width: 100%, height: 15%, align: center}
   title-only:
-    - {name: title, x: 5, y: 40%, width: 90%, height: 20%}
+    - {name: title, x: 5, y: 40%, width: 90%, height: 20%, align: center}
   title-content:
-    - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
+    - {name: title,   x: 5, y: 3,  width: 90%, height: 6, align: center}
     - {name: content, x: 5, y: 10, width: 90%, height: 80%}
   two-column:
-    - {name: title, x: 5,   y: 3,  width: 90%, height: 6}
+    - {name: title, x: 5,   y: 3,  width: 90%, height: 6, align: center}
     - {name: left,  x: 5,   y: 10, width: 45%, height: 80%}
     - {name: right, x: 50%, y: 10, width: 45%, height: 80%}
   photo-caption:
-    - {name: title,   x: 5,   y: 3,  width: 90%, height: 6}
+    - {name: title,   x: 5,   y: 3,  width: 90%, height: 6, align: center}
     - {name: image,   x: 5,   y: 10, width: 60%, height: 70%}
     - {name: caption, x: 65%, y: 10, width: 30%, height: 70%}
