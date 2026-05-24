@@ -280,6 +280,79 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
   - With `x` and `y` set, the image layers on top of the slide and contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. Without `x` / `y`, the image stays horizontally centered and takes up its natural height in the flow.
 - Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.
 
+### Slide layouts
+
+Layouts let a slide carve itself into named regions ("slots") — title across the top, two columns underneath, image-and-caption side-by-side, etc. Without a layout, slides render in the existing top-down flow (the default behavior is unchanged).
+
+**Picking a layout.** Use an h1 IAL with the layout name. Three interchangeable spellings:
+
+```markdown
+# Two columns {layout=two-column}     ← plain HTML-attr style
+# Two columns {:layout=two-column}    ← kramdown IAL marker
+# Two columns {layout: two-column}    ← YAML / JSON flow style
+```
+
+`=` and `:` are interchangeable separators. Values may be unquoted (`name`), single-quoted (`'name'`), or double-quoted (`"name"`).
+
+**Filling slots.** The layout's first `title` slot is auto-filled from the h1. Remaining slots fill in declaration order; a block-level `<slot/>` advances to the next slot, and `<slot name="right"/>` jumps to a specific slot by name.
+
+```markdown
+# Two columns {layout=two-column}
+
+left column content
+- bullet A
+- bullet B
+
+<slot/>
+
+right column content
+- bullet C
+- bullet D
+```
+
+**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, and `height`. Coordinates use the same convention as `<at>` and `<img x y>`: 1-based cells or `N%` of the terminal dimension. `%` values reflow on terminal resize.
+
+```yaml
+layouts:
+  title-content:
+    - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
+    - {name: content, x: 5, y: 10, width: 90%, height: 80%}
+  two-column:
+    - {name: title, x: 5,   y: 3,  width: 90%, height: 6}
+    - {name: left,  x: 5,   y: 10, width: 45%, height: 80%}
+    - {name: right, x: 50%, y: 10, width: 45%, height: 80%}
+```
+
+**Built-in layouts** (shipped in `default_theme.yml`):
+
+- `default` — single full-width content slot from row 2. Theme-wide fallback for slides without an `{layout=...}` IAL; gives the same top-down flow you get when you write a plain Markdown deck.
+- `cover` — auto-applied to slide 0 when it has no `{layout=...}` IAL. Roughly emulates Keynote's "Title" slide: heading centered near the middle (slot `title`, y=35%), a smaller subtitle near the bottom (slot `subtitle`, y=80%). Put the deck title in the h1 and any author/date line in a paragraph after it.
+- `title-only` — one slot, vertically centered. For section dividers.
+- `title-content` — title across the top, content below.
+- `two-column` — title across the top, two side-by-side columns.
+- `photo-caption` — title across the top, image on the left, caption on the right.
+
+Both `default` and `cover` are picked automatically when no IAL is set; `cover` only on slide 0, `default` everywhere else. To opt out of `cover` on slide 0, write `# Title {layout=default}` (or any other explicit layout) on the first slide. To remove the auto-cover behavior deck-wide, delete `cover` from your theme.
+
+**Theme-wide default.** Override `layouts.default` in your own `theme.yml` to apply a different layout to every plain slide — `title-content` is a common pick when you want every slide to have a heading band:
+
+```yaml
+layouts:
+  default:
+    - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
+    - {name: content, x: 5, y: 10, width: 90%, height: 80%}
+```
+
+A single slide can opt back out of the `default` layout with `{layout=none}`:
+
+```markdown
+# This one uses flow rendering {layout=none}
+
+normal top-down content, no slot routing.
+```
+
+**Overflow.** Content past a slot's `height` spills downward; there's no clipping or shrink-to-fit. Slot height is a layout guide, not a hard cap — easier to debug while authoring. If you need tighter control, shrink the content or grow the slot.
+
 ### Comments
 
 ```markdown

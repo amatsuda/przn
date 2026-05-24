@@ -41,3 +41,41 @@ colors:
 # 🐢 turtle tracking elapsed time against the goal.
 # rabbit:
 #   duration:           # "30m", "1h30m", "1800s", or plain integer seconds
+
+# Slide layouts. Each layout names an ordered list of slots; a slot is a
+# rectangular region with x / y / width / height (1-based cells, or N%
+# of the terminal width/height). A slide picks a layout via an h1 IAL,
+# e.g. `# Title {layout=two-column}`. The `title` slot, when present,
+# is auto-filled from the h1; other slots fill in declaration order,
+# advanced by a `<slot/>` (or `<slot name="..."/>`) marker.
+#
+# Two layouts have special semantics:
+#   `default` — theme-wide fallback for slides without an
+#               `{layout=...}` IAL. Shipped as a single full-width slot
+#               starting at row 2, matching the top-down flow you get
+#               in a plain Markdown deck.
+#   `cover`   — automatic for slide 0 when no IAL is set, roughly
+#               emulating Keynote's "Title" slide: big centered
+#               heading near the middle, smaller subtitle near the
+#               bottom. Override / delete from your own theme to opt
+#               out — explicit `{layout=...}` on slide 0 still wins.
+# Other named layouts are opt-in via `# Title {layout=name}`.
+layouts:
+  default:
+    - {name: content, x: 1, y: 2, width: 100%, height: 100%}
+  cover:
+    - {name: title,    x: 1, y: 35%, width: 100%, height: 25%}
+    - {name: subtitle, x: 1, y: 80%, width: 100%, height: 15%}
+  title-only:
+    - {name: title, x: 5, y: 40%, width: 90%, height: 20%}
+  title-content:
+    - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
+    - {name: content, x: 5, y: 10, width: 90%, height: 80%}
+  two-column:
+    - {name: title, x: 5,   y: 3,  width: 90%, height: 6}
+    - {name: left,  x: 5,   y: 10, width: 45%, height: 80%}
+    - {name: right, x: 50%, y: 10, width: 45%, height: 80%}
+  photo-caption:
+    - {name: title,   x: 5,   y: 3,  width: 90%, height: 6}
+    - {name: image,   x: 5,   y: 10, width: 60%, height: 70%}
+    - {name: caption, x: 65%, y: 10, width: 30%, height: 70%}

@@ -64,6 +64,7 @@ module Przn
 
     def parse_slide(raw)
       blocks = []
+      slide_attrs = {}
       lines = raw.lines
       i = 0
 
@@ -138,9 +139,21 @@ module Przn
           end
           blocks << {type: :code_block, content: code_lines.join("\n") + "\n", language: lang}
 
-        # h1 (slide title)
+        # h1 (slide title) — also accepts a trailing IAL with slide-level
+        # metadata: `# Title {layout=name}` / `{:layout=name}` / `{layout: name}`.
+        # The IAL is lifted off and stashed on slide_attrs; the heading
+        # content keeps just the title text.
         when /\A#\s+(.*)/
-          blocks << {type: :heading, level: 1, content: Regexp.last_match(1).strip}
+          heading_body, ial_attrs = extract_h1_ial(Regexp.last_match(1).strip)
+          blocks << {type: :heading, level: 1, content: heading_body}
+          slide_attrs.merge!(ial_attrs)
+
+        # Slot break inside a layout-driven slide. `<slot/>` advances to
+        # the next slot; `<slot name="right"/>` jumps to that named slot.
+        # Outside a layout, the block is a render-time no-op.
+        when %r{\A\s*<slot((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
+          attrs = parse_xml_attrs(Regexp.last_match(1))
+          blocks << {type: :slot, name: attrs[:name]}
 
         # h2-h6 (sub-headings within slide)
         when /\A(\#{2,6})\s+(.*)/
@@ -263,7 +276,30 @@ module Przn
         i += 1
       end
 
-      Slide.new(blocks)
+      layout = slide_attrs.delete(:layout)
+      Slide.new(blocks, layout: layout, attrs: slide_attrs)
+    end
+
+    # Pull a trailing IAL block off an h1's content. Accepted spellings:
+    #   `Title {layout=name}`     — plain HTML-attr style
+    #   `Title {:layout=name}`    — kramdown IAL (leading colon marker)
+    #   `Title {layout: name}`    — YAML / JSON flow style (colon separator)
+    # `=` and `:` are interchangeable separators. Values can be unquoted,
+    # single-quoted, or double-quoted; unquoted excludes `,` and `}` so
+    # multi-attr forms like `{layout: two-column, foo: bar}` parse cleanly.
+    # If no key=value pairs are found inside the braces we leave the title
+    # untouched — `# What about {curlies}?` shouldn't be munched.
+    def extract_h1_ial(content)
+      return [content, {}] unless content =~ /\A(.*?)\s*\{([^}]*)\}\s*\z/
+      body  = Regexp.last_match(1)
+      inner = Regexp.last_match(2).sub(/\A:?\s*/, '')
+
+      attrs = {}
+      inner.scan(/(\w+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|([^\s=:<>"',}]+))/) do |key, dq, sq, uq|
+        attrs[key.to_sym] = dq || sq || uq
+      end
+      return [content, {}] if attrs.empty?
+      [body, attrs]
     end
 
     # HTML4-style <font face="..." size="..." color="..."> attributes.

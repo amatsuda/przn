@@ -540,6 +540,57 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Slide layouts: h1 IAL + <slot/>' do
+    test 'h1 IAL {layout=name} sets slide.layout and strips the IAL from the title' do
+      slide = Przn::Parser.parse(%(# Title {layout=two-column}\n\nbody\n)).slides[0]
+      assert_equal 'two-column', slide.layout
+      h1 = slide.blocks.find { |b| b[:type] == :heading && b[:level] == 1 }
+      assert_equal 'Title', h1[:content]
+    end
+
+    test 'kramdown form {:layout=name} is equivalent' do
+      slide = Przn::Parser.parse(%(# Title {:layout=two-column}\n)).slides[0]
+      assert_equal 'two-column', slide.layout
+      assert_equal 'Title', slide.blocks.find { |b| b[:type] == :heading }[:content]
+    end
+
+    test 'YAML-flow form {layout: name} is equivalent' do
+      slide = Przn::Parser.parse(%(# Title {layout: two-column}\n)).slides[0]
+      assert_equal 'two-column', slide.layout
+      assert_equal 'Title', slide.blocks.find { |b| b[:type] == :heading }[:content]
+    end
+
+    test 'unrelated trailing {curlies} are left in the heading content as-is' do
+      slide = Przn::Parser.parse(%(# What about {curlies}?\n)).slides[0]
+      assert_nil slide.layout
+      assert_equal 'What about {curlies}?', slide.blocks.find { |b| b[:type] == :heading }[:content]
+    end
+
+    test 'extra IAL keys ride on slide.attrs (forward-compat for future per-slide metadata)' do
+      slide = Przn::Parser.parse(%(# Title {layout=two-column align=center}\n)).slides[0]
+      assert_equal 'two-column', slide.layout
+      assert_equal({align: 'center'}, slide.attrs)
+    end
+
+    test 'h1 without IAL leaves slide.layout nil' do
+      slide = Przn::Parser.parse(%(# Title\n\nbody\n)).slides[0]
+      assert_nil slide.layout
+    end
+
+    test '<slot/> parses to a :slot block with no name' do
+      slide = Przn::Parser.parse(%(# t {layout=two-column}\n\nleft\n\n<slot/>\n\nright\n)).slides[0]
+      slot = slide.blocks.find { |b| b[:type] == :slot }
+      assert_not_nil slot
+      assert_nil slot[:name]
+    end
+
+    test '<slot name="right"/> parses to a :slot block carrying the name' do
+      slide = Przn::Parser.parse(%(# t {layout=two-column}\n\n<slot name="right"/>\n\nright\n)).slides[0]
+      slot = slide.blocks.find { |b| b[:type] == :slot }
+      assert_equal 'right', slot[:name]
+    end
+  end
+
   sub_test_case 'Rabbit: inline - mixed' do
     test 'parses mixed inline formatting' do
       result = Przn::Parser.parse_inline('hello *world* and **bold**')

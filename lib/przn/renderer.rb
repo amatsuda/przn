@@ -36,6 +36,12 @@ module Przn
       @image_cache = {}
       @kitty_uploads = {}
       @mutex = Mutex.new
+      # Horizontal cell offset applied by `term_move` to flow-mode block
+      # rendering. Set per slot inside `render_layout`; zero everywhere
+      # else. Screen-absolute emits (footer, runner bar, render_at,
+      # `<img x y>` absolute mode) bypass it and call @terminal.move_to
+      # directly.
+      @x_offset = 0
     end
 
     def render(slide, current:, total:, started_at: nil)
@@ -45,21 +51,32 @@ module Przn
         w = @terminal.width
         h = @terminal.height
 
-        row = if current == 0
-          content_height = calculate_height(slide.blocks, w)
-          usable_height = h - 1
-          [(usable_height - content_height) / 2 + 1, 1].max
-        else
-          2
-        end
+        # Resolve the slide's effective layout name:
+        #   `# Title {layout=name}` on the slide wins.
+        #   Otherwise: slide 0 prefers `cover` (if the theme ships one),
+        #   every other slide falls through to `default`.
+        #   `{layout=none}` is an explicit per-slide opt-out — useful
+        #   when a custom default layout isn't right for one slide.
+        layout_name = slide.layout
+        layout_name ||= 'cover' if current == 0 && @theme.layouts['cover']
+        layout_name ||= 'default'
+        layout_name = nil if layout_name == 'none'
+        layout = layout_name && @theme.layouts[layout_name]
 
-        pending_align = nil
-        slide.blocks.each do |block|
-          if block[:type] == :align
-            pending_align = block[:align]
-          else
-            row = render_block(block, w, row, align: pending_align)
-            pending_align = nil
+        if layout
+          render_layout(slide, layout, w, h)
+        else
+          # `{layout=none}` (or a theme stripped of `default`) — render
+          # blocks top-down from row 2 with no slot routing.
+          row = 2
+          pending_align = nil
+          slide.blocks.each do |block|
+            if block[:type] == :align
+              pending_align = block[:align]
+            else
+              row = render_block(block, w, row, align: pending_align)
+              pending_align = nil
+            end
           end
         end
 
@@ -96,6 +113,81 @@ module Przn
 
     private
 
+    # Move the terminal cursor in flow-mode block coordinates: `col` is
+    # measured from the left of the current slot (or from the screen edge
+    # when no slot is active, @x_offset = 0). Screen-absolute emits
+    # (footer, runner bar, render_at, `<img x y>`) bypass this and call
+    # @terminal.move_to directly so a layout context can't shift them.
+    def term_move(row, col)
+      @terminal.move_to(row, col + @x_offset)
+    end
+
+    # Group a slide's blocks into per-slot lists and render each slot in
+    # its own region. The first slot named `title` (if any) is auto-filled
+    # from the h1; remaining slots fill in declaration order, advanced by
+    # a `<slot/>` block. `<slot name="...">` jumps to that slot if it
+    # exists. Slots whose blocks would resolve to an invalid region (x/y
+    # missing or unparseable) are skipped silently.
+    def render_layout(slide, slots, width, height)
+      buckets = route_blocks_to_slots(slide.blocks, slots)
+
+      slots.each do |slot|
+        blocks = buckets[slot.name] || []
+        next if blocks.empty?
+        x = resolve_at_coord(slot.x, width)
+        y = resolve_at_coord(slot.y, height)
+        w = resolve_at_coord(slot.width, width)
+        next unless x && y && w
+
+        prev_offset = @x_offset
+        @x_offset = x - 1
+        begin
+          row = y
+          pending_align = nil
+          blocks.each do |block|
+            if block[:type] == :align
+              pending_align = block[:align]
+            else
+              row = render_block(block, w, row, align: pending_align)
+              pending_align = nil
+            end
+          end
+        ensure
+          @x_offset = prev_offset
+        end
+      end
+    end
+
+    # Walk the slide's blocks once and bucket each one into a slot name.
+    # The h1 (first heading at level 1) goes into the `title` slot when
+    # one exists. Remaining blocks fill the first non-title slot until a
+    # `:slot` block advances the cursor (`<slot/>` → next slot;
+    # `<slot name="X"/>` → jump to slot X by name). Blocks past the last
+    # slot are silently dropped — the slot list is the layout contract.
+    def route_blocks_to_slots(blocks, slots)
+      buckets = Hash.new { |h, k| h[k] = [] }
+      title_slot = slots.find { |s| s.name == 'title' }
+      non_title_slots = title_slot ? slots.reject { |s| s.equal?(title_slot) } : slots
+      cursor = 0  # index into non_title_slots
+
+      blocks.each do |block|
+        if title_slot && block[:type] == :heading && block[:level] == 1 && !buckets.key?('title')
+          buckets['title'] << block
+        elsif block[:type] == :slot
+          if block[:name]
+            idx = non_title_slots.index { |s| s.name == block[:name] }
+            cursor = idx if idx
+          else
+            cursor += 1
+          end
+        else
+          next if cursor >= non_title_slots.size
+          buckets[non_title_slots[cursor].name] << block
+        end
+      end
+      buckets
+    end
+
     def render_block(block, width, row, align: nil)
       case block[:type]
       when :heading         then render_heading(block, width, row)
@@ -109,6 +201,7 @@ module Przn
       when :image           then render_image(block, width, row)
       when :blank           then row + DEFAULT_SCALE
       when :bg              then row
+      when :slot            then row
       when :at              then render_at(block); row
       else row + 1
       end
@@ -249,7 +342,7 @@ module Przn
         wrapped.each do |line_segs|
           vis = segments_visible_cells(line_segs, scale)
           pad = [(width - vis) / 2, 0].max
-          @terminal.move_to(row, pad + 1)
+          term_move(row, pad + 1)
           @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2, default_color: color)}#{ANSI[:reset]}"
           row += scale
         end
@@ -263,7 +356,7 @@ module Przn
         wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
-          @terminal.move_to(row, left)
+          term_move(row, left)
           if li == 0
             @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
@@ -290,7 +383,7 @@ module Przn
       wrapped = wrap_segments(segments, max_w, scale)
 
       wrapped.each do |line_segs|
-        @terminal.move_to(row, left + 1)
+        term_move(row, left + 1)
         @terminal.write render_segments_scaled(line_segs, scale)
         row += scale
       end
@@ -309,7 +402,7 @@ module Przn
       code_lines.each do |code_line|
         truncated = truncate_to_width(code_line, box_content_w)
         padded = pad_to_width(truncated, box_content_w)
-        @terminal.move_to(row, left + 1)
+        term_move(row, left + 1)
         @terminal.write "#{ANSI[:gray_bg]}#{KittyText.sized("  #{padded}  ", s: DEFAULT_SCALE)}#{ANSI[:reset]}"
         row += DEFAULT_SCALE
       end
@@ -330,7 +423,7 @@ module Przn
         wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
-          @terminal.move_to(row, left)
+          term_move(row, left)
           if li == 0
             @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
@@ -356,7 +449,7 @@ module Przn
         wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
-          @terminal.move_to(row, left)
+          term_move(row, left)
           if li == 0
             @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
           else
@@ -376,7 +469,7 @@ module Przn
       segments = Parser.parse_inline(block[:term])
       wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
       wrapped.each do |line_segs|
-        @terminal.move_to(row, left)
+        term_move(row, left)
         @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
         row += DEFAULT_SCALE
       end
@@ -386,7 +479,7 @@ module Przn
         segments = Parser.parse_inline(line.chomp)
         wrapped = wrap_segments(segments, def_max_w, DEFAULT_SCALE)
         wrapped.each do |line_segs|
-          @terminal.move_to(row, left + 4)
+          term_move(row, left + 4)
           @terminal.write render_segments_scaled(line_segs, DEFAULT_SCALE)
           row += DEFAULT_SCALE
         end
@@ -406,7 +499,7 @@ module Przn
         wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
 
         wrapped.each_with_index do |line_segs, li|
-          @terminal.move_to(row, left + 1)
+          term_move(row, left + 1)
           p = li == 0 ? prefix : ' ' * prefix_w
           @terminal.write "#{ANSI[:dim]}#{KittyText.sized(p, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
           row += DEFAULT_SCALE
@@ -428,7 +521,7 @@ module Przn
       all_rows.each_with_index do |cells, ri|
         next unless cells
 
-        @terminal.move_to(row, left)
+        term_move(row, left)
         line = cells.each_with_index.map { |cell, ci|
           pad_to_width(cell, col_widths[ci] || 0)
         }.join('  |  ')
@@ -440,7 +533,7 @@ module Przn
         row += DEFAULT_SCALE
 
         if ri == 0
-          @terminal.move_to(row, left)
+          term_move(row, left)
           @terminal.write KittyText.sized(col_widths.map { |w| '-' * w }.join('--+--'), s: DEFAULT_SCALE)
           row += DEFAULT_SCALE
         end
@@ -496,7 +589,10 @@ module Przn
         y_cell, x_cell = abs_y, abs_x
       else
         y_cell = row
-        x_cell = [(width - target_cols) / 2, 0].max + 1
+        # In flow mode, fold the active slot offset into x_cell so both
+        # move_to and the kitty_icat coordinate land in the right column.
+        # Absolute mode (`<img x y>`) already names the screen cell.
+        x_cell = [(width - target_cols) / 2, 0].max + 1 + @x_offset
       end
 
       if ImageUtil.kitty_terminal? && ImageUtil.png?(path)
@@ -809,10 +905,6 @@ module Przn
       end
     end
 
-    def visible_length(text)
-      display_width(strip_markup(text))
-    end
-
     def display_width(str)
       str.each_char.sum { |c|
         o = c.ord
@@ -838,104 +930,5 @@ module Przn
       }
     end
 
-    def strip_markup(text)
-      text
-        .gsub(/\{::tag\s+name="[^"]+"\}(.*?)\{:\/tag\}/, '\1')
-        .gsub(/\{::note\}(.*?)\{:\/note\}/, '\1')
-        .gsub('{::wait/}', '')
-        .gsub(/\*\*(.+?)\*\*/, '\1')
-        .gsub(/\*(.+?)\*/, '\1')
-        .gsub(/~~(.+?)~~/, '\1')
-        .gsub(/`([^`]+)`/, '\1')
-        .gsub(/&(lt|gt|amp);/) { |_| {'lt' => '<', 'gt' => '>', 'amp' => '&'}[$1] }
-    end
-
-    def calculate_height(blocks, width)
-      blocks.sum { |b| block_height(b, width) }
-    end
-
-    def block_height(block, width)
-      s = DEFAULT_SCALE
-      left = content_left(width)
-      max_w = max_text_width(width, left, s)
-
-      case block[:type]
-      when :heading
-        scale = KittyText::HEADING_SCALES[block[:level]] || s
-        if block[:level] == 1
-          scale + 4
-        else
-          lines_count(block[:content], [max_w - 2, 1].max) * scale
-        end
-      when :paragraph
-        para_scale = max_inline_scale(block[:content]) || s
-        lines_count(block[:content], [max_text_width(width, left, para_scale), 1].max) * para_scale
-      when :code_block
-        [block[:content].lines.size * s, s].max
-      when :unordered_list
-        block[:items].sum { |item|
-          prefix_w = (item[:depth] || 0) * 2 + 2
-          lines_count(item[:text], [max_w - prefix_w, 1].max) * s
-        }
-      when :ordered_list
-        block[:items].size * s
-      when :definition_list
-        term_lines = lines_count(block[:term], [max_w, 1].max)
-        def_lines = block[:definition].lines.sum { |l| lines_count(l.chomp, [max_w - 4, 1].max) }
-        (term_lines + def_lines) * s
-      when :blockquote
-        block[:content].lines.sum { |l| lines_count(l.chomp, [max_w - 3, 1].max) } * s
-      when :table
-        ((block[:header] ? 2 : 0) + block[:rows].size) * s
-      when :image
-        # Absolute-positioned images (`<img x y src/>`) layer on top of
-        # the slide and contribute 0 to the layout — same treatment as :at.
-        attrs = block[:attrs] || {}
-        if resolve_at_coord(attrs['x'], @terminal.width) && resolve_at_coord(attrs['y'], @terminal.height)
-          0
-        else
-          image_block_height(block, width)
-        end
-      when :align
-        0
-      when :bg
-        0
-      when :at
-        0
-      when :blank
-        s
-      else
-        s
-      end
-    end
-
-    def lines_count(text, max_width)
-      vis_w = display_width(strip_markup(text))
-      return 1 if vis_w <= max_width
-      (vis_w.to_f / max_width).ceil
-    end
-
-    def image_block_height(block, width)
-      path = resolve_image_path(block[:path])
-      img_size = ImageUtil.image_size(path)
-      return DEFAULT_SCALE unless img_size
-
-      img_w, img_h = img_size
-      cell_w, cell_h = @terminal.cell_pixel_size
-      h = @terminal.height
-
-      left = content_left(width)
-      available_cols = width - left * 2
-      available_rows = h / 2
-
-      if (rh = block[:attrs]['relative_height'])
-        available_rows = (h * rh.to_i / 100.0).to_i
-      end
-
-      img_cell_w = img_w.to_f / cell_w
-      img_cell_h = img_h.to_f / cell_h
-      scale = [available_cols / img_cell_w, available_rows / img_cell_h, 1.0].min
-      [(img_cell_h * scale).ceil, 1].max
-    end
   end
 end

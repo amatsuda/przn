@@ -46,6 +46,28 @@ class ThemeTest < Test::Unit::TestCase
     test 'rabbit is nil by default (renderer falls back to simple N / M footer)' do
       assert_nil Przn::Theme.default.rabbit
     end
+
+    test 'ships built-in layouts (default, cover, title-only, title-content, two-column, photo-caption)' do
+      layouts = Przn::Theme.default.layouts
+      assert_equal %w[default cover title-only title-content two-column photo-caption].sort,
+                   layouts.keys.sort
+      assert_equal %w[title left right], layouts['two-column'].map(&:name)
+      assert_equal '50%', layouts['two-column'].find { |s| s.name == 'right' }.x
+    end
+
+    test 'shipped `default` is a single full-width content slot from row 2' do
+      slots = Przn::Theme.default.layouts['default']
+      assert_equal 1, slots.size
+      assert_equal ['content', '1', '2', '100%', '100%'],
+                   [slots[0].name, slots[0].x, slots[0].y, slots[0].width, slots[0].height]
+    end
+
+    test 'shipped `cover` has a centered title slot and a bottom subtitle slot' do
+      slots = Przn::Theme.default.layouts['cover']
+      assert_equal %w[title subtitle], slots.map(&:name)
+      assert_equal '35%', slots[0].y
+      assert_equal '80%', slots[1].y
+    end
   end
 
   sub_test_case '.parse_duration' do
@@ -117,6 +139,48 @@ class ThemeTest < Test::Unit::TestCase
       assert_raise(ArgumentError) do
         Przn::Theme.load('/nonexistent/theme.yml')
       end
+    end
+
+    test 'custom layouts: section loads as an ordered list of Slot structs' do
+      write_theme <<~YAML
+        layouts:
+          custom:
+            - {name: title, x: 1, y: 1, width: 100%, height: 5}
+            - {name: body,  x: 1, y: 7, width: 100%, height: 80%}
+      YAML
+
+      theme = Przn::Theme.load(theme_path)
+      assert_equal %w[title body], theme.layouts['custom'].map(&:name)
+      slot = theme.layouts['custom'][1]
+      assert_equal ['body', '1', '7', '100%', '80%'],
+                   [slot.name, slot.x, slot.y, slot.width, slot.height]
+    end
+
+    test 'default-named layout in theme.yml is loaded like any other layout' do
+      write_theme <<~YAML
+        layouts:
+          default:
+            - {name: title,   x: 5, y: 3,  width: 90%, height: 6}
+            - {name: content, x: 5, y: 10, width: 90%, height: 80%}
+      YAML
+
+      theme = Przn::Theme.load(theme_path)
+      assert_equal %w[title content], theme.layouts['default'].map(&:name)
+    end
+
+    test 'overriding a built-in layout replaces its slot list end-to-end' do
+      write_theme <<~YAML
+        layouts:
+          two-column:
+            - {name: title, x: 1, y: 1, width: 100%, height: 3}
+            - {name: only,  x: 1, y: 4, width: 100%, height: 90%}
+      YAML
+
+      theme = Przn::Theme.load(theme_path)
+      assert_equal %w[title only], theme.layouts['two-column'].map(&:name)
+      # Other built-ins remain untouched.
+      assert_equal @defaults.layouts['photo-caption'].map(&:name),
+                   theme.layouts['photo-caption'].map(&:name)
     end
   end
 

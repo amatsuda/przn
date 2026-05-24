@@ -405,10 +405,10 @@ class RendererTest < Test::Unit::TestCase
       def cell_pixel_size; [10, 20]; end
     end
 
-    FakeTheme = Struct.new(:rabbit, :font, :background, :title, :bullet, :colors)
+    FakeTheme = Struct.new(:rabbit, :font, :background, :title, :bullet, :colors, :layouts)
 
     def fake_theme(rabbit: {})
-      FakeTheme.new(rabbit, {}, {}, {}, {text: '・'}, {})
+      FakeTheme.new(rabbit, {}, {}, {}, {text: '・'}, {}, {})
     end
 
     test 'anchors current slide number at column 1' do
@@ -548,9 +548,154 @@ class RendererTest < Test::Unit::TestCase
       assert_includes moves, [:move_to, 30, 80]    # huge values clamp to the right edge
     end
 
-    test 'does not advance the slide layout row (block_height is 0)' do
-      r = Przn::Renderer.new(nil)
-      assert_equal 0, r.send(:block_height, {type: :at, attrs: {x: '10', y: '5'}, content: 'x'}, 80)
+  end
+
+  sub_test_case 'Slide layouts' do
+    class LayoutFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def render(md, w: 80, h: 30)
+      ps = Przn::Parser.parse(md)
+      term = LayoutFakeTerm.new(w: w, h: h)
+      Przn::Renderer.new(term, theme: Przn::Theme.default).render(ps.slides[0], current: 0, total: 1)
+      term.ops
+    end
+
+    test 'route_blocks_to_slots: h1 auto-fills title; left then right by <slot/>' do
+      r = Przn::Renderer.new(nil, theme: Przn::Theme.default)
+      slots = Przn::Theme.default.layouts['two-column']
+      blocks = [
+        {type: :heading, level: 1, content: 'T'},
+        {type: :paragraph, content: 'left para'},
+        {type: :slot, name: nil},
+        {type: :paragraph, content: 'right para'},
+      ]
+      buckets = r.send(:route_blocks_to_slots, blocks, slots)
+      assert_equal 1, buckets['title'].size
+      assert_equal :heading, buckets['title'][0][:type]
+      assert_equal ['left para'], buckets['left'].map { |b| b[:content] }
+      assert_equal ['right para'], buckets['right'].map { |b| b[:content] }
+    end
+
+    test '<slot name="X"/> jumps to that named slot' do
+      r = Przn::Renderer.new(nil, theme: Przn::Theme.default)
+      slots = Przn::Theme.default.layouts['two-column']
+      blocks = [
+        {type: :heading, level: 1, content: 'T'},
+        {type: :slot, name: 'right'},
+        {type: :paragraph, content: 'right para'},
+      ]
+      buckets = r.send(:route_blocks_to_slots, blocks, slots)
+      assert_equal [], buckets['left']
+      assert_equal ['right para'], buckets['right'].map { |b| b[:content] }
+    end
+
+    test 'two-column slide renders the right slot at the configured x (>= 50% of 80)' do
+      md = "# Two columns {layout=two-column}\n\nleft\n\n<slot/>\n\nright\n"
+      ops = render(md, w: 80, h: 30)
+      moves = ops.select { |op, *| op == :move_to }
+      # Left-slot moves land in the left half; right-slot moves land in the right half.
+      left_cols  = moves.map { |_, _, c| c }.select { |c| c <= 36 }
+      right_cols = moves.map { |_, _, c| c }.select { |c| c >= 40 && c <= 76 }
+      assert(!left_cols.empty?,  "expected at least one move into the left slot: #{moves.inspect}")
+      assert(!right_cols.empty?, "expected at least one move into the right slot: #{moves.inspect}")
+    end
+
+    test 'a layout-less slide flows through the shipped `default` layout' do
+      md = "# Plain title\n\nbody\n"
+      ps = Przn::Parser.parse(md)
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      # current: 1 so slide 0's auto-cover doesn't kick in — we want to
+      # exercise the `default` layout here.
+      Przn::Renderer.new(term, theme: Przn::Theme.default).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # `default` is `{x: 1, y: 2, width: 100%, height: 100%}` — first body
+      # move lands at row 2 in the left half of the screen.
+      first_body_move = moves.find { |_, r, _| r >= 2 && r <= 10 }
+      assert_not_nil first_body_move, "expected at least one move into the default slot: #{moves.inspect}"
+      assert_operator first_body_move[2], :<, 40,
+                      "expected default-slot content in the left half: #{moves.inspect}"
+    end
+
+    test 'slide 0 without an IAL auto-uses the shipped `cover` layout' do
+      md = "# My Presentation\n\nBy Akira, 2026\n"
+      ops = render(md, w: 80, h: 30)  # `render` helper passes current: 0
+      moves = ops.select { |op, *| op == :move_to }
+      # Cover title slot is at y=35% of 30 = row 10. The h1 should land near there.
+      title_moves = moves.select { |_, r, _| r >= 8 && r <= 13 }
+      # Cover subtitle slot is at y=80% of 30 = row 24. The paragraph follows.
+      subtitle_moves = moves.select { |_, r, _| r >= 22 && r <= 26 }
+      assert(!title_moves.empty?,
+             "expected the h1 to land in the cover title slot near row 10: #{moves.inspect}")
+      assert(!subtitle_moves.empty?,
+             "expected the paragraph to land in the cover subtitle slot near row 24: #{moves.inspect}")
+    end
+
+    test 'slide 0 with an explicit {layout=default} skips the cover auto-pick' do
+      md = "# My Presentation {layout=default}\n\nbody\n"
+      ops = render(md, w: 80, h: 30)
+      moves = ops.select { |op, *| op == :move_to }
+      # default starts at row 2 — title should appear there, not at y=35%.
+      first_body_move = moves.find { |_, r, _| r >= 2 && r <= 6 }
+      assert_not_nil first_body_move,
+                     "expected an early-row move (default layout), got: #{moves.inspect}"
+    end
+
+    test 'when the theme has no `cover` layout, slide 0 falls back to `default`' do
+      theme = Przn::Theme.default
+      cover = theme.layouts.delete('cover')
+      ps = Przn::Parser.parse("# My Presentation\n\nbody\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 0, total: 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      first_body_move = moves.find { |_, r, _| r >= 2 && r <= 6 }
+      assert_not_nil first_body_move,
+                     "expected slide 0 to fall through to default (row 2) when no cover ships"
+    ensure
+      theme.layouts['cover'] = cover
+    end
+
+    test 'overriding layouts.default routes plain slides through that layout' do
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      # Alias the `default` slot list to the two-column built-in.
+      theme.layouts['default'] = theme.layouts['two-column']
+      ps = Przn::Parser.parse("# Plain title\n\nleft\n\n<slot/>\n\nright\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 0, total: 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      right_cols = moves.map { |_, _, c| c }.select { |c| c >= 40 && c <= 76 }
+      assert(!right_cols.empty?,
+             "expected the overridden default to route content into the right slot: #{moves.inspect}")
+    ensure
+      theme.layouts['default'] = original
+    end
+
+    test '{layout=none} on a slide opts out of layouts.default for that slide' do
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      # Override `default` to a clearly-different layout so we'd see it if
+      # `{layout=none}` accidentally used it.
+      theme.layouts['default'] = theme.layouts['two-column']
+      ps = Przn::Parser.parse("# Plain title {layout=none}\n\nbody\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 0, total: 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # No slot offset → all body moves stay in the left half of the screen.
+      body_cols = moves.map { |_, _, c| c }.reject { |c| c > 70 }  # exclude footer counter
+      assert(body_cols.all? { |c| c < 40 },
+             "expected layout=none to skip layouts.default: #{moves.inspect}")
+    ensure
+      theme.layouts['default'] = original
     end
   end
 
@@ -598,12 +743,6 @@ class RendererTest < Test::Unit::TestCase
       Przn::Renderer.new(term).send(:render_image, block, 80, 1)
       moves = term.ops.select { |op, *| op == :move_to }
       assert_includes moves, [:move_to, 15, 40]
-    end
-
-    test 'block_height is 0 when x and y are set (layered, not in flow)' do
-      term = RunnerFakeTerm.new(w: 80, h: 30)
-      block = {type: :image, path: @png.path, attrs: {'x' => '10', 'y' => '5'}}
-      assert_equal 0, Przn::Renderer.new(term).send(:block_height, block, 80)
     end
 
     test 'without x and y, image stays horizontally centered and advances the flow' do

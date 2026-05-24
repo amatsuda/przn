@@ -64,6 +64,18 @@ normal and {::tag name="red"}red text{:/tag} mixed
 <at x="80" y="25"><color=red>warn</color></at>
 <at x="50%" y="50%">dead center</at>
 
+# Two columns {layout=two-column}
+
+left side text
+- bullet A
+- bullet B
+
+<slot/>
+
+right side text
+- bullet C
+- bullet D
+
 # Thank You!
 
 That's all! Enjoy!

@@ -2,10 +2,12 @@
 
 module Przn
   class Slide
-    attr_reader :blocks
+    attr_reader :blocks, :layout, :attrs
 
-    def initialize(blocks)
+    def initialize(blocks, layout: nil, attrs: {})
       @blocks = blocks.freeze
+      @layout = layout
+      @attrs = attrs.freeze
     end
 
     # Aggregate every `{::note}` / `<note>` segment in the slide's text-bearing
