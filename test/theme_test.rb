@@ -47,12 +47,21 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil Przn::Theme.default.rabbit
     end
 
-    test 'ships built-in layouts (default, cover, title-only, title-content, two-column, photo-caption)' do
+    test 'ships built-in layouts (default, cover, title-only, takahashi, title-content, two-column, photo-caption)' do
       layouts = Przn::Theme.default.layouts
-      assert_equal %w[default cover title-only title-content two-column photo-caption].sort,
+      assert_equal %w[default cover title-only takahashi title-content two-column photo-caption].sort,
                    layouts.keys.sort
       assert_equal %w[title left right], layouts['two-column'].map(&:name)
       assert_equal '50%', layouts['two-column'].find { |s| s.name == 'right' }.x
+    end
+
+    test 'shipped `takahashi` is a single very-large centered slot (高橋メソッド)' do
+      slots = Przn::Theme.default.layouts['takahashi']
+      assert_equal 1, slots.size
+      slot = slots[0]
+      assert_equal 'title',      slot.name
+      assert_equal :center,      slot.align
+      assert_equal 'xxxx-large', slot.size
     end
 
     test 'shipped `default` mirrors `title-content` (centered title band + content below)' do
@@ -72,7 +81,7 @@ class ThemeTest < Test::Unit::TestCase
 
     test 'every built-in title slot opts into center alignment explicitly' do
       layouts = Przn::Theme.default.layouts
-      %w[default cover title-only title-content two-column photo-caption].each do |name|
+      %w[default cover title-only takahashi title-content two-column photo-caption].each do |name|
         title = layouts[name].find { |s| s.name == 'title' }
         assert_equal :center, title.align, "expected #{name}.title to have align: center"
       end

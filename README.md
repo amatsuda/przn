@@ -333,6 +333,7 @@ layouts:
 - `default` — theme-wide fallback for slides without an `{layout=...}` IAL. Shipped identical to `title-content`: centered title band across the top, content below. Override in your own `theme.yml` to give every plain slide a different layout.
 - `cover` — auto-applied to slide 0 when it has no `{layout=...}` IAL. Roughly emulates Keynote's "Title" slide: heading centered near the middle (slot `title`, y=35%), a smaller subtitle near the bottom (slot `subtitle`, y=80%). Put the deck title in the h1 and any author/date line in a paragraph after it.
 - `title-only` — one slot, vertically centered. For section dividers.
+- `takahashi` — [Takahashi-method](https://en.wikipedia.org/wiki/Takahashi_method) (高橋メソッド) slides: a single very-large phrase per slide, no decoration. Just the words.
 - `title-content` — title across the top, content below.
 - `two-column` — title across the top, two side-by-side columns.
 - `photo-caption` — title across the top, image on the left, caption on the right.
