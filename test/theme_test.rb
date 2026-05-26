@@ -82,6 +82,24 @@ class ThemeTest < Test::Unit::TestCase
       content = Przn::Theme.default.layouts['default'].find { |s| s.name == 'content' }
       assert_nil content.align
     end
+
+    test 'slot accepts size / family / color from YAML' do
+      write_theme <<~YAML
+        layouts:
+          fancy:
+            - {name: title, x: 1, y: 1, width: 100%, height: 5, size: xxx-large, family: Menlo, color: red}
+      YAML
+
+      slot = Przn::Theme.load(theme_path).layouts['fancy'][0]
+      assert_equal 'xxx-large', slot.size
+      assert_equal 'Menlo',     slot.family
+      assert_equal 'red',       slot.color
+    end
+
+    test 'shipped `cover.title` opts into a larger size (Keynote-style title slide)' do
+      title = Przn::Theme.default.layouts['cover'].find { |s| s.name == 'title' }
+      assert_equal 'xxx-large', title.size
+    end
   end
 
   sub_test_case '.parse_duration' do

@@ -42,6 +42,12 @@ module Przn
       # `<img x y>` absolute mode) bypass it and call @terminal.move_to
       # directly.
       @x_offset = 0
+      # Per-slot text-style overrides (`size` / `family` / `color`)
+      # populated by `render_layout` for the duration of one slot.
+      # render_heading h1, render_paragraph, and the :body defaults in
+      # render_segments_scaled consult this so a `cover.title` slot
+      # with `size: xxx-large` actually makes the title bigger.
+      @slot_style = nil
     end
 
     def render(slide, current:, total:, started_at: nil)
@@ -122,6 +128,26 @@ module Przn
       @terminal.move_to(row, col + @x_offset)
     end
 
+    # Resolve the current slot's `size:` override into an OSC 66 scale
+    # (1-7). nil when no slot styling applies or the slot didn't set
+    # a size — caller falls back to its own default (HEADING_SCALES,
+    # DEFAULT_SCALE, etc.).
+    def slot_scale
+      return nil unless @slot_style
+      name = @slot_style[:size]
+      name && Parser::SIZE_SCALES[name]
+    end
+
+    # The active slot's `family:` override, or nil.
+    def slot_family
+      @slot_style && @slot_style[:family]
+    end
+
+    # The active slot's `color:` override, or nil.
+    def slot_color
+      @slot_style && @slot_style[:color]
+    end
+
     # Group a slide's blocks into per-slot lists and render each slot in
     # its own region. The first slot named `title` (if any) is auto-filled
     # from the h1; remaining slots fill in declaration order, advanced by
@@ -140,7 +166,10 @@ module Przn
         next unless x && y && w
 
         prev_offset = @x_offset
+        prev_style = @slot_style
         @x_offset = x - 1
+        @slot_style = {size: slot.size, family: slot.family, color: slot.color}.compact
+        @slot_style = nil if @slot_style.empty?
         begin
           row = y
           pending_align = nil
@@ -154,6 +183,7 @@ module Przn
           end
         ensure
           @x_offset = prev_offset
+          @slot_style = prev_style
         end
       end
     end
@@ -332,9 +362,9 @@ module Przn
 
       if block[:level] == 1
         title = @theme.title || {}
-        scale = (title[:size] && Parser::SIZE_SCALES[title[:size].to_s]) || KittyText::HEADING_SCALES[1]
-        face = title[:family]
-        color = title[:color]
+        scale = slot_scale || (title[:size] && Parser::SIZE_SCALES[title[:size].to_s]) || KittyText::HEADING_SCALES[1]
+        face = slot_family || title[:family]
+        color = slot_color || title[:color]
         max_w = max_text_width(width, 0, scale)
         segments = Parser.parse_inline(text)
         wrapped = wrap_segments(segments, max_w, scale)
@@ -370,7 +400,7 @@ module Przn
 
     def render_paragraph(block, width, row, align: nil)
       text = block[:content]
-      scale = max_inline_scale(text) || DEFAULT_SCALE
+      scale = max_inline_scale(text) || slot_scale || DEFAULT_SCALE
       left = content_left(width)
 
       if align
@@ -733,9 +763,9 @@ module Przn
     # align inside the block and the visible text drifts left of the center
     # column we computed.
     def render_segments_scaled(segments, para_scale, default_face: :body, default_h: nil, default_color: :body)
-      f = default_face == :body ? @theme.font[:family] : default_face
+      f = default_face == :body ? (slot_family || @theme.font[:family]) : default_face
       h = default_h
-      c = default_color == :body ? @theme.font[:color] : default_color
+      c = default_color == :body ? (slot_color || @theme.font[:color]) : default_color
       body_open = c ? color_code(c) : ''
       inner = segments.map { |segment|
         type = segment[0]

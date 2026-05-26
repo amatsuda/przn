@@ -14,8 +14,13 @@ module Przn
     # `<at x y>` and `<img x y>` coords. `align` is the default
     # horizontal alignment for blocks rendered into this slot (:left,
     # :center, :right, or nil = :left); a per-block `<center>` /
-    # `{:.center}` still wins over the slot default.
-    Slot = Struct.new(:name, :x, :y, :width, :height, :align)
+    # `{:.center}` still wins over the slot default. `size` /
+    # `family` / `color` are per-slot text-style overrides: `size`
+    # sets the base scale for h1 and paragraphs (accepts the same
+    # names as inline `<size>`); `family` and `color` cascade through
+    # render_segments_scaled to every text run in the slot. Inline
+    # tags (`<size>`, `<font>`, `<color>`) still win per-segment.
+    Slot = Struct.new(:name, :x, :y, :width, :height, :align, :size, :family, :color)
 
     attr_reader :colors, :font, :bullet, :background, :title, :rabbit, :layouts
 
@@ -107,7 +112,14 @@ module Przn
         next unless slot_list.is_a?(Array)
         out[name.to_s] = slot_list.map { |s|
           h = s.transform_keys(&:to_sym)
-          Slot.new(h[:name].to_s, h[:x].to_s, h[:y].to_s, h[:width].to_s, h[:height].to_s, h[:align]&.to_sym)
+          Slot.new(
+            h[:name].to_s,
+            h[:x].to_s, h[:y].to_s, h[:width].to_s, h[:height].to_s,
+            h[:align]&.to_sym,
+            h[:size]&.to_s,
+            h[:family]&.to_s,
+            h[:color]&.to_s
+          )
         }
       end
     end

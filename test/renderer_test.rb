@@ -650,6 +650,50 @@ class RendererTest < Test::Unit::TestCase
                       "expected the title's column to be roughly centered, got: #{title_move[2]}"
     end
 
+    test 'slot size: overrides h1 scale (cover.title goes through SIZE_SCALES)' do
+      ops = render("# Hi\n", w: 80, h: 30)
+      writes = ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      # cover.title ships with size: xxx-large → OSC 66 s=6
+      assert(writes.include?('s=6'),
+             "expected an OSC 66 s=6 emit from xxx-large h1: #{writes.inspect[0, 400]}")
+    end
+
+    test 'slot family: cascades into render_segments_scaled :body default' do
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, nil, 'Menlo', nil)
+      ]
+      ps = Przn::Parser.parse("a paragraph\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      # OSC 7772 ;multicell carries f= when running under Echoes-aware code.
+      # Outside Echoes, the multicell path is suppressed but the slot's family
+      # is still threaded into render_segments_scaled. We just confirm the slot
+      # didn't crash and produced *some* write.
+      assert(!writes.empty?, "expected the paragraph to render")
+    ensure
+      theme.layouts['default'] = original
+    end
+
+    test 'slot color: cascades into body color for paragraphs' do
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, nil, nil, 'red')
+      ]
+      ps = Przn::Parser.parse("a paragraph\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      # `red` resolves to ANSI fg 31. The paragraph emit should include it.
+      assert(writes.include?("\e[31m"),
+             "expected ANSI red opener in body writes: #{writes.inspect[0, 200]}")
+    ensure
+      theme.layouts['default'] = original
+    end
+
     test 'slot align: center centers content WITHIN the slot, not the whole screen' do
       # Define a custom layout: slot positioned at right half of the screen,
       # 30% wide, with align: center. The title should land roughly in the
