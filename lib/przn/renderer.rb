@@ -240,6 +240,7 @@ module Przn
       when :blockquote      then render_blockquote(block, width, row)
       when :table           then render_table(block, width, row)
       when :image           then render_image(block, width, row)
+      when :shape           then render_shape(block); row
       when :blank           then row + DEFAULT_SCALE
       when :bg              then row
       when :slot            then row
@@ -330,6 +331,252 @@ module Przn
       segments = Parser.parse_inline(block[:content].to_s)
       @terminal.move_to(y, x)
       @terminal.write render_segments_scaled(segments, DEFAULT_SCALE)
+    end
+
+    # Draw a Keynote-style shape primitive (rect, circle, ellipse, line,
+    # polyline, polygon) by composing a tiny self-contained SVG document
+    # and shipping it via the Kitty Graphics Protocol's direct-data mode.
+    # Echoes content-sniffs the payload and rasterizes it through its
+    # native CoreGraphics fast path (sub-millisecond for path-only SVGs,
+    # which these always are).
+    #
+    # Geometry is authored in slide-cell coords (or `N%` of the terminal
+    # w/h) but composed into the SVG in **pixel** coords. The SVG
+    # viewBox matches the cell-quantized rasterization target exactly,
+    # which keeps 1 user unit = 1 pixel and avoids the anisotropic
+    # stretch that would otherwise turn `<circle>` into an ellipse
+    # (terminal cells are ~1:2 wide-to-tall). For "axis-agnostic"
+    # extents (`r`, `stroke-width`) we use `cell_w` as the canonical
+    # unit so a `circle r="5"` renders as a true circle.
+    # Shapes are absolute-positioned and contribute 0 to the layout flow.
+    def render_shape(block)
+      return unless ImageUtil.kitty_terminal?
+      kind = block[:kind]
+      attrs = (block[:attrs] || {})
+      cell_w, cell_h = @terminal.cell_pixel_size
+      return unless cell_w&.positive? && cell_h&.positive?
+
+      geom = resolve_shape_geometry(kind, attrs, cell_w, cell_h)
+      return unless geom
+
+      sw_user = if attrs['stroke-width']
+                  attrs['stroke-width'].to_f
+                elsif open_shape?(kind)
+                  SHAPE_DEFAULT_STROKE_WIDTH
+                else
+                  0.0
+                end
+      sw_px = sw_user * cell_w
+      pad = sw_px / 2.0
+
+      gx_min = geom[:bbox_x] - pad
+      gy_min = geom[:bbox_y] - pad
+      gx_max = geom[:bbox_x] + geom[:bbox_w] + pad
+      gy_max = geom[:bbox_y] + geom[:bbox_h] + pad
+
+      # Quantize the pixel bbox to whole slide cells.
+      place_col0 = (gx_min / cell_w).floor       # 0-indexed cell col
+      place_row0 = (gy_min / cell_h).floor
+      end_col0   = (gx_max / cell_w).ceil
+      end_row0   = (gy_max / cell_h).ceil
+      cols = end_col0 - place_col0
+      rows = end_row0 - place_row0
+      return if cols < 1 || rows < 1
+
+      # viewBox in pixels covers the cell-quantized footprint exactly.
+      vb_x = place_col0 * cell_w
+      vb_y = place_row0 * cell_h
+      vb_w = cols * cell_w
+      vb_h = rows * cell_h
+
+      svg = build_shape_svg(kind, attrs, geom, sw_px, vb_x, vb_y, vb_w, vb_h)
+      image_id = ensure_kitty_inline_uploaded(svg)
+      @terminal.move_to(place_row0 + 1, place_col0 + 1)
+      @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: cols, rows: rows)
+    end
+
+    # SVG paint / presentation attributes passed through to the shape
+    # element verbatim. Anything else on `block[:attrs]` is treated as
+    # geometry (consumed per-shape) and not re-emitted.
+    SHAPE_PAINT_ATTRS = %w[
+      fill stroke stroke-width opacity fill-opacity stroke-opacity
+      stroke-linecap stroke-linejoin stroke-dasharray stroke-miterlimit
+      fill-rule transform
+    ].freeze
+
+    SHAPE_DEFAULT_STROKE_WIDTH = 0.2
+
+    OPEN_SHAPES = %i[line polyline].freeze
+
+    def open_shape?(kind)
+      OPEN_SHAPES.include?(kind)
+    end
+
+    # Resolve a shape's geometry attrs to pixel coordinates. Positional
+    # attrs (x, y, cx, cy, x1, y1, x2, y2, polyline/polygon points) are
+    # 1-indexed cell coords matching `<at>` semantics — cell N maps to
+    # pixel `(N-1) * cell_dim`. Size attrs (width, height, rx, ry) are
+    # cell counts → `N * cell_dim` pixels. `r` and other "axis-agnostic"
+    # extents use `cell_w` as the canonical unit so a `circle r="5"`
+    # renders visually circular regardless of cell aspect ratio.
+    # Returns a hash with the per-shape geometry in pixels plus a
+    # `:bbox_*` quadruple covering the shape's pixel extent, or nil if
+    # any required attr is missing / unparseable.
+    def resolve_shape_geometry(kind, attrs, cell_w, cell_h)
+      case kind
+      when :rect
+        x  = to_px(attrs['x'],      :position, :x, cell_w, cell_h)
+        y  = to_px(attrs['y'],      :position, :y, cell_w, cell_h)
+        w_ = to_px(attrs['width'],  :size,     :x, cell_w, cell_h)
+        h_ = to_px(attrs['height'], :size,     :y, cell_w, cell_h)
+        return nil unless x && y && w_ && h_
+        {bbox_x: x, bbox_y: y, bbox_w: w_, bbox_h: h_, x: x, y: y, w: w_, h: h_,
+         rx: to_px(attrs['rx'], :size, :x, cell_w, cell_h),
+         ry: to_px(attrs['ry'], :size, :y, cell_w, cell_h)}
+      when :circle
+        cx = to_px(attrs['cx'], :position, :x, cell_w, cell_h)
+        cy = to_px(attrs['cy'], :position, :y, cell_w, cell_h)
+        # r is axis-agnostic: use cell_w on both axes so the rasterized
+        # shape is a true circle, not a vertical ellipse.
+        r  = to_px(attrs['r'],  :size,     :x, cell_w, cell_h)
+        return nil unless cx && cy && r
+        {bbox_x: cx - r, bbox_y: cy - r, bbox_w: 2 * r, bbox_h: 2 * r, cx: cx, cy: cy, r: r}
+      when :ellipse
+        cx = to_px(attrs['cx'], :position, :x, cell_w, cell_h)
+        cy = to_px(attrs['cy'], :position, :y, cell_w, cell_h)
+        rx = to_px(attrs['rx'], :size,     :x, cell_w, cell_h)
+        ry = to_px(attrs['ry'], :size,     :y, cell_w, cell_h)
+        return nil unless cx && cy && rx && ry
+        {bbox_x: cx - rx, bbox_y: cy - ry, bbox_w: 2 * rx, bbox_h: 2 * ry, cx: cx, cy: cy, rx: rx, ry: ry}
+      when :line
+        x1 = to_px(attrs['x1'], :position, :x, cell_w, cell_h)
+        y1 = to_px(attrs['y1'], :position, :y, cell_w, cell_h)
+        x2 = to_px(attrs['x2'], :position, :x, cell_w, cell_h)
+        y2 = to_px(attrs['y2'], :position, :y, cell_w, cell_h)
+        return nil unless x1 && y1 && x2 && y2
+        {bbox_x: [x1, x2].min, bbox_y: [y1, y2].min,
+         bbox_w: (x2 - x1).abs, bbox_h: (y2 - y1).abs,
+         x1: x1, y1: y1, x2: x2, y2: y2}
+      when :polyline, :polygon
+        pts = parse_shape_points(attrs['points'], cell_w, cell_h)
+        return nil if pts.nil? || pts.empty?
+        xs = pts.map(&:first)
+        ys = pts.map(&:last)
+        {bbox_x: xs.min, bbox_y: ys.min,
+         bbox_w: xs.max - xs.min, bbox_h: ys.max - ys.min,
+         points: pts}
+      end
+    end
+
+    # Convert a single coord attribute to pixels.
+    #   role:  :position — 1-indexed cell N → pixel (N-1)*cell_dim
+    #          :size     — cell count N → pixel N*cell_dim
+    #   axis:  :x → cell_w & terminal.width;  :y → cell_h & terminal.height
+    # `%` is allowed and resolves against the corresponding terminal
+    # extent before the cell→pixel conversion.
+    def to_px(raw, role, axis, cell_w, cell_h)
+      return nil if raw.nil?
+      s = raw.to_s.strip
+      return nil if s.empty?
+
+      cell_dim    = (axis == :x) ? cell_w : cell_h
+      total_cells = (axis == :x) ? @terminal.width : @terminal.height
+
+      cells =
+        if s.end_with?('%')
+          s.chomp('%').to_f / 100.0 * total_cells
+        elsif s =~ /\A-?[\d.]+\z/
+          s.to_f
+        end
+      return nil if cells.nil?
+
+      role == :position ? (cells - 1) * cell_dim : cells * cell_dim
+    end
+
+    # Parse a `points="x1,y1 x2,y2 …"` attribute into resolved [x, y]
+    # pixel-coord pairs. Coords are 1-indexed cells or `N%`; each
+    # x uses `:x` axis, each y uses `:y` axis. Returns nil if the token
+    # count is odd or any individual coord fails to parse.
+    def parse_shape_points(raw, cell_w, cell_h)
+      return nil if raw.nil?
+      tokens = raw.to_s.split(/[\s,]+/).reject(&:empty?)
+      return nil if tokens.empty? || tokens.size.odd?
+      pts = []
+      tokens.each_slice(2) do |xs, ys|
+        x = to_px(xs, :position, :x, cell_w, cell_h)
+        y = to_px(ys, :position, :y, cell_w, cell_h)
+        return nil if x.nil? || y.nil?
+        pts << [x, y]
+      end
+      pts
+    end
+
+    # Compose the SVG document shipped to the terminal. The viewBox is
+    # in pixels and matches the cell-quantized rasterization footprint
+    # exactly, so 1 user unit = 1 pixel — no anisotropic stretching,
+    # circles render circular, stroke widths reproduce the exact pixel
+    # thickness we computed. Default paint colors are spelled out as
+    # `white` (not `currentColor`) so the SVG renders correctly even
+    # if Echoes doesn't propagate the root `color=` to children.
+    def build_shape_svg(kind, attrs, geom, sw_px, vb_x, vb_y, vb_w, vb_h)
+      vb = "#{fnum(vb_x)} #{fnum(vb_y)} #{fnum(vb_w)} #{fnum(vb_h)}"
+      shape_xml = shape_element(kind, attrs, geom, sw_px)
+      %(<svg xmlns="http://www.w3.org/2000/svg" viewBox="#{vb}">#{shape_xml}</svg>)
+    end
+
+    def shape_element(kind, attrs, geom, sw_px)
+      paint = shape_paint_attrs(kind, attrs, sw_px)
+      case kind
+      when :rect
+        rx = geom[:rx] ? %( rx="#{fnum(geom[:rx])}") : ''
+        ry = geom[:ry] ? %( ry="#{fnum(geom[:ry])}") : ''
+        %(<rect x="#{fnum(geom[:x])}" y="#{fnum(geom[:y])}" width="#{fnum(geom[:w])}" height="#{fnum(geom[:h])}"#{rx}#{ry}#{paint}/>)
+      when :circle
+        %(<circle cx="#{fnum(geom[:cx])}" cy="#{fnum(geom[:cy])}" r="#{fnum(geom[:r])}"#{paint}/>)
+      when :ellipse
+        %(<ellipse cx="#{fnum(geom[:cx])}" cy="#{fnum(geom[:cy])}" rx="#{fnum(geom[:rx])}" ry="#{fnum(geom[:ry])}"#{paint}/>)
+      when :line
+        %(<line x1="#{fnum(geom[:x1])}" y1="#{fnum(geom[:y1])}" x2="#{fnum(geom[:x2])}" y2="#{fnum(geom[:y2])}"#{paint}/>)
+      when :polyline
+        %(<polyline points="#{points_attr(geom[:points])}"#{paint}/>)
+      when :polygon
+        %(<polygon points="#{points_attr(geom[:points])}"#{paint}/>)
+      end
+    end
+
+    # `stroke-width` is overridden with the renderer-computed pixel
+    # value so the user's "0.3" cell-widths becomes the actual pixel
+    # count we padded the bbox by. The user's other paint attrs pass
+    # through; sensible defaults fill in fill/stroke if unset.
+    def shape_paint_attrs(kind, attrs, sw_px)
+      defaults =
+        if open_shape?(kind)
+          {'fill' => 'none', 'stroke' => 'white'}
+        else
+          {'fill' => 'white'}
+        end
+      out = defaults.merge(attrs.slice(*SHAPE_PAINT_ATTRS))
+      # Replace stroke-width (if present, or implicit on open shapes)
+      # with the pixel value matching our bbox padding.
+      if out['stroke'] && out['stroke'] != 'none' && sw_px > 0
+        out['stroke-width'] = fnum(sw_px)
+      else
+        out.delete('stroke-width')
+      end
+      out.map { |k, v| %( #{k}="#{v}") }.join
+    end
+
+    def points_attr(points)
+      points.map { |x, y| "#{fnum(x)},#{fnum(y)}" }.join(' ')
+    end
+
+    # Compact float formatting for SVG: drop trailing ".0" on integral
+    # values, otherwise emit up to three decimals. Keeps the payload
+    # short and the cache key stable.
+    def fnum(n)
+      f = n.to_f
+      i = f.to_i
+      f == i ? i.to_s : format('%.3f', f)
     end
 
     # Resolve an `<at>` coordinate string against the dimension it indexes.
@@ -729,6 +976,20 @@ module Przn
 
       image_id = @kitty_uploads.size + 1
       @terminal.write ImageUtil.kitty_upload_png(path, image_id: image_id)
+      @kitty_uploads[key] = image_id
+    end
+
+    # Upload any inline image bytes (currently used by shape SVGs) once
+    # via Kitty graphics direct-data transmission. Keyed by SHA1 so
+    # identical shapes on multiple slides dedup. Shares the
+    # @kitty_uploads cache (and id counter) with PNG / file uploads.
+    def ensure_kitty_inline_uploaded(bytes)
+      require 'digest'
+      key = [:inline, Digest::SHA1.hexdigest(bytes.to_s)]
+      return @kitty_uploads[key] if @kitty_uploads.key?(key)
+
+      image_id = @kitty_uploads.size + 1
+      @terminal.write ImageUtil.kitty_upload_inline(bytes, image_id: image_id)
       @kitty_uploads[key] = image_id
     end
 

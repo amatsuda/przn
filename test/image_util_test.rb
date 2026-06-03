@@ -92,4 +92,27 @@ class ImageUtilTest < Test::Unit::TestCase
       assert_equal "\e_Ga=d,d=A,q=2\e\\", Przn::ImageUtil.kitty_clear_all
     end
   end
+
+  sub_test_case 'kitty_upload_inline' do
+    test 'emits a t=d APC with the base64-encoded payload' do
+      out = Przn::ImageUtil.kitty_upload_inline('<svg/>', image_id: 5)
+      assert(out.start_with?("\e_G"), "expected APC start: #{out.inspect}")
+      assert(out.end_with?("\e\\"),   "expected APC terminator: #{out.inspect}")
+      controls, payload = out[3..-3].split(';', 2)
+      pairs = controls.split(',').map { |p| p.split('=', 2) }.to_h
+      assert_equal 't',   pairs['a']
+      assert_equal 'd',   pairs['t']
+      assert_equal '100', pairs['f']
+      assert_equal '5',   pairs['i']
+      assert_equal '2',   pairs['q']
+      assert_equal '<svg/>', decode64(payload)
+    end
+
+    test 'round-trips arbitrary bytes including a newline' do
+      bytes = "<svg>\n  <line x1='0' y1='0' x2='1' y2='1'/>\n</svg>\n"
+      out = Przn::ImageUtil.kitty_upload_inline(bytes, image_id: 1)
+      _, payload = out[3..-3].split(';', 2)
+      assert_equal bytes, decode64(payload)
+    end
+  end
 end

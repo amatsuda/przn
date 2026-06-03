@@ -32,7 +32,7 @@ module Przn
     # `/` is intentionally NOT excluded so paths like `src=path/to/file`
     # work — which means self-closing tags need a space before `/>` when
     # the last attribute is unquoted (`<img src=foo.png />`).
-    ATTR_RE_SRC = '\w+=(?:"[^"]*"|\'[^\']*\'|[^\s=<>"\'`]+)'
+    ATTR_RE_SRC = '[\w-]+=(?:"[^"]*"|\'[^\']*\'|[^\s=<>"\'`]+)'
 
     module_function
 
@@ -209,6 +209,19 @@ module Przn
           i -= 1
           blocks << {type: :ordered_list, items: items}
 
+        # Shape primitives — Keynote-style "Shapes and Lines". Each tag is
+        # self-closing with the shape's geometry attrs (cells, or `N%` of
+        # the terminal w/h) plus optional SVG paint attrs (fill, stroke,
+        # stroke-width, opacity, …). The renderer composes each block into
+        # a tiny self-contained SVG document shipped via the Kitty
+        # Graphics Protocol — Echoes content-sniffs the payload and
+        # rasterizes it through its native CoreGraphics fast path
+        # (sub-millisecond for path-only SVGs, which these always are).
+        when %r{\A\s*<(rect|circle|ellipse|line|polyline|polygon)((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
+          kind = Regexp.last_match(1).to_sym
+          attrs = parse_xml_attrs(Regexp.last_match(2)).transform_keys(&:to_s)
+          blocks << {type: :shape, kind: kind, attrs: attrs}
+
         # Image, XML form: <img src="path" alt="..." title="..." {:attrs}/>
         # Equivalent to the markdown `![alt](src "title"){:attrs}` form below
         # — emits the same `:image` block so the renderer handles both
@@ -317,7 +330,7 @@ module Przn
     # are allowed; callers slice.
     def parse_xml_attrs(str)
       attrs = {}
-      str.scan(/(\w+)=(?:"([^"]*)"|'([^']*)'|([^\s=<>"'`]+))/) do |key, dq, sq, uq|
+      str.scan(/([\w-]+)=(?:"([^"]*)"|'([^']*)'|([^\s=<>"'`]+))/) do |key, dq, sq, uq|
         attrs[key.to_sym] = dq || sq || uq
       end
       attrs

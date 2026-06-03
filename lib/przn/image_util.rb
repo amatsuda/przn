@@ -85,6 +85,19 @@ module Przn
       "\e_Ga=t,t=f,f=100,i=#{image_id},q=2;#{encoded}\e\\"
     end
 
+    # Kitty Graphics Protocol: upload arbitrary image bytes inline via
+    # the direct-data transmission mode (`t=d`). Used by the shape-
+    # drawing tags (`<rect>`, `<circle>`, `<line>`, …) which build a
+    # tiny self-contained SVG document per shape and ship it here.
+    # Echoes content-sniffs the payload and routes SVGs through its
+    # native CoreGraphics rasterizer (sub-millisecond for path-only
+    # SVGs — the case shape primitives always hit). `f=100` is the
+    # default PNG format code; the sniffer overrides it for SVG.
+    def kitty_upload_inline(bytes, image_id:)
+      encoded = [bytes.to_s].pack('m0')
+      "\e_Ga=t,t=d,f=100,i=#{image_id},q=2;#{encoded}\e\\"
+    end
+
     # Kitty Graphics Protocol: place a previously-uploaded image at the
     # current cursor position, scaled to fit `cols` x `rows` cells.
     # `z` sets the z-index — negative values draw the image behind

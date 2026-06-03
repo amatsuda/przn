@@ -290,6 +290,33 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
   - With `x` and `y` set, the image layers on top of the slide and contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. Without `x` / `y`, the image stays horizontally centered and takes up its natural height in the flow.
 - Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.
 
+### Shapes and Lines
+
+Keynote-style vector shapes — `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>` — drawn natively by the terminal. Each tag is self-closing, absolute-positioned (contributes 0 to the layout flow), and accepts geometry attrs in slide cells or `N%` of the terminal width / height.
+
+```markdown
+<line   x1="10" y1="5"  x2="70" y2="5"  stroke="white" stroke-width="0.3"/>
+<rect   x="10" y="8"  width="20" height="6" rx="1" fill="tomato"/>
+<circle cx="50%" cy="15" r="5" fill="cyan"/>
+<ellipse cx="50" cy="15" rx="20" ry="6" fill="none" stroke="gold" stroke-width="0.5"/>
+<polyline points="10,5 30,15 50,5 70,15" stroke="lime" stroke-width="0.4"/>
+<polygon points="50,2 60,15 40,15" fill="gold"/>
+```
+
+- Geometry attrs per shape:
+  - `<rect>`: `x`, `y`, `width`, `height`, optional `rx`, `ry` for rounded corners.
+  - `<circle>`: `cx`, `cy`, `r` (radius is a length, resolved against terminal width when given as `N%`).
+  - `<ellipse>`: `cx`, `cy`, `rx`, `ry`.
+  - `<line>`: `x1`, `y1`, `x2`, `y2`.
+  - `<polyline>` / `<polygon>`: `points="x1,y1 x2,y2 ..."` (space- or comma-separated; each coord can be `N%`).
+- Paint attrs pass through to SVG verbatim: `fill`, `stroke`, `stroke-width`, `opacity`, `fill-opacity`, `stroke-opacity`, `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray`, `stroke-miterlimit`, `fill-rule`, `transform`.
+- Colors: `#rrggbb` / `#rgb` / `rgba(...)` always work. Echoes' fast path supports a focused named-color set — `black`, `white`, `red`, `green`, `blue`, `yellow`, `cyan`, `magenta`, `gray`, `orange`, `purple`, `pink`, `brown`, `lime`, `navy`, `teal`, `silver`, `maroon`, `olive` (plus `aqua` / `fuchsia` / `grey` aliases). Anything outside that set bails to a slower path that may silently render nothing — when in doubt, use a hex code.
+- Defaults: closed shapes (`rect`, `circle`, `ellipse`, `polygon`) fill `white`; open shapes (`line`, `polyline`) stroke `white` at `stroke-width="0.2"` (a cell-width hairline). Override via explicit `fill=` / `stroke=` when your slide background is light.
+- Coordinate semantics: positional attrs (`x`, `y`, `cx`, `cy`, `x1`, `y1`, `x2`, `y2`, `points`) are 1-indexed slide cells, matching `<at>` and `<img>` (so `x="10" y="5"` lands at column 10, row 5). Size attrs (`width`, `height`, `rx`, `ry`) are cell counts on the respective axis. The shape is composed in pixel coords behind the scenes using the terminal's actual cell pixel size, so a `circle r="5"` renders as a true circle even though terminal cells are typically ~1:2 wide-to-tall.
+- Stroke widths are in **cell-widths** (typically ~12 px each) — `stroke-width="0.3"` is roughly a 3–4 pixel hairline regardless of cell aspect.
+- Stroke is rendered inside the shape's padded bounding box, so the stroke won't get clipped.
+- Rendering backend: Kitty Graphics Protocol direct-data mode. Echoes content-sniffs the payload and rasterizes via its native CoreGraphics fast path (sub-millisecond, synchronous) — these shapes always hit the fast path. On terminals that don't speak Kitty graphics the shape silently renders nothing.
+
 ### Slide layouts
 
 Layouts let a slide carve itself into named regions ("slots") — title across the top, two columns underneath, image-and-caption side-by-side, etc. Without a layout, slides render in the existing top-down flow (the default behavior is unchanged).

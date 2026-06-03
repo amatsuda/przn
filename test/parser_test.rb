@@ -506,6 +506,84 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Shapes: <rect>, <circle>, <ellipse>, <line>, <polyline>, <polygon>' do
+    test '<rect> parses to {type: :shape, kind: :rect, attrs: {...}}' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<rect x="10" y="5" width="20" height="6" fill="tomato"/>\n)
+      ).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_not_nil block
+      assert_equal :rect, block[:kind]
+      assert_equal '10', block[:attrs]['x']
+      assert_equal '5',  block[:attrs]['y']
+      assert_equal '20', block[:attrs]['width']
+      assert_equal '6',  block[:attrs]['height']
+      assert_equal 'tomato', block[:attrs]['fill']
+    end
+
+    test '<circle> kind and attrs' do
+      slide = Przn::Parser.parse(%(# t\n\n<circle cx="50%" cy="50%" r="5" fill="cyan"/>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :circle, block[:kind]
+      assert_equal '50%', block[:attrs]['cx']
+      assert_equal '50%', block[:attrs]['cy']
+      assert_equal '5',   block[:attrs]['r']
+    end
+
+    test '<ellipse> kind and attrs' do
+      slide = Przn::Parser.parse(%(# t\n\n<ellipse cx="50" cy="15" rx="20" ry="6"/>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :ellipse, block[:kind]
+      assert_equal '20', block[:attrs]['rx']
+      assert_equal '6',  block[:attrs]['ry']
+    end
+
+    test '<line> kind and endpoint attrs' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<line x1="10" y1="5" x2="70" y2="5" stroke="white" stroke-width="0.3"/>\n)
+      ).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :line, block[:kind]
+      assert_equal '10', block[:attrs]['x1']
+      assert_equal '70', block[:attrs]['x2']
+      assert_equal 'white', block[:attrs]['stroke']
+      assert_equal '0.3',   block[:attrs]['stroke-width']
+    end
+
+    test '<polyline> captures points unchanged' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<polyline points="10,5 30,15 50,5 70,15" stroke="lime"/>\n)
+      ).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :polyline, block[:kind]
+      assert_equal '10,5 30,15 50,5 70,15', block[:attrs]['points']
+    end
+
+    test '<polygon> captures points unchanged' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<polygon points="50,2 60,15 40,15" fill="gold"/>\n)
+      ).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :polygon, block[:kind]
+      assert_equal '50,2 60,15 40,15', block[:attrs]['points']
+    end
+
+    test 'unquoted attribute values work on shape tags too' do
+      slide = Przn::Parser.parse(%(# t\n\n<circle cx=40 cy=10 r=4 fill=cyan />\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :circle, block[:kind]
+      assert_equal '40', block[:attrs]['cx']
+      assert_equal 'cyan', block[:attrs]['fill']
+    end
+
+    test 'parameter-less shape tag still emits a block (renderer skips if geometry incomplete)' do
+      slide = Przn::Parser.parse(%(# t\n\n<rect/>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :rect, block[:kind]
+      assert_equal({}, block[:attrs])
+    end
+  end
+
   sub_test_case 'Absolute-position text: <at x y>...</at>' do
     test 'XML form parses x/y and content' do
       slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5">hello</at>\n)).slides[0]

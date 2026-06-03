@@ -861,6 +861,168 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'render_shape' do
+    class ShapeFakeTerm
+      attr_reader :ops
+      def initialize(w: 80, h: 30); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      # Anisotropic cell — typical 1:2 wide-to-tall — to verify the
+      # renderer composes the SVG in pixel coords (so circles render
+      # circular regardless of cell aspect).
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def setup
+      super
+      @orig_kitty = Przn::ImageUtil.method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+    end
+
+    def teardown
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?, @orig_kitty)
+    end
+
+    def uploaded_svg(term)
+      apc = term.ops.find { |op, s| op == :write && s.is_a?(String) && s.start_with?("\e_Ga=t,t=d") }
+      return nil unless apc
+      _, payload = apc[1][3..-3].split(';', 2)
+      payload.unpack1('m')
+    end
+
+    def placement(term)
+      term.ops.find { |op, s| op == :write && s.is_a?(String) && s.start_with?("\e_Ga=p") }&.[](1)
+    end
+
+    test 'rect: geometry in pixels, viewBox covers the cell-quantized footprint' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6', 'fill' => 'red'}})
+
+      svg = uploaded_svg(term)
+      # x=10 → (10-1)*cell_w(10) = 90 px. y=5 → 4*20 = 80 px.
+      # width=20 → 200 px. height=6 → 120 px. No stroke padding.
+      # Quantized: cells 10..29 × 5..10 → viewBox "90 80 200 120".
+      assert_match(/viewBox="90 80 200 120"/, svg)
+      assert_match(/<rect x="90" y="80" width="200" height="120" fill="red"\/>/, svg)
+      assert_includes term.ops, [:move_to, 5, 10]
+      assert_match(/c=20,r=6/, placement(term))
+    end
+
+    test 'circle: rx and ry both scale by cell_w → visually circular' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :circle,
+                              attrs: {'cx' => '40', 'cy' => '15', 'r' => '5'}})
+      svg = uploaded_svg(term)
+      # cx=40 → 390 px, cy=15 → 280 px. r=5 → 5*cell_w(10) = 50 px on
+      # BOTH axes — circle, not anisotropic ellipse. bbox pixels
+      # (340, 230) to (440, 330). Quantized cell footprint:
+      # cols floor(340/10)..ceil(440/10) = 34..44 → 10 cols
+      # rows floor(230/20)..ceil(330/20) = 11..17 → 6 rows
+      # viewBox pixel origin: 34*10=340, 11*20=220. Size: 100, 120.
+      assert_match(/viewBox="340 220 100 120"/, svg)
+      assert_match(/<circle cx="390" cy="280" r="50" fill="white"\/>/, svg)
+      assert_includes term.ops, [:move_to, 12, 35]
+      assert_match(/c=10,r=6/, placement(term))
+    end
+
+    test 'ellipse: rx scales by cell_w, ry by cell_h (intentionally anisotropic)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :ellipse,
+                              attrs: {'cx' => '50', 'cy' => '15', 'rx' => '20', 'ry' => '6'}})
+      svg = uploaded_svg(term)
+      # cx=50→490, cy=15→280, rx=20*10=200, ry=6*20=120.
+      assert_match(/<ellipse cx="490" cy="280" rx="200" ry="120"/, svg)
+    end
+
+    test 'line: stroke-width in cell-widths, geometry in pixels' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :line,
+                              attrs: {'x1' => '10', 'y1' => '5', 'x2' => '70', 'y2' => '5', 'stroke' => 'red'}})
+      svg = uploaded_svg(term)
+      # x1=10→90, y1=5→80, x2=70→690, y2=5→80. sw default 0.2 cell-widths
+      # → 2 px. Pad ±1 px.
+      assert_match(/<line x1="90" y1="80" x2="690" y2="80" fill="none" stroke="red" stroke-width="2"\/>/, svg)
+    end
+
+    test 'polyline: points converted to pixels' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :polyline,
+                              attrs: {'points' => '10,5 30,15 50,5 70,15', 'stroke' => 'cyan', 'stroke-width' => '0.4'}})
+      svg = uploaded_svg(term)
+      # Each (col, row) → ((col-1)*10, (row-1)*20).
+      # 10,5 → 90,80;  30,15 → 290,280;  50,5 → 490,80;  70,15 → 690,280.
+      assert_match(%r{<polyline points="90,80 290,280 490,80 690,280"}, svg)
+    end
+
+    test 'polygon: closed-shape default fill = white' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :polygon,
+                              attrs: {'points' => '50,2 60,15 40,15'}})
+      svg = uploaded_svg(term)
+      assert_match(/<polygon points="490,20 590,280 390,280" fill="white"\/>/, svg)
+    end
+
+    test 'percent coords resolve against terminal cells, then convert to pixels' do
+      term = ShapeFakeTerm.new   # 80 cols × 30 rows, cell 10×20
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :circle,
+                              attrs: {'cx' => '50%', 'cy' => '50%', 'r' => '10%'}})
+      svg = uploaded_svg(term)
+      # cx=50% of 80 cols = col 40 → (40-1)*10 = 390 px.
+      # cy=50% of 30 rows = row 15 → (15-1)*20 = 280 px.
+      # r=10% of 80 cols = 8 cells * cell_w(10) = 80 px (uniform).
+      assert_match(/<circle cx="390" cy="280" r="80"/, svg)
+    end
+
+    test 'missing required attr → silently skip (no upload, no place)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :rect, attrs: {'x' => '10', 'y' => '5'}})  # no width/height
+      assert_nil uploaded_svg(term)
+      assert_nil placement(term)
+    end
+
+    test 'non-Kitty terminal: no-op' do
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { false }
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :circle,
+                              attrs: {'cx' => '40', 'cy' => '15', 'r' => '5'}})
+      assert_empty term.ops
+    end
+
+    test 'identical shapes on two renders dedup (one upload, two placements)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      block = {type: :shape, kind: :circle, attrs: {'cx' => '40', 'cy' => '15', 'r' => '5'}}
+      r.send(:render_shape, block)
+      r.send(:render_shape, block)
+      uploads = term.ops.count { |op, s| op == :write && s.is_a?(String) && s.start_with?("\e_Ga=t,t=d") }
+      places  = term.ops.count { |op, s| op == :write && s.is_a?(String) && s.start_with?("\e_Ga=p") }
+      assert_equal 1, uploads
+      assert_equal 2, places
+    end
+
+    test 'shape blocks do not advance the flow row (render_block returns row unchanged)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      block = {type: :shape, kind: :rect, attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6'}}
+      new_row = r.send(:render_block, block, 80, 12)
+      assert_equal 12, new_row
+    end
+  end
+
   sub_test_case 'ensure_kitty_uploaded' do
     class FakeTerm
       attr_reader :writes
@@ -1067,5 +1229,6 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 1, id
       assert_equal writes_after_preload, @term.writes.size  # no new upload
     end
+
   end
 end
