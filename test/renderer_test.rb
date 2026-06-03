@@ -490,6 +490,19 @@ class RendererTest < Test::Unit::TestCase
       assert(joined.include?('🐇'), "expected rabbit in runner bar: #{joined.inspect}")
       assert(!joined.include?(' 1 / 9 '), "did not expect simple N/M footer: #{joined.inspect}")
     end
+
+    test 'export_mode hides 🐇/🐢 and falls back to the simple N/M counter' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term,
+                                    theme: fake_theme(rabbit: {duration: '60s'}),
+                                    export_mode: true)
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(!joined.include?('🐇'), "expected no rabbit in PDF: #{joined.inspect}")
+      assert(!joined.include?('🐢'), "expected no turtle in PDF: #{joined.inspect}")
+      assert(joined.include?(' 1 / 9 '), "expected fallback N/M footer: #{joined.inspect}")
+    end
   end
 
   sub_test_case 'render_at: absolute-position text' do

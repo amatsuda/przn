@@ -28,11 +28,16 @@ module Przn
     #   :presenter — dim-inline (so the presenter sees them in context) and
     #                ALSO aggregated separately for the side panel via
     #                Slide#notes; this renderer just keeps the inline copy.
-    def initialize(terminal, base_dir: '.', theme: nil, mode: :solo)
+    # `export_mode:` true when the renderer is driving a PDF export (currently
+    # ScreenshotPdfExporter): suppresses the 🐇/🐢 runner bar in favor of the
+    # plain `N / M` counter, since the emoji animation belongs on a live screen,
+    # not a static page.
+    def initialize(terminal, base_dir: '.', theme: nil, mode: :solo, export_mode: false)
       @terminal = terminal
       @base_dir = base_dir
       @theme = theme || Theme.default
       @mode = mode
+      @export_mode = export_mode
       @image_cache = {}
       @kitty_uploads = {}
       @mutex = Mutex.new
@@ -92,7 +97,7 @@ module Przn
           end
         end
 
-        if @theme.rabbit
+        if @theme.rabbit && !@export_mode
           draw_runner_bar(h, w, current, total, started_at)
         else
           status = " #{current + 1} / #{total} "

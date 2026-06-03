@@ -48,7 +48,7 @@ module Przn
       @base_dir = base_dir
       @theme = theme || Theme.default
       @terminal = terminal || Terminal.new
-      @renderer = Renderer.new(@terminal, base_dir: base_dir, theme: theme)
+      @renderer = Renderer.new(@terminal, base_dir: base_dir, theme: theme, export_mode: true)
     end
 
     def export(output_path)
