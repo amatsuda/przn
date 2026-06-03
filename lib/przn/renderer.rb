@@ -48,6 +48,12 @@ module Przn
       # render_segments_scaled consult this so a `cover.title` slot
       # with `size: xxx-large` actually makes the title bigger.
       @slot_style = nil
+      # Kitty image id of the previous slide's background image (when
+      # set via `<bg image="..."/>` or `background.image:` in theme).
+      # Tracked so the placement can be deleted before the next slide
+      # applies its own bg — keeps the upload cached but wipes the
+      # visible artifact.
+      @bg_image_id = nil
     end
 
     def render(slide, current:, total:, started_at: nil)
@@ -246,7 +252,16 @@ module Przn
       attrs = block ? block[:attrs] : (@theme.background || {})
 
       @terminal.write "\e]7772;bg-clear\a"
+      clear_background_image
       return if attrs.empty?
+
+      # An `image:` background wins over color / gradient — the image
+      # covers the whole slide area at z: -1 so subsequent text and
+      # `<img>` placements draw on top.
+      if (image = attrs[:image])
+        apply_background_image(image.to_s)
+        return
+      end
 
       if (color = attrs[:color])
         @terminal.write "\e]7772;bg-color;#{color}\a"
@@ -259,6 +274,37 @@ module Przn
       type = attrs[:type] || 'linear'
       angle = attrs[:angle] || 0
       @terminal.write "\e]7772;bg-gradient;type=#{type}:angle=#{angle}:colors=#{colors.join(',')}\a"
+    end
+
+    # Cover the slide with a Kitty Graphics image at z: -1 so text
+    # drawn afterward layers on top. PNG only for now (relies on the
+    # in-process upload path; JPGs would need a kitten icat detour).
+    # Silently no-ops on non-Kitty terminals — the bg-clear emitted
+    # above already wiped any prior Echoes color / gradient.
+    def apply_background_image(path)
+      return unless ImageUtil.kitty_terminal?
+      resolved = resolve_image_path(path)
+      return unless File.exist?(resolved) && ImageUtil.png?(resolved)
+
+      image_id = ensure_kitty_uploaded(resolved)
+      @bg_image_id = image_id
+      @terminal.move_to(1, 1)
+      @terminal.write ImageUtil.kitty_place(
+        image_id: image_id,
+        cols: @terminal.width,
+        rows: @terminal.height,
+        z: -1
+      )
+    end
+
+    # Delete the previous slide's bg-image placement (if any) so it
+    # doesn't bleed through to a slide that defines no image bg.
+    # Image data stays cached so revisiting the same bg doesn't
+    # re-upload.
+    def clear_background_image
+      return unless @bg_image_id && ImageUtil.kitty_terminal?
+      @terminal.write ImageUtil.kitty_delete_placements(image_id: @bg_image_id)
+      @bg_image_id = nil
     end
 
     # Place text at an absolute (column, row) on the slide, escaping the

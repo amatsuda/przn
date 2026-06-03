@@ -20,9 +20,12 @@ bullet:                 # unordered-list marker; also h2–h6 heading prefix
   size:                 # OSC 66 scale (1–7) for the bullet; default = body text's scale
 
 # Default slide background, applied when a slide has no <bg .../> directive.
-# Echoes-only (OSC 7772). Use either `color` (solid) or `from`/`to`/`angle`
-# (linear gradient). Both unset = no background override.
+# `color` / `from` / `to` / `angle` use Echoes' OSC 7772 (no-op on other
+# terminals). `image` uses the Kitty Graphics Protocol (works on Kitty,
+# Echoes, Wezterm, Ghostty — PNG only) and wins over `color` / gradient
+# when both are set. All unset = no background override.
 background:
+  image:                # background image path, relative to the deck; PNG only
   color:                # solid color, e.g. "#1a1a2e"
   from:                 # gradient endpoint, e.g. "#1a1a2e"
   to:                   # gradient endpoint, e.g. "#16213e"

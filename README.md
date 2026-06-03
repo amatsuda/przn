@@ -219,7 +219,7 @@ XML form (single-line, paragraph-level):
 
 ### Slide background
 
-Set a per-slide background — solid color or linear gradient — via a self-closing block-level directive. Uses the [Echoes](https://github.com/amatsuda/echoes) OSC 7772 extension; other terminals ignore the escape sequence.
+Set a per-slide background — solid color, linear gradient, or image — via a self-closing block-level directive.
 
 ```markdown
 # Title
@@ -233,9 +233,19 @@ content...
 <bg from="#1a1a2e" to="#16213e" angle="90"/>
 
 content...
+
+# Third slide
+
+<bg image="cover.png"/>
+
+content layered on top of the image...
 ```
 
-The previous slide's background is cleared on every navigation, and on `przn` exit, so your shell isn't left tinted.
+- `color` / `from` / `to` / `angle` use [Echoes](https://github.com/amatsuda/echoes)' OSC 7772 extension; other terminals ignore the escape sequence.
+- `image` (PNG, path relative to the deck) uses the Kitty Graphics Protocol at `z: -1` so text and `<img>` content layer on top. Works on every kitty-graphics terminal (Kitty, Ghostty, Wezterm, Echoes…); silently no-ops elsewhere. `image` wins when set alongside `color` / `from` / `to`.
+- For a deck-wide default, set `background.image:` (or `color:` / gradient keys) in `theme.yml`.
+
+The previous slide's background — color, gradient, and image placement — is cleared on every navigation, and on `przn` exit, so your shell isn't left tinted or covered.
 
 ### Absolute-position text
 

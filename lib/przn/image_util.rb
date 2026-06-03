@@ -87,8 +87,20 @@ module Przn
 
     # Kitty Graphics Protocol: place a previously-uploaded image at the
     # current cursor position, scaled to fit `cols` x `rows` cells.
-    def kitty_place(image_id:, cols:, rows:)
-      "\e_Ga=p,i=#{image_id},c=#{cols},r=#{rows},q=2\e\\"
+    # `z` sets the z-index — negative values draw the image behind
+    # text cells (used by slide background images at z: -1).
+    def kitty_place(image_id:, cols:, rows:, z: nil)
+      params = +"a=p,i=#{image_id},c=#{cols},r=#{rows},q=2"
+      params << ",z=#{z}" if z
+      "\e_G#{params}\e\\"
+    end
+
+    # Kitty Graphics Protocol: delete every placement for a specific
+    # image id while keeping the stored image data alive (lowercase
+    # `d=i`). Used to wipe the previous slide's background image
+    # before placing a new one, without forcing a re-upload.
+    def kitty_delete_placements(image_id:)
+      "\e_Ga=d,d=i,i=#{image_id},q=2\e\\"
     end
 
     # Kitty Graphics Protocol: delete every placement and free the

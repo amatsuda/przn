@@ -901,6 +901,81 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'apply_slide_background: image:' do
+    class BgFakeTerm
+      attr_reader :writes
+      def initialize; @writes = []; @move_ops = []; end
+      def width;  80; end
+      def height; 30; end
+      def write(s); @writes << s; end
+      def move_to(r, c); @move_ops << [r, c]; end
+      attr_reader :move_ops
+    end
+
+    def setup
+      super
+      @png = Tempfile.new(['bg', '.png'])
+      @png.binmode
+      @png.write("\x89PNG\r\n\x1a\n".b)
+      @png.flush
+
+      @orig_kitty = Przn::ImageUtil.method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+    end
+
+    def teardown
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?, @orig_kitty)
+      @png.close!
+    end
+
+    test 'uploads the bg image and emits a z=-1 full-screen placement' do
+      term = BgFakeTerm.new
+      r = Przn::Renderer.new(term)
+      slide = Struct.new(:blocks, :layout, :attrs).new(
+        [{type: :bg, attrs: {image: @png.path}}], nil, {}
+      )
+      r.send(:apply_slide_background, slide)
+      payload = term.writes.join
+      assert_match(/\e_Ga=t,t=f,f=100,i=\d+,q=2;/, payload, 'expected an upload sequence')
+      assert_match(/\e_Ga=p,i=\d+,c=80,r=30,q=2,z=-1\e\\/, payload,
+                   "expected a z=-1 placement: #{payload.inspect}")
+      assert_includes term.move_ops, [1, 1], 'expected the bg placement anchored at (1,1)'
+    end
+
+    test 'switching to a slide without a bg-image deletes the previous placement' do
+      term = BgFakeTerm.new
+      r = Przn::Renderer.new(term)
+      slide_with    = Struct.new(:blocks, :layout, :attrs).new(
+        [{type: :bg, attrs: {image: @png.path}}], nil, {}
+      )
+      slide_without = Struct.new(:blocks, :layout, :attrs).new([], nil, {})
+
+      r.send(:apply_slide_background, slide_with)
+      uploaded_id = r.instance_variable_get(:@bg_image_id) ||
+                    # the placement payload exposes the id; pull from there if needed
+                    term.writes.join.match(/a=p,i=(\d+)/)[1].to_i
+      r.send(:apply_slide_background, slide_without)
+      payload = term.writes.join
+      assert_match(/\e_Ga=d,d=i,i=#{uploaded_id},q=2\e\\/, payload,
+                   "expected a placement-delete for the previous bg: #{payload.inspect}")
+    end
+
+    test 'silently no-ops on non-Kitty terminals (no upload, no placement)' do
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { false }
+      term = BgFakeTerm.new
+      r = Przn::Renderer.new(term)
+      slide = Struct.new(:blocks, :layout, :attrs).new(
+        [{type: :bg, attrs: {image: @png.path}}], nil, {}
+      )
+      r.send(:apply_slide_background, slide)
+      payload = term.writes.join
+      refute_match(/\e_Ga=t/, payload, "no upload expected: #{payload.inspect}")
+      refute_match(/\e_Ga=p/, payload, "no placement expected: #{payload.inspect}")
+    end
+  end
+
   sub_test_case 'preload' do
     class FakeTerm2
       attr_reader :writes, :flushes

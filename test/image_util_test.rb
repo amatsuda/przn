@@ -73,6 +73,18 @@ class ImageUtilTest < Test::Unit::TestCase
       out = Przn::ImageUtil.kitty_place(image_id: 7, cols: 30, rows: 12)
       assert_equal "\e_Ga=p,i=7,c=30,r=12,q=2\e\\", out
     end
+
+    test 'appends z= for background placements (z: -1 draws behind text)' do
+      out = Przn::ImageUtil.kitty_place(image_id: 7, cols: 80, rows: 30, z: -1)
+      assert_equal "\e_Ga=p,i=7,c=80,r=30,q=2,z=-1\e\\", out
+    end
+  end
+
+  sub_test_case 'kitty_delete_placements' do
+    test 'emits action=d with d=i (lowercase) so storage stays cached' do
+      assert_equal "\e_Ga=d,d=i,i=42,q=2\e\\",
+                   Przn::ImageUtil.kitty_delete_placements(image_id: 42)
+    end
   end
 
   sub_test_case 'kitty_clear_all' do
