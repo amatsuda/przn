@@ -69,14 +69,19 @@ class ImageUtilTest < Test::Unit::TestCase
   end
 
   sub_test_case 'kitty_place' do
-    test 'emits an APC sequence with action=p, the given id, and grid size' do
+    test 'emits an APC sequence with action=p, the given id, grid size, and C=1' do
       out = Przn::ImageUtil.kitty_place(image_id: 7, cols: 30, rows: 12)
-      assert_equal "\e_Ga=p,i=7,c=30,r=12,q=2\e\\", out
+      assert_equal "\e_Ga=p,i=7,c=30,r=12,C=1,q=2\e\\", out
     end
 
     test 'appends z= for background placements (z: -1 draws behind text)' do
       out = Przn::ImageUtil.kitty_place(image_id: 7, cols: 80, rows: 30, z: -1)
-      assert_equal "\e_Ga=p,i=7,c=80,r=30,q=2,z=-1\e\\", out
+      assert_equal "\e_Ga=p,i=7,c=80,r=30,C=1,q=2,z=-1\e\\", out
+    end
+
+    test 'C=1 is always present so placements never wrap or scroll the screen' do
+      out = Przn::ImageUtil.kitty_place(image_id: 1, cols: 999, rows: 999)
+      assert(out.include?(',C=1,'), "expected C=1 in oversize placement: #{out.inspect}")
     end
   end
 

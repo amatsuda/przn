@@ -1457,7 +1457,7 @@ class RendererTest < Test::Unit::TestCase
       r.send(:apply_slide_background, slide)
       payload = term.writes.join
       assert_match(/\e_Ga=t,t=f,f=100,i=\d+,q=2;/, payload, 'expected an upload sequence')
-      assert_match(/\e_Ga=p,i=\d+,c=80,r=30,q=2,z=-1\e\\/, payload,
+      assert_match(/\e_Ga=p,i=\d+,c=80,r=30,C=1,q=2,z=-1\e\\/, payload,
                    "expected a z=-1 placement: #{payload.inspect}")
       assert_includes term.move_ops, [1, 1], 'expected the bg placement anchored at (1,1)'
     end

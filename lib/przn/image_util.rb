@@ -102,8 +102,12 @@ module Przn
     # current cursor position, scaled to fit `cols` x `rows` cells.
     # `z` sets the z-index — negative values draw the image behind
     # text cells (used by slide background images at z: -1).
+    # `C=1` (suppress cursor movement / wrap / scroll) is always set
+    # — przn is a presentation tool, never the kind of context that
+    # wants an image landing near the bottom to scroll prior rows
+    # off-screen; oversize placements clip at the pane edge instead.
     def kitty_place(image_id:, cols:, rows:, z: nil)
-      params = +"a=p,i=#{image_id},c=#{cols},r=#{rows},q=2"
+      params = +"a=p,i=#{image_id},c=#{cols},r=#{rows},C=1,q=2"
       params << ",z=#{z}" if z
       "\e_G#{params}\e\\"
     end
