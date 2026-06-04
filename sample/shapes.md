@@ -38,6 +38,14 @@
 <arrow x1="10" y1="12" x2="70" y2="18" stroke="yellow" stroke-width="0.5"/>
 <arrow x1="40" y1="22" x2="40" y2="6"  stroke="red"    stroke-width="0.4"/>
 
+# Paths
+
+<path d="M 10 5 L 70 5 L 40 25 Z" fill="cyan" stroke="white" stroke-width="0.3"/>
+
+# Path — cubic Bezier curve
+
+<path d="M 10 20 C 25 5 55 5 70 20" stroke="orange" stroke-width="0.4" fill="none"/>
+
 # Mixed composition
 <line x1="5" y1="50%" x2="75" y2="50%" stroke="white" stroke-width="0.3"/>
 <circle cx="20" cy="50%" r="2" fill="red"/>

@@ -467,7 +467,7 @@ module Przn
 
     SHAPE_DEFAULT_STROKE_WIDTH = 0.2
 
-    OPEN_SHAPES = %i[line polyline arrow].freeze
+    OPEN_SHAPES = %i[line polyline arrow path].freeze
 
     def open_shape?(kind)
       OPEN_SHAPES.include?(kind)
@@ -529,6 +529,13 @@ module Przn
         {bbox_x: xs.min, bbox_y: ys.min,
          bbox_w: xs.max - xs.min, bbox_h: ys.max - ys.min,
          points: pts}
+      when :path
+        # Parse `d`, compute bbox in pixels, and rewrite the path data
+        # from cell-space (what the user wrote) into pixel-space (what
+        # the SVG viewBox expects). Rewriting avoids wrapping in a
+        # `<g transform="scale(...)">` — a non-uniform scale would
+        # render strokes elliptically, which is not what anyone wants.
+        path_to_pixels(attrs['d'], cell_w, cell_h)
       end
     end
 
@@ -575,6 +582,159 @@ module Przn
       pts
     end
 
+    # Tokenizer / rewriter for SVG `<path d="...">` data. Returns
+    # `{bbox_x:, bbox_y:, bbox_w:, bbox_h:, d:}` (all in pixel space)
+    # or nil if the path data has an unknown command.
+    #
+    # User authors path data in 1-indexed slide cells, matching every
+    # other shape coord (`<line x1>`, `<rect x>`, polyline points …).
+    # We walk each command, accumulate every endpoint and control
+    # point as a pixel coord (over-estimates the bbox slightly for
+    # cubic / quadratic curves — control points commonly sit outside
+    # the visible curve — but that's safe), and re-emit `d` with the
+    # numbers translated. Absolute positions take the `(N-1)*cell_dim`
+    # offset; relative deltas use the unshifted `N*cell_dim`. Arc `A`
+    # / `a` rx & ry scale anisotropically (rx by cell_w, ry by
+    # cell_h) so an author who wants a circular arc has to use equal
+    # rx/ry written in cell-widths of *each* axis — same as the
+    # `<circle>` vs `<ellipse>` distinction.
+    PATH_TOKEN_RE = /[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/
+    def path_to_pixels(d_attr, cell_w, cell_h)
+      return nil if d_attr.nil?
+      tokens = d_attr.to_s.scan(PATH_TOKEN_RE)
+      return nil if tokens.empty?
+
+      xs = []
+      ys = []
+      cx = 0.0
+      cy = 0.0
+      sx = 0.0   # subpath start (for Z)
+      sy = 0.0
+      out = []
+      cmd = nil
+      i = 0
+
+      pos_x = ->(x) { (x - 1) * cell_w }
+      pos_y = ->(y) { (y - 1) * cell_h }
+      del_x = ->(x) { x * cell_w }
+      del_y = ->(y) { y * cell_h }
+
+      while i < tokens.size
+        tok = tokens[i]
+        if tok.match?(/\A[A-Za-z]\z/)
+          cmd = tok
+          out << cmd
+          i += 1
+          if cmd == 'Z' || cmd == 'z'
+            cx, cy = sx, sy
+          end
+          next
+        end
+
+        case cmd
+        when 'M', 'L', 'T'
+          x = tokens[i].to_f; y = tokens[i + 1].to_f
+          cx, cy = x, y
+          sx, sy = cx, cy if cmd == 'M'
+          px = pos_x.call(cx); py = pos_y.call(cy)
+          xs << px; ys << py
+          out << "#{fnum(px)} #{fnum(py)}"
+          i += 2
+          cmd = 'L' if cmd == 'M'
+        when 'm', 'l', 't'
+          dx = tokens[i].to_f; dy = tokens[i + 1].to_f
+          cx += dx; cy += dy
+          sx, sy = cx, cy if cmd == 'm'
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << "#{fnum(del_x.call(dx))} #{fnum(del_y.call(dy))}"
+          i += 2
+          cmd = 'l' if cmd == 'm'
+        when 'H'
+          x = tokens[i].to_f
+          cx = x
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << fnum(pos_x.call(cx))
+          i += 1
+        when 'h'
+          dx = tokens[i].to_f
+          cx += dx
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << fnum(del_x.call(dx))
+          i += 1
+        when 'V'
+          y = tokens[i].to_f
+          cy = y
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << fnum(pos_y.call(cy))
+          i += 1
+        when 'v'
+          dy = tokens[i].to_f
+          cy += dy
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << fnum(del_y.call(dy))
+          i += 1
+        when 'C'
+          nums = (0..5).map { |k| tokens[i + k].to_f }
+          # Three (x, y) pairs: two control points then endpoint.
+          pairs = nums.each_slice(2).to_a
+          pairs.each { |x, y| xs << pos_x.call(x); ys << pos_y.call(y) }
+          cx, cy = pairs.last
+          out << pairs.map { |x, y| "#{fnum(pos_x.call(x))} #{fnum(pos_y.call(y))}" }.join(' ')
+          i += 6
+        when 'c'
+          nums = (0..5).map { |k| tokens[i + k].to_f }
+          pairs_rel = nums.each_slice(2).to_a
+          pairs_abs = pairs_rel.map { |dx, dy| [cx + dx, cy + dy] }
+          pairs_abs.each { |x, y| xs << pos_x.call(x); ys << pos_y.call(y) }
+          cx, cy = pairs_abs.last
+          out << pairs_rel.map { |dx, dy| "#{fnum(del_x.call(dx))} #{fnum(del_y.call(dy))}" }.join(' ')
+          i += 6
+        when 'S', 'Q'
+          nums = (0..3).map { |k| tokens[i + k].to_f }
+          pairs = nums.each_slice(2).to_a
+          pairs.each { |x, y| xs << pos_x.call(x); ys << pos_y.call(y) }
+          cx, cy = pairs.last
+          out << pairs.map { |x, y| "#{fnum(pos_x.call(x))} #{fnum(pos_y.call(y))}" }.join(' ')
+          i += 4
+        when 's', 'q'
+          nums = (0..3).map { |k| tokens[i + k].to_f }
+          pairs_rel = nums.each_slice(2).to_a
+          pairs_abs = pairs_rel.map { |dx, dy| [cx + dx, cy + dy] }
+          pairs_abs.each { |x, y| xs << pos_x.call(x); ys << pos_y.call(y) }
+          cx, cy = pairs_abs.last
+          out << pairs_rel.map { |dx, dy| "#{fnum(del_x.call(dx))} #{fnum(del_y.call(dy))}" }.join(' ')
+          i += 4
+        when 'A'
+          rx = tokens[i].to_f; ry = tokens[i + 1].to_f
+          rot = tokens[i + 2].to_f
+          la  = tokens[i + 3].to_i
+          sw_flag = tokens[i + 4].to_i
+          x = tokens[i + 5].to_f; y = tokens[i + 6].to_f
+          cx, cy = x, y
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << "#{fnum(del_x.call(rx))} #{fnum(del_y.call(ry))} #{fnum(rot)} #{la} #{sw_flag} #{fnum(pos_x.call(x))} #{fnum(pos_y.call(y))}"
+          i += 7
+        when 'a'
+          rx = tokens[i].to_f; ry = tokens[i + 1].to_f
+          rot = tokens[i + 2].to_f
+          la  = tokens[i + 3].to_i
+          sw_flag = tokens[i + 4].to_i
+          dx = tokens[i + 5].to_f; dy = tokens[i + 6].to_f
+          cx += dx; cy += dy
+          xs << pos_x.call(cx); ys << pos_y.call(cy)
+          out << "#{fnum(del_x.call(rx))} #{fnum(del_y.call(ry))} #{fnum(rot)} #{la} #{sw_flag} #{fnum(del_x.call(dx))} #{fnum(del_y.call(dy))}"
+          i += 7
+        else
+          return nil
+        end
+      end
+
+      return nil if xs.empty?
+      {bbox_x: xs.min, bbox_y: ys.min,
+       bbox_w: xs.max - xs.min, bbox_h: ys.max - ys.min,
+       d: out.join(' ')}
+    end
+
     # Compose the SVG document shipped to the terminal. The viewBox is
     # in pixels and matches the cell-quantized rasterization footprint
     # exactly, so 1 user unit = 1 pixel — no anisotropic stretching,
@@ -615,6 +775,11 @@ module Przn
         %(<polyline points="#{points_attr(geom[:points])}"#{paint}/>)
       when :polygon
         %(<polygon points="#{points_attr(geom[:points])}"#{paint}/>)
+      when :path
+        # `d` has already been rewritten into pixel space by
+        # path_to_pixels — stash on the geom hash so the renderer
+        # never needs to know about cell coordinates here.
+        %(<path d="#{geom[:d]}"#{paint}/>)
       end
     end
 

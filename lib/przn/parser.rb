@@ -224,7 +224,7 @@ module Przn
         # Graphics Protocol — Echoes content-sniffs the payload and
         # rasterizes it through its native CoreGraphics fast path
         # (sub-millisecond for path-only SVGs, which these always are).
-        when %r{\A\s*<(rect|circle|ellipse|line|polyline|polygon|arrow)((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
+        when %r{\A\s*<(rect|circle|ellipse|line|polyline|polygon|arrow|path)((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
           kind = Regexp.last_match(1).to_sym
           attrs = parse_xml_attrs(Regexp.last_match(2)).transform_keys(&:to_s)
           blocks << {type: :shape, kind: kind, attrs: attrs}

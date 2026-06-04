@@ -587,6 +587,14 @@ class ParserTest < Test::Unit::TestCase
       assert_equal '50,2 60,15 40,15', block[:attrs]['points']
     end
 
+    test '<path> captures the d attribute' do
+      slide = Przn::Parser.parse(%(# t\n\n<path d="M 10 5 L 70 5 Z" stroke="red"/>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :path, block[:kind]
+      assert_equal 'M 10 5 L 70 5 Z', block[:attrs]['d']
+      assert_equal 'red', block[:attrs]['stroke']
+    end
+
     test '<arrow> kind and endpoint attrs' do
       slide = Przn::Parser.parse(
         %(# t\n\n<arrow x1="10" y1="15" x2="70" y2="15" stroke="red" stroke-width="0.5"/>\n)

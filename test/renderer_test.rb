@@ -1159,6 +1159,46 @@ class RendererTest < Test::Unit::TestCase
       assert_match(/c=2,r=12/, placement_str)
     end
 
+    test 'path: M/L coords are rewritten from cells to pixels' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :path,
+                              attrs: {'d' => 'M 10 5 L 70 5 Z', 'stroke' => 'red', 'stroke-width' => '0.3'}})
+      svg = uploaded_svg(term)
+      # (10,5) → ((10-1)*10, (5-1)*20) = (90, 80); (70,5) → (690, 80).
+      assert_match(%r{<path d="M 90 80 L 690 80 Z" fill="none" stroke="red" stroke-width="3"/>}, svg)
+    end
+
+    test 'path: relative h/v deltas use scale (no -1 offset)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :path,
+                              attrs: {'d' => 'M 10 10 h 50 v 10 h -50 Z', 'stroke' => 'cyan'}})
+      svg = uploaded_svg(term)
+      # M 10 10 → (90, 180). h 50 → +500 px. v 10 → +200 px. h -50 → -500 px.
+      assert_match(%r{<path d="M 90 180 h 500 v 200 h -500 Z"}, svg)
+    end
+
+    test 'path: cubic Bezier control points contribute to bbox' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      # M 10 10 C 30 0 50 0 70 10 — control points at y=0 (above the viewBox-line endpoints)
+      r.send(:render_shape, {type: :shape, kind: :path,
+                              attrs: {'d' => 'M 10 10 C 30 0 50 0 70 10', 'stroke' => 'lime', 'stroke-width' => '0.3'}})
+      svg = uploaded_svg(term)
+      # Control points at y=0 → pixel y=-20. bbox stretches up to include them.
+      assert_match(%r{viewBox="\d+ -\d+ \d+ \d+"}, svg,
+                   "expected negative y in viewBox to include control points: #{svg.inspect}")
+    end
+
+    test 'path: returns nil geometry on unknown command (renderer skips)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :path,
+                              attrs: {'d' => 'M 10 5 W 70 5', 'stroke' => 'red'}})  # W isn't valid
+      assert_nil uploaded_svg(term)
+    end
+
     test 'percent coords resolve against terminal cells, then convert to pixels' do
       term = ShapeFakeTerm.new   # 80 cols × 30 rows, cell 10×20
       r = Przn::Renderer.new(term)

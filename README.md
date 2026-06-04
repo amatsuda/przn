@@ -287,7 +287,7 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 
 ### Shapes and Lines
 
-Keynote-style vector shapes — `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`, `<arrow>` — drawn natively by the terminal. Each tag is self-closing, absolute-positioned (contributes 0 to the layout flow), and accepts geometry attrs in slide cells or `N%` of the terminal width / height.
+Keynote-style vector shapes — `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`, `<arrow>`, `<path>` — drawn natively by the terminal. Each tag is self-closing, absolute-positioned (contributes 0 to the layout flow), and accepts geometry attrs in slide cells or `N%` of the terminal width / height.
 
 ```markdown
 <line   x1="10" y1="5"  x2="70" y2="5"  stroke="white" stroke-width="0.3"/>
@@ -297,6 +297,7 @@ Keynote-style vector shapes — `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<p
 <ellipse cx="50" cy="15" rx="20" ry="6" fill="none" stroke="gold" stroke-width="0.5"/>
 <polyline points="10,5 30,15 50,5 70,15" stroke="lime" stroke-width="0.4"/>
 <polygon points="50,2 60,15 40,15" fill="gold"/>
+<path d="M 10 20 C 30 12 50 12 70 20" stroke="orange" stroke-width="0.4"/>
 ```
 
 - Geometry attrs per shape:
@@ -305,9 +306,10 @@ Keynote-style vector shapes — `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<p
   - `<ellipse>`: `cx`, `cy`, `rx`, `ry`.
   - `<line>`, `<arrow>`: `x1`, `y1`, `x2`, `y2`. The arrow grows a filled triangular head at `(x2, y2)`; the head sizes scale with `stroke-width` (length 4×, width 3×). The head's color defaults to `stroke`; an explicit `fill="..."` recolors only the head (handy for two-tone arrows).
   - `<polyline>` / `<polygon>`: `points="x1,y1 x2,y2 ..."` (space- or comma-separated; each coord can be `N%`).
+  - `<path>`: `d="..."` — SVG path data using `M / L / H / V / C / S / Q / T / A / Z` commands (uppercase = absolute, lowercase = relative). Coordinates are in slide cells exactly like every other shape (`<path d="M 10 5 L 70 5"/>` runs a line from cell `(10, 5)` to `(70, 5)`); under the hood the renderer rewrites `d` into pixel coords so the stroke renders crisply at the cell aspect ratio. Percents inside `d` aren't supported (only plain numbers); the bbox is computed from every endpoint and control point in `d`, which slightly over-estimates curves (control points often sit outside the visible curve) — safe but means the placement reserves a few extra cells in that direction.
 - Paint attrs pass through to SVG verbatim: `fill`, `stroke`, `stroke-width`, `opacity`, `fill-opacity`, `stroke-opacity`, `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray`, `stroke-miterlimit`, `fill-rule`, `transform`.
 - Colors: `#rrggbb` / `#rgb` / `rgba(...)` always work. Echoes' fast path supports a focused named-color set — `black`, `white`, `red`, `green`, `blue`, `yellow`, `cyan`, `magenta`, `gray`, `orange`, `purple`, `pink`, `brown`, `lime`, `navy`, `teal`, `silver`, `maroon`, `olive` (plus `aqua` / `fuchsia` / `grey` aliases). Anything outside that set bails to a slower path that may silently render nothing — when in doubt, use a hex code.
-- Defaults: closed shapes (`rect`, `circle`, `ellipse`, `polygon`) fill `white`; open shapes (`line`, `polyline`, `arrow`) stroke `white` at `stroke-width="0.2"` (a cell-width hairline). Override via explicit `fill=` / `stroke=` when your slide background is light.
+- Defaults: closed shapes (`rect`, `circle`, `ellipse`, `polygon`) fill `white`; open shapes (`line`, `polyline`, `arrow`, `path`) stroke `white` at `stroke-width="0.2"` (a cell-width hairline). Override via explicit `fill=` / `stroke=` when your slide background is light. `<path>` can be either open (default) or closed via `Z` plus an explicit `fill="..."`.
 - Coordinate semantics: positional attrs (`x`, `y`, `cx`, `cy`, `x1`, `y1`, `x2`, `y2`, `points`) are 1-indexed slide cells, matching `<at>` and `<img>` (so `x="10" y="5"` lands at column 10, row 5). Size attrs (`width`, `height`, `rx`, `ry`) are cell counts on the respective axis. The shape is composed in pixel coords behind the scenes using the terminal's actual cell pixel size, so a `circle r="5"` renders as a true circle even though terminal cells are typically ~1:2 wide-to-tall.
 - Stroke widths are in **cell-widths** (typically ~12 px each) — `stroke-width="0.3"` is roughly a 3–4 pixel hairline regardless of cell aspect.
 - Stroke is rendered inside the shape's padded bounding box, so the stroke won't get clipped.
