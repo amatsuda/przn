@@ -340,6 +340,32 @@ class ParserTest < Test::Unit::TestCase
                    Przn::Parser.parse_inline('a<br><br>b')
     end
 
+    test '<br> inside <size> splits into two :tag segments + :break' do
+      assert_equal [[:tag, 'si', '2'], [:break], [:tag, 'ze', '2']],
+                   Przn::Parser.parse_inline('<size=2>si<br>ze</size>')
+    end
+
+    test '<br> inside <color> splits into two :tag segments + :break' do
+      assert_equal [[:tag, 'a', 'red'], [:break], [:tag, 'b', 'red']],
+                   Przn::Parser.parse_inline('<color=red>a<br>b</color>')
+    end
+
+    test '<br> inside <font> splits, carrying the same attrs across' do
+      result = Przn::Parser.parse_inline('<font face="Menlo">a<br>b</font>')
+      assert_equal [[:font, 'a', {face: 'Menlo'}], [:break], [:font, 'b', {face: 'Menlo'}]],
+                   result
+    end
+
+    test '<br> inside <note> splits the note across lines' do
+      assert_equal [[:note, 'a'], [:break], [:note, 'b']],
+                   Przn::Parser.parse_inline('<note>a<br>b</note>')
+    end
+
+    test '<br> inside kramdown {::tag} splits too' do
+      assert_equal [[:tag, 'a', 'red'], [:break], [:tag, 'b', 'red']],
+                   Przn::Parser.parse_inline('{::tag name="red"}a<br>b{:/tag}')
+    end
+
     test 'interleaves XML tags with surrounding text' do
       result = Przn::Parser.parse_inline('hi <size=3>X</size> there')
       assert_equal [[:text, 'hi '], [:tag, 'X', '3'], [:text, ' there']], result

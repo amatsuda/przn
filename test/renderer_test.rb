@@ -702,6 +702,26 @@ class RendererTest < Test::Unit::TestCase
       assert(writes.include?('s=3'),  "expected <size=3> to translate to s=3 in OSC 66: #{writes.inspect}")
     end
 
+    test '<br> splits content into multiple rows at the same column' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: 'a<br>b'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # body_scale is 2 → second line at y=7, same x.
+      assert_includes moves, [:move_to, 5, 10]
+      assert_includes moves, [:move_to, 7, 10]
+    end
+
+    test '<br> inside <size> inside <at> renders both chunks at the size' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: '<size=3>si<br>ze</size>'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(writes.scan(/s=3/).size >= 2,
+             "expected both 'si' and 'ze' to be sized at s=3: #{writes.inspect}")
+      refute_match(/<br>/, writes, 'no literal <br> should reach the terminal')
+    end
+
     test 'silently skips when x or y is missing or unparseable' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {y: '5'}, content: 'x'})

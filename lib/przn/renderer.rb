@@ -391,8 +391,18 @@ module Przn
       return if x.nil? || y.nil?
 
       segments = Parser.parse_inline(block[:content].to_s)
-      @terminal.move_to(y, x)
-      @terminal.write render_segments_scaled(segments, body_scale)
+      # Split on `:break` (from <br>) and emit each chunk on its own
+      # row at the same x. `render_segments_scaled` itself doesn't
+      # know about :break — it's a styling renderer, not a wrapping
+      # one — so we handle the line break here.
+      lines = [[]]
+      segments.each do |seg|
+        seg[0] == :break ? (lines << []) : (lines.last << seg)
+      end
+      lines.each_with_index do |line_segs, idx|
+        @terminal.move_to(y + idx * body_scale, x)
+        @terminal.write render_segments_scaled(line_segs, body_scale)
+      end
     end
 
     # Draw a Keynote-style shape primitive (rect, circle, ellipse, line,

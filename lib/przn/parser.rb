@@ -384,20 +384,22 @@ module Przn
 
       until scanner.eos?
         if scanner.scan(/<size=([^>\s]+)>(.*?)<\/size>/)
-          segments << [:tag, scanner[2], scanner[1]]
+          push_with_breaks(segments, scanner[2]) { |chunk| [:tag, chunk, scanner[1]] }
         elsif scanner.scan(/<color=([^>\s]+)>(.*?)<\/color>/)
-          segments << [:tag, scanner[2], scanner[1]]
+          push_with_breaks(segments, scanner[2]) { |chunk| [:tag, chunk, scanner[1]] }
         elsif scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
           # Rabbit-compatible kramdown spelling; covers both size and color.
-          segments << [:tag, scanner[2], scanner[1]]
+          push_with_breaks(segments, scanner[2]) { |chunk| [:tag, chunk, scanner[1]] }
         elsif scanner.scan(%r{<font((?:\s+#{ATTR_RE_SRC})+)\s*>(.*?)</font>}o)
-          segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
+          font_attrs = parse_font_attrs(scanner[1])
+          push_with_breaks(segments, scanner[2]) { |chunk| [:font, chunk, font_attrs] }
         elsif scanner.scan(%r{\{::font((?:\s+#{ATTR_RE_SRC})+)\}(.*?)\{:/font\}}o)
-          segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
+          font_attrs = parse_font_attrs(scanner[1])
+          push_with_breaks(segments, scanner[2]) { |chunk| [:font, chunk, font_attrs] }
         elsif scanner.scan(/<note>(.*?)<\/note>/)
-          segments << [:note, scanner[1]]
+          push_with_breaks(segments, scanner[1]) { |chunk| [:note, chunk] }
         elsif scanner.scan(/\{::note\}(.*?)\{:\/note\}/)
-          segments << [:note, scanner[1]]
+          push_with_breaks(segments, scanner[1]) { |chunk| [:note, chunk] }
         elsif scanner.scan(/<wait\s*\/>/) || scanner.scan('{::wait/}')
           # skip wait markers in inline text
         elsif scanner.scan(/<br\s*\/?>/i)
@@ -439,6 +441,21 @@ module Przn
         else
           acc << seg
         end
+      end
+    end
+
+    # Push a styled segment to `segments`, splitting its inner content
+    # on `<br>` so a `<br>` written inside a `<size>` / `<color>` /
+    # `<font>` / `<note>` etc. wrapper closes the current line the same
+    # way it would inside plain text. Without this, the `.*?` inside
+    # the wrapper regex captures `<br>` literally and the styled
+    # segment carries it as text.
+    BR_RE = /<br\s*\/?>/i
+    def push_with_breaks(segments, content)
+      chunks = content.split(BR_RE, -1)
+      chunks.each_with_index do |chunk, i|
+        segments << yield(chunk) unless chunk.empty?
+        segments << [:break] if i < chunks.size - 1
       end
     end
   end
