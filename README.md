@@ -159,45 +159,39 @@ term
 
 ### Text sizing
 
-Uses Rabbit-compatible `{::tag}` notation. Supported size names: `xx-small`, `x-small`, `small`, `large`, `x-large`, `xx-large`, `xxx-large`, `xxxx-large`, and numeric `1`-`7`.
-
-```markdown
-{::tag name="x-large"}Big text{:/tag}
-{::tag name="7"}Maximum size{:/tag}
-```
-
-An XML-style alternative is also accepted:
+Supported size names: `xx-small`, `x-small`, `small`, `large`, `x-large`, `xx-large`, `xxx-large`, `xxxx-large`, and numeric `1`-`7`.
 
 ```markdown
 <size=x-large>Big text</size>
 <size=7>Maximum size</size>
 ```
 
+Rabbit-compatible kramdown form is also accepted: `{::tag name="x-large"}Big text{:/tag}`.
+
 On [Kitty](https://sw.kovidgoyal.net/kitty/)-compatible terminals, sized text is rendered using the OSC 66 text sizing protocol. On other terminals, the markup is silently ignored.
 
 ### Color
 
-Named ANSI colors (`red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, plus `bright_*` variants) and 6-digit hex. Use `{::tag name="..."}` (kramdown form) or the `color` attribute on `<font>` (see [Font](#font)).
+Named ANSI colors (`red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, plus `bright_*` variants) and 6-digit hex.
 
 ```markdown
-{::tag name="red"}warning{:/tag}
-{::tag name="ff5555"}custom hex{:/tag}
-
-<font color="red">warning</font>
-<font color="ff5555">custom hex</font>
+<color=red>warning</color>
+<color=ff5555>custom hex</color>
 ```
+
+For combined styling, the `color` attribute on `<font>` works too (see [Font](#font)). Rabbit-compatible kramdown form is also accepted: `{::tag name="red"}warning{:/tag}`.
 
 ### Font
 
-HTML 4-style `<font>` tag with `face`, `size`, and `color` attributes. Any subset, in any order. The kramdown shape is also accepted.
+HTML4-style `<font>` tag with `face`, `size`, and `color` attributes. Any subset, in any order.
 
 ```markdown
 <font face="Helvetica Neue">Title</font>
 <font face="Menlo" size="3">code</font>
 <font face="Menlo" size="3" color="red">flagged</font>
-
-{::font name="Helvetica Neue"}Title{:/font}
 ```
+
+Rabbit-compatible kramdown form is also accepted: `{::font name="Helvetica Neue"}Title{:/font}` (`name` maps to `face`).
 
 `face` requires a terminal that honors the OSC 66 `f=` extension (e.g. [Echoes](https://github.com/amatsuda/echoes)). For PDF export, the family is registered with Prawn via fontconfig — families that can't be found fall through to the default font.
 
@@ -259,9 +253,9 @@ Place text at an arbitrary `(column, row)` on the slide, escaping the normal top
 <at x="40" y="15"><size=3>BIG</size></at>
 <at x="80" y="25"><color=red>warn</color></at>
 <at x="50%" y="50%">dead center</at>
-
-{::at x="10" y="20"}same thing, kramdown form{:/at}
 ```
+
+Rabbit-compatible kramdown form is also accepted: `{::at x="10" y="20"}content{:/at}`.
 
 - `x` / `y` accept two forms:
   - **Plain integer** — 1-based terminal cells, matching the cursor-position escape (`\e[y;xH`). `x="1" y="1"` is the very top-left of the slide pane.
@@ -399,6 +393,19 @@ normal top-down content, no slot routing.
 
 ### Comments
 
+HTML-style comments — single-line or multi-line — are stripped at parse time.
+
+```markdown
+<!-- single-line note to self, hidden from the deck -->
+
+<!--
+multi-line
+hidden block
+-->
+```
+
+Rabbit-compatible kramdown form is also accepted:
+
 ```markdown
 {::comment}
 This text is hidden from the presentation.
@@ -408,9 +415,10 @@ This text is hidden from the presentation.
 ### Notes
 
 ```markdown
-Visible text {::note}(speaker note){:/note}
 Visible text <note>(speaker note)</note>
 ```
+
+Rabbit-compatible kramdown form is also accepted: `{::note}(speaker note){:/note}`.
 
 ### Escaping `<`, `>`, `&`
 
@@ -422,16 +430,17 @@ To show literal markup characters that would otherwise be interpreted as a tag, 
 A &amp; B               renders as: A & B
 ```
 
-A bare `<` not followed by a recognized tag name renders literally as well, so most accidental `<` characters are fine. The entities are only needed when you'd otherwise hit one of the tag patterns (`<size=...>`, `<font ...>`, `<note>`, `<wait/>`, `<center>`, `<right>`, `<bg .../>`).
+A bare `<` not followed by a recognized tag name renders literally as well, so most accidental `<` characters are fine. The entities are only needed when you'd otherwise hit one of the tag patterns (`<size=...>`, `<color=...>`, `<font ...>`, `<note>`, `<wait/>`, `<center>`, `<right>`, `<at ...>`, `<bg .../>`, `<img .../>`, shape tags like `<rect/>` / `<circle/>`, or `<!-- ... -->`).
 
 ### Wait marker
 
 Self-closing presentation flow marker, consumed at parse time:
 
 ```markdown
-{::wait/}
 <wait/>
 ```
+
+Rabbit-compatible kramdown form is also accepted: `{::wait/}`.
 
 ## Theming
 

@@ -72,6 +72,13 @@ module Przn
         line = lines[i]
 
         case line
+        # <!-- ... --> block (single or multi line) — skip entirely.
+        # Sibling of the kramdown `{::comment} ... {:/comment}` form.
+        when /\A\s*<!--/
+          # Same line? Skip just this line.
+          i += 1 unless line.match?(/-->/)
+          i += 1 while i < lines.size && !lines[i].match?(/-->/)
+
         # {::comment} ... {:/comment} block — skip entirely
         when /\A\s*\{::comment\}/
           i += 1
@@ -376,19 +383,22 @@ module Przn
       scanner = StringScanner.new(text)
 
       until scanner.eos?
-        if scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
+        if scanner.scan(/<size=([^>\s]+)>(.*?)<\/size>/)
           segments << [:tag, scanner[2], scanner[1]]
-        elsif scanner.scan(/<size=([^>\s]+)>(.*?)<\/size>/)
+        elsif scanner.scan(/<color=([^>\s]+)>(.*?)<\/color>/)
+          segments << [:tag, scanner[2], scanner[1]]
+        elsif scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
+          # Rabbit-compatible kramdown spelling; covers both size and color.
           segments << [:tag, scanner[2], scanner[1]]
         elsif scanner.scan(%r{<font((?:\s+#{ATTR_RE_SRC})+)\s*>(.*?)</font>}o)
           segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
         elsif scanner.scan(%r{\{::font((?:\s+#{ATTR_RE_SRC})+)\}(.*?)\{:/font\}}o)
           segments << [:font, scanner[2], parse_font_attrs(scanner[1])]
-        elsif scanner.scan(/\{::note\}(.*?)\{:\/note\}/)
-          segments << [:note, scanner[1]]
         elsif scanner.scan(/<note>(.*?)<\/note>/)
           segments << [:note, scanner[1]]
-        elsif scanner.scan('{::wait/}') || scanner.scan(/<wait\s*\/>/)
+        elsif scanner.scan(/\{::note\}(.*?)\{:\/note\}/)
+          segments << [:note, scanner[1]]
+        elsif scanner.scan(/<wait\s*\/>/) || scanner.scan('{::wait/}')
           # skip wait markers in inline text
         elsif scanner.scan('&lt;')
           segments << [:text, '<']

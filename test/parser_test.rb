@@ -220,8 +220,27 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case 'Rabbit: {::comment}' do
-    test 'skips {::comment} blocks entirely' do
+  sub_test_case 'Comments' do
+    test 'XML form: <!-- ... --> single-line is skipped' do
+      md = "before\n<!-- hidden -->\nafter\n"
+      slide = Przn::Parser.parse_slide(md)
+      texts = slide.blocks.select { |b| b[:type] == :paragraph }.map { |b| b[:content] }
+      assert_include texts, 'before'
+      assert_include texts, 'after'
+      assert_not_include texts, 'hidden'
+    end
+
+    test 'XML form: <!-- ... --> multi-line is skipped' do
+      md = "before\n<!--\nhidden line 1\nhidden line 2\n-->\nafter\n"
+      slide = Przn::Parser.parse_slide(md)
+      texts = slide.blocks.select { |b| b[:type] == :paragraph }.map { |b| b[:content] }
+      assert_include texts, 'before'
+      assert_include texts, 'after'
+      assert_not_include texts, 'hidden line 1'
+      assert_not_include texts, 'hidden line 2'
+    end
+
+    test 'kramdown form: {::comment} block is skipped' do
       md = "before\n{::comment}\nhidden\n{:/comment}\nafter\n"
       slide = Przn::Parser.parse_slide(md)
       texts = slide.blocks.select { |b| b[:type] == :paragraph }.map { |b| b[:content] }
@@ -286,12 +305,12 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:tag, 'max', '7']],       Przn::Parser.parse_inline('<size=7>max</size>')
     end
 
-    test 'color is set via <font color="...">, not a standalone <color> tag' do
-      # Standalone <color=...> is no longer recognized — falls through to text.
-      result = Przn::Parser.parse_inline('<color=red>warn</color>')
-      assert_equal :text, result[0][0]
+    test 'parses <color=NAME>...</color>' do
+      assert_equal [[:tag, 'warn', 'red']],    Przn::Parser.parse_inline('<color=red>warn</color>')
+      assert_equal [[:tag, 'hex', 'ff5555']],  Przn::Parser.parse_inline('<color=ff5555>hex</color>')
+    end
 
-      # The HTML4-style <font color="..."> form is the supported XML way.
+    test '<font color="..."> remains supported (HTML4 form)' do
       assert_equal [[:font, 'warn', {color: 'red'}]],
                    Przn::Parser.parse_inline('<font color="red">warn</font>')
     end
