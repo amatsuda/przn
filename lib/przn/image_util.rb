@@ -116,6 +116,16 @@ module Przn
       "\e_Ga=d,d=i,i=#{image_id},q=2\e\\"
     end
 
+    # Kitty Graphics Protocol: delete every placement on the screen
+    # while keeping the stored image data alive (lowercase `d=a`).
+    # Called at the start of each slide render to wipe the previous
+    # slide's `<img>` / shape placements; the new slide re-emits its
+    # own placements so cached images need only the small placement
+    # command, not a re-transmission.
+    def kitty_delete_all_placements
+      "\e_Ga=d,d=a,q=2\e\\"
+    end
+
     # Kitty Graphics Protocol: delete every placement and free the
     # stored image data. Used on quit so previously-rendered images
     # don't leak through onto the user's restored shell screen

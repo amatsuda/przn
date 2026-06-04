@@ -64,9 +64,29 @@ module Przn
     def render(slide, current:, total:, started_at: nil)
       @mutex.synchronize do
         @terminal.clear
+        # Wipe the previous slide's `<img>` / shape placements (cached
+        # image data stays alive). The current slide re-emits its own
+        # placements below; the alternative — letting placements leak
+        # — would mean every prior slide's images bleed through onto
+        # later ones, since kitty placements aren't tied to the cell
+        # buffer that @terminal.clear empties.
+        @terminal.write ImageUtil.kitty_delete_all_placements if ImageUtil.kitty_terminal?
         apply_slide_background(slide)
         w = @terminal.width
         h = @terminal.height
+
+        # Pre-pass: register shape placements BEFORE any text writes.
+        # Echoes' kitty graphics implementation erases the cells covered
+        # by a placement when the placement is registered, then text
+        # writes to those cells later restore the cell buffer (via
+        # erase_multicell_at). The placement itself stays in the GUI's
+        # @placements list and re-blits on top — but where the SVG is
+        # transparent, the underlying text shows through. Solid-filled
+        # shapes still occlude text (Echoes has no z-index yet); thin
+        # strokes / outlines coexist with text just fine.
+        slide.blocks.each do |block|
+          render_shape(block) if block[:type] == :shape
+        end
 
         # Resolve the slide's effective layout name:
         #   `# Title {layout=name}` on the slide wins.
@@ -240,7 +260,7 @@ module Przn
       when :blockquote      then render_blockquote(block, width, row)
       when :table           then render_table(block, width, row)
       when :image           then render_image(block, width, row)
-      when :shape           then render_shape(block); row
+      when :shape           then row   # rendered in render()'s pre-pass
       when :blank           then row + DEFAULT_SCALE
       when :bg              then row
       when :slot            then row
@@ -392,7 +412,11 @@ module Przn
       svg = build_shape_svg(kind, attrs, geom, sw_px, vb_x, vb_y, vb_w, vb_h)
       image_id = ensure_kitty_inline_uploaded(svg)
       @terminal.move_to(place_row0 + 1, place_col0 + 1)
-      @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: cols, rows: rows)
+      # z=-1 draws the shape below text but above the slide background,
+      # so heading text / paragraphs at the same cells remain legible.
+      # An explicit `z="..."` attr lets authors put a shape on top.
+      z = attrs['z'] ? attrs['z'].to_i : -1
+      @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: cols, rows: rows, z: z)
     end
 
     # SVG paint / presentation attributes passed through to the shape

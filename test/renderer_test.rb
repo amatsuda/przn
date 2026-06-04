@@ -491,6 +491,36 @@ class RendererTest < Test::Unit::TestCase
       assert(!joined.include?(' 1 / 9 '), "did not expect simple N/M footer: #{joined.inspect}")
     end
 
+    test 'render emits kitty delete-all-placements at the start (Kitty terminals only)' do
+      orig = Przn::ImageUtil.method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term)
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(joined.include?("\e_Ga=d,d=a,q=2\e\\"),
+             "expected delete-all-placements escape: #{joined.inspect}")
+    ensure
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?, orig)
+    end
+
+    test 'render skips kitty delete-all-placements on non-Kitty terminals' do
+      orig = Przn::ImageUtil.method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { false }
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term)
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      refute(joined.include?("\e_Ga=d,d=a"),
+             "did not expect delete-all-placements escape: #{joined.inspect}")
+    ensure
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?, orig)
+    end
+
     test 'export_mode hides 🐇/🐢 and falls back to the simple N/M counter' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       renderer = Przn::Renderer.new(term,
@@ -1020,6 +1050,22 @@ class RendererTest < Test::Unit::TestCase
       block = {type: :shape, kind: :rect, attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6'}}
       new_row = r.send(:render_block, block, 80, 12)
       assert_equal 12, new_row
+    end
+
+    test 'placement defaults to z=-1 so text drawn at the same cells stays legible' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6'}})
+      assert_match(/z=-1/, placement(term))
+    end
+
+    test 'explicit z="..." attr overrides the default' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6', 'z' => '2'}})
+      assert_match(/z=2(?:[^0-9]|\z)/, placement(term))
     end
   end
 

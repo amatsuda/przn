@@ -87,6 +87,12 @@ class ImageUtilTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'kitty_delete_all_placements' do
+    test 'emits d=a (lowercase) so all placements clear but image data stays cached' do
+      assert_equal "\e_Ga=d,d=a,q=2\e\\", Przn::ImageUtil.kitty_delete_all_placements
+    end
+  end
+
   sub_test_case 'kitty_clear_all' do
     test 'emits an APC sequence with action=d that frees both placements and storage' do
       assert_equal "\e_Ga=d,d=A,q=2\e\\", Przn::ImageUtil.kitty_clear_all
