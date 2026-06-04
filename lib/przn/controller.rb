@@ -79,6 +79,11 @@ module Przn
         else
           Theme.auto_discover(near: @source_file)
         end
+      # auto_discover returns nil when no theme.yml sits next to the
+      # deck; fall back to Theme.default so the renderer never has a
+      # nil theme (matching what Renderer#initialize does on first
+      # construction).
+      new_theme ||= Theme.default
 
       new_presentation.go_to([@presentation.current, new_presentation.total - 1].min)
       @presentation = new_presentation

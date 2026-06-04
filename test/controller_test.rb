@@ -124,6 +124,24 @@ class ControllerTest < Test::Unit::TestCase
       end
     end
 
+    test 'falls back to Theme.default when no theme.yml is discoverable' do
+      Dir.mktmpdir do |dir|
+        deck_path = File.join(dir, 'deck.md')
+        File.write(deck_path, "# A\n")
+
+        ps = Przn::Parser.parse(File.read(deck_path))
+        c = Przn::Controller.new(ps, @term, @renderer, source_file: deck_path)
+
+        c.send(:reload)
+        # The theme must not be nil — apply_slide_background would crash
+        # on the next render otherwise. The default theme has a
+        # background hash (possibly empty) so the call to `.background`
+        # downstream stays safe.
+        assert_not_nil @renderer.theme
+        assert_not_nil @renderer.theme.background
+      end
+    end
+
     test 'silently no-ops when source_file is nil' do
       ps = Przn::Parser.parse("# A\n")
       c = Przn::Controller.new(ps, @term, @renderer)  # no source_file
