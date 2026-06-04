@@ -118,15 +118,17 @@ Long lines wrap at whitespace boundaries (not mid-word) for English-style text. 
 
 ### Code blocks
 
-Fenced code blocks:
+Fenced code blocks render on a dim gray background and are syntax-highlighted via [rouge](https://github.com/rouge-ruby/rouge) when a language is set on the fence — Ruby, Python, JavaScript, Go, Rust, HTML, JSON, YAML, shell, and ~200 others all work:
 
 ````markdown
 ```ruby
-puts "hello"
+def hello
+  puts "world"  # greet
+end
 ```
 ````
 
-Indented code blocks (4 spaces) with optional kramdown IAL:
+Indented code blocks (4 spaces) with an optional kramdown IAL pick up highlighting too:
 
 ```markdown
     def hello
@@ -134,6 +136,8 @@ Indented code blocks (4 spaces) with optional kramdown IAL:
     end
 {: lang="ruby"}
 ```
+
+Blocks without a language fall back to the same gray-on-dim plain text. The color scheme is fixed (tuned for the dim background) — comments dim, strings green, keywords cyan, numbers magenta, function / type names yellow / green.
 
 ### Block quotes
 

@@ -30,4 +30,5 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'prawn'
   spec.add_dependency 'hexapdf'
+  spec.add_dependency 'rouge'
 end

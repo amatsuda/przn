@@ -1079,15 +1079,87 @@ module Przn
       max_len = code_lines.map { |l| display_width(l) }.max
       box_content_w = [max_len, max_content_w].min
 
-      code_lines.each do |code_line|
-        truncated = truncate_to_width(code_line, box_content_w)
-        padded = pad_to_width(truncated, box_content_w)
+      highlighted = highlighted_code_lines(block, code_lines)
+
+      highlighted.each_with_index do |line_tokens, li|
+        fitted, used_w = fit_tokens_to_width(line_tokens, box_content_w)
+        pad_len = [box_content_w - used_w, 0].max
         term_move(row, left + 1)
-        @terminal.write "#{ANSI[:gray_bg]}#{KittyText.sized("  #{padded}  ", s: body_scale)}#{ANSI[:reset]}"
+        @terminal.write ANSI[:gray_bg]
+        @terminal.write KittyText.sized('  ', s: body_scale)
+        fitted.each do |color, value|
+          if color && !value.empty?
+            code = color_code(color)
+            @terminal.write code unless code.empty?
+            @terminal.write KittyText.sized(value, s: body_scale)
+            # Reset only the fg so the gray bg stays in effect.
+            @terminal.write "\e[39m" unless code.empty?
+          else
+            @terminal.write KittyText.sized(value, s: body_scale) unless value.empty?
+          end
+        end
+        @terminal.write KittyText.sized("#{' ' * pad_len}  ", s: body_scale)
+        @terminal.write ANSI[:reset]
         row += body_scale
+        # Defensive: ensure we don't leave the gray bg open between
+        # adjacent code lines (the next line re-opens it).
+        _ = li
       end
 
       row
+    end
+
+    # Tokenize fenced code through CodeHighlighter when a language is
+    # set; fall back to a single uncolored token per line otherwise.
+    # The returned shape is always `[[[color, value], …], …]` — one
+    # outer array per code line, one inner pair per token, color is
+    # nil for "default fg" runs.
+    def highlighted_code_lines(block, code_lines)
+      tokens = block[:language] && CodeHighlighter.highlight(block[:content], block[:language])
+      return code_lines.map { |line| [[nil, line]] } unless tokens
+
+      group_tokens_by_line(tokens, code_lines.size)
+    end
+
+    # Walk a flat token stream and split values containing "\n" so each
+    # line gets its own array. The trailing newline on a token is
+    # dropped — render_code_block emits line-by-line and newlines are
+    # implicit between rows.
+    def group_tokens_by_line(tokens, expected_lines)
+      lines = [[]]
+      tokens.each do |color, value|
+        parts = value.split("\n", -1)
+        parts.each_with_index do |part, idx|
+          lines.last << [color, part] unless part.empty?
+          lines << [] if idx < parts.size - 1
+        end
+      end
+      # Pop a trailing empty line that comes from the source's final \n.
+      lines.pop if lines.last.empty? && lines.size > expected_lines
+      lines
+    end
+
+    # Walk tokens until the cumulative visible width hits `max_w`,
+    # truncating the last partial token if needed. Returns the
+    # fitted-token array and the total width it consumed (useful for
+    # right-padding the line).
+    def fit_tokens_to_width(line_tokens, max_w)
+      out = []
+      used = 0
+      line_tokens.each do |color, value|
+        avail = max_w - used
+        break if avail <= 0
+        w = display_width(value)
+        if w <= avail
+          out << [color, value]
+          used += w
+        else
+          out << [color, truncate_to_width(value, avail)]
+          used = max_w
+          break
+        end
+      end
+      [out, used]
     end
 
     def render_unordered_list(block, width, row)
