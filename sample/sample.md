@@ -2,80 +2,177 @@
 
 A terminal presentation tool written in Ruby
 
-# Features
+# Slide format
 
-- **Markdown** based slides
-- *Kitty text sizing* protocol support
-- Simple keyboard navigation
+Every <color=cyan>`# h1`</color> starts a new slide.
 
-# Code Blocks
-
-```ruby
-puts "Hello from przn!"
-```
-
-# Inline Formatting
-
-This is **bold**, this is *italic*, and this is `inline code`.
-
-> This is a blockquote
+Below the heading you can write **bold**, *italic*, `inline code`, ~~strikethrough~~, and the usual markdown.
 
 # Lists
 
-- First item
-- Second item
-- Third item
+Unordered, ordered, and nested:
 
-1. Ordered one
-2. Ordered two
-3. Ordered three
+- pick a fruit
+- or a vegetable
+  - leafy ones too
+- something else
 
-# Custom Styling
+1. first
+2. second
+3. third
 
-{::tag name="xx-large"}BIG text{:/tag}
+# Code blocks
 
-{::tag name="x-large"}large text{:/tag}
+```ruby
+class Slide
+  attr_reader :title, :body
+end
+```
 
-{::tag name="large"}large text{:/tag}
+```python
+def fib(n):
+    return n if n < 2 else fib(n-1) + fib(n-2)
+```
 
-normal and {::tag name="red"}red text{:/tag} mixed
+# Block quotes
 
-# Image (PNG)
+> Code is read more often than it is written.
 
-![](doge.png){:relative_height="70"}
+> Tables, lists, and the rest of standard markdown render normally.
 
-# Image (JPG)
+# Tables
 
-![](doge.jpg){:relative_height="70"}
+| Language | Year | Designer |
+|----------|------|----------|
+| Ruby     | 1995 | Matz |
+| Python   | 1991 | Guido |
+| Lisp     | 1958 | McCarthy |
 
-# Image (XML form)
+# Definition lists
 
-<img src="doge.png" relative_height="70"/>
+term
+: definition for the term
 
-# Image (absolute position)
+another term
+: another definition
 
-<img src="doge.png" x="5"   y="3"   relative_height="40"/>
-<img src="doge.png" x="50%" y="50%" relative_height="40"/>
+# Text sizing — `<size=N>`
 
-# Absolute-position text
+<size=xx-small>xx-small</size> <size=x-small>x-small</size> <size=small>small</size> <size=large>large</size>
 
-<at x="10" y="10">top-left ish</at>
-<at x="40" y="15"><size=3>BIG</size></at>
-<at x="80" y="25"><color=red>warn</color></at>
-<at x="50%" y="50%">dead center</at>
+<size=x-large>x-large</size>
+
+<size=xx-large>xx-large</size>
+
+<size=xxx-large>xxx-large</size>
+
+<size=xxxx-large>biggest</size>
+
+# Color — `<color=NAME>`
+
+<color=red>red</color>, <color=green>green</color>, <color=yellow>yellow</color>, <color=blue>blue</color>, <color=magenta>magenta</color>, <color=cyan>cyan</color>
+
+Plus 6-digit hex: <color=ff5555>tomato-ish</color>, <color=50fa7b>mint</color>, <color=8be9fd>sky</color>
+
+# Font — `<font>`
+
+<font face="Helvetica Neue" size="x-large">Helvetica Neue</font>
+
+<font face="Menlo" color="green" size="large">monospace in green</font>
+
+<font face="Georgia" size="xx-large" color="cyan">all three at once</font>
+
+# Alignment — `<center>` / `<right>`
+
+<center>centered line</center>
+
+<right>right-aligned line</right>
+
+The bare paragraph stays left-aligned for contrast.
+
+# Slide background — `<bg>`
+
+<bg color="#1a1a2e"/>
+
+A `<bg>` directive applies for this slide only. The next slide reverts.
+
+# Background — gradient
+
+<bg from="#1a1a2e" to="#16213e" angle="90"/>
+
+`<bg from="..." to="..." angle="..."/>` ships a linear gradient (Echoes' OSC 7772).
+
+# Background — image
+
+<bg image="ruby.png"/>
+
+`<bg image="ruby.png"/>` uses the Kitty Graphics Protocol at `z: -1` so text layers on top.
+
+# Image — flow
+
+<img src="ruby.png" relative_height="70"/>
+
+# Image — width="N%"
+
+<img src="ruby.png" width="40%"/>
+
+# Image — absolute position
+
+<img src="ruby.png" x="5"   y="3"   relative_height="40"/>
+<img src="ruby.png" x="50%" y="50%" relative_height="40"/>
+
+# Absolute-position text — `<at>`
+
+<at x="5"  y="5">top-left ish</at>
+<at x="40" y="15"><size=x-large>BIG</size></at>
+<at x="60" y="20"><color=red>warn</color></at>
+<at x="50%" y="50%"><font face="Georgia" size="xx-large" color="cyan">dead center</font></at>
+
+# Shapes and Lines
+
+<rect x="10" y="5"  width="20" height="6" rx="1" fill="green"/>
+<circle cx="60%" cy="40%" r="6" fill="yellow"/>
+<ellipse cx="85%" cy="40%" rx="8" ry="4" fill="cyan"/>
+<line x1="10" y1="20" x2="70" y2="20" stroke="white" stroke-width="0.3"/>
+<polyline points="10,22 25,28 40,22 55,28 70,22" stroke="lime" stroke-width="0.4" fill="none"/>
+<polygon points="50%,3 60%,15 50%,20 40%,15" fill="orange"/>
 
 # Two columns {layout=two-column}
 
-left side text
+left side
+
 - bullet A
 - bullet B
 
 <slot/>
 
-right side text
+right side
+
 - bullet C
 - bullet D
 
-# Thank You!
+# Takahashi method {layout=takahashi}
 
-That's all! Enjoy!
+たかはし
+
+# Title only {layout=title-only}
+
+# Comments
+
+<!-- this comment is hidden; the slide renders only the prose below -->
+
+Comments use `<!-- ... -->` (single-line or multi-line) and never appear on the rendered slide.
+
+# Speaker notes
+
+The next sentence has a hidden side-strip note. <note>this never appears on the audience screen</note> Everything around the note still shows.
+
+The note is visible in `--present` mode on the presenter pane.
+
+# Wait marker
+
+The `<wait/>` marker is a parser-level no-op today, reserved for future incremental-reveal use. <wait/> Both `<wait/>` and the kramdown spelling are accepted.
+
+# Thank you
+
+That's all — enjoy.
