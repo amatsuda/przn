@@ -72,6 +72,6 @@ else
   elsif options[:present]
     Przn.present(file, theme: theme, theme_path: options[:theme]).run
   else
-    Przn.start(file, theme: theme, start_at: start_at).run
+    Przn.start(file, theme: theme, theme_path: options[:theme], start_at: start_at).run
   end
 end

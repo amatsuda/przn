@@ -65,6 +65,7 @@ przn --export prawn -o output.pdf your_slides.md
 | `←` `↑` `h` `k` | Previous slide |
 | `g` | First slide |
 | `G` | Last slide |
+| `r` | Reload the deck (and `theme.yml`) from disk, keeping the current slide index |
 | `q` `Ctrl-C` | Quit |
 
 ### Selecting and copying text

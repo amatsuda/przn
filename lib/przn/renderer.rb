@@ -32,6 +32,11 @@ module Przn
     # ScreenshotPdfExporter): suppresses the 🐇/🐢 runner bar in favor of the
     # plain `N / M` counter, since the emoji animation belongs on a live screen,
     # not a static page.
+    # Swap in a fresh theme without rebuilding the renderer (so the
+    # image / kitty-upload caches survive). Used by the `r` reload
+    # path so a theme.yml edit takes effect mid-session.
+    attr_writer :theme
+
     def initialize(terminal, base_dir: '.', theme: nil, mode: :solo, export_mode: false)
       @terminal = terminal
       @base_dir = base_dir

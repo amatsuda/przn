@@ -21,14 +21,15 @@ require_relative 'przn/theme'
 module Przn
   class Error < StandardError; end
 
-  def self.start(file, theme: nil, start_at: nil)
+  def self.start(file, theme: nil, theme_path: nil, start_at: nil)
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     presentation.go_to(start_at - 1) if start_at
     terminal = Terminal.new
     base_dir = File.dirname(File.expand_path(file))
     renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme)
-    Controller.new(presentation, terminal, renderer)
+    Controller.new(presentation, terminal, renderer,
+                   source_file: file, theme_path: theme_path)
   end
 
   # Audience-side entry: opens the file, listens on `socket`, and renders
@@ -98,6 +99,7 @@ module Przn
     terminal = Terminal.new
     base_dir = File.dirname(File.expand_path(file))
     renderer = PresenterRenderer.new(terminal, presentation: presentation, base_dir: base_dir, theme: theme)
-    Controller.new(presentation, terminal, renderer, audience_link: link)
+    Controller.new(presentation, terminal, renderer, audience_link: link,
+                   source_file: file, theme_path: theme_path)
   end
 end

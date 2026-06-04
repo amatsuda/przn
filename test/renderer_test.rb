@@ -290,6 +290,15 @@ class RendererTest < Test::Unit::TestCase
       assert_operator white_idx, :<, red_idx, "body color should open before the inline color: #{out.inspect}"
       assert(out.count("\e[37m") >= 2, "expected body color to re-open after the inline reset: #{out.inspect}")
     end
+
+    test 'theme= swaps the active theme (used by the reload key)' do
+      theme_a = Przn::Theme.new(colors: {}, font: {color: 'red'},   bullet: {text: '・'}, background: {}, title: {})
+      theme_b = Przn::Theme.new(colors: {}, font: {color: 'green'}, bullet: {text: '・'}, background: {}, title: {})
+      r = Przn::Renderer.new(nil, theme: theme_a)
+      assert(r.send(:render_segments_scaled, [[:text, 'x']], 2).start_with?("\e[31m"))
+      r.theme = theme_b
+      assert(r.send(:render_segments_scaled, [[:text, 'x']], 2).start_with?("\e[32m"))
+    end
   end
 
   sub_test_case 'effective_seg_scale' do

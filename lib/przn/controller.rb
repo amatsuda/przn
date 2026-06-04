@@ -2,11 +2,20 @@
 
 module Przn
   class Controller
-    def initialize(presentation, terminal, renderer, audience_link: nil)
+    # `source_file:` / `theme_path:` enable the `r` key to re-read the
+    # deck (and the theme.yml, if one is in play) from disk so authors
+    # can iterate on the markdown without restarting the session.
+    # `theme_path` is the explicit `--theme PATH` value; when nil, the
+    # auto-discover path is re-run on each reload (so dropping a
+    # `theme.yml` next to the deck mid-session also takes effect).
+    def initialize(presentation, terminal, renderer, audience_link: nil,
+                   source_file: nil, theme_path: nil)
       @presentation = presentation
       @terminal = terminal
       @renderer = renderer
       @audience_link = audience_link
+      @source_file = source_file
+      @theme_path = theme_path
       @preload_gen = 0
     end
 
@@ -31,6 +40,8 @@ module Przn
           when 'G'
             @presentation.last_slide!
             render_current
+          when 'r'
+            reload
           when 'q', "\x03"
             break
           end
@@ -50,6 +61,32 @@ module Przn
     end
 
     private
+
+    # Re-read the source markdown (and theme.yml, if any) from disk
+    # and re-render. Stays on the current slide index, clamped to the
+    # new deck's bounds. Any IO / parse error is swallowed so a bad
+    # save mid-edit doesn't kill the running session — the user just
+    # sees the previous slide until the next reload succeeds.
+    def reload
+      return unless @source_file
+      markdown = File.read(@source_file)
+      new_presentation = Parser.parse(markdown)
+      return if new_presentation.total.zero?
+
+      new_theme =
+        if @theme_path
+          Theme.load(@theme_path)
+        else
+          Theme.auto_discover(near: @source_file)
+        end
+
+      new_presentation.go_to([@presentation.current, new_presentation.total - 1].min)
+      @presentation = new_presentation
+      @renderer.theme = new_theme
+      render_current
+    rescue StandardError
+      # Don't crash the session on a bad edit; keep showing the old deck.
+    end
 
     def render_current
       @renderer.render(
