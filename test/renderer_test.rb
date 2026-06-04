@@ -1118,6 +1118,47 @@ class RendererTest < Test::Unit::TestCase
       assert_match(/<polygon points="490,20 590,280 390,280" fill="white"\/>/, svg)
     end
 
+    test 'arrow: emits both a stem line and a filled triangular head' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      # Horizontal arrow → stem at y=80px; head extends back from (690,80)
+      # by head_length = 4*sw_px = 4*0.5*10 = 20px, head_width = 3*sw_px = 15px.
+      r.send(:render_shape, {type: :shape, kind: :arrow,
+                              attrs: {'x1' => '10', 'y1' => '5', 'x2' => '70', 'y2' => '5',
+                                       'stroke' => 'red', 'stroke-width' => '0.5'}})
+      svg = uploaded_svg(term)
+      # Stem
+      assert_match(/<line x1="90" y1="80" x2="690" y2="80" fill="none" stroke="red" stroke-width="5"\/>/, svg)
+      # Head: tip at (690, 80); base at x=670, y=80±7.5.
+      assert_match(/<polygon points="690,80 670,87\.500 670,72\.500" fill="red"\/>/, svg)
+    end
+
+    test 'arrow: head fill defaults to stroke color, override-able via fill=' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :arrow,
+                              attrs: {'x1' => '10', 'y1' => '5', 'x2' => '70', 'y2' => '5',
+                                       'stroke' => 'cyan', 'fill' => 'yellow'}})
+      svg = uploaded_svg(term)
+      assert_match(/<polygon points="[^"]+" fill="yellow"\/>/, svg)
+    end
+
+    test 'arrow: viewBox grows to include the head (vertical arrow extends bbox in x)' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      # Vertical arrow, no horizontal extent on the line, but the head's
+      # width forces the bbox to expand horizontally.
+      r.send(:render_shape, {type: :shape, kind: :arrow,
+                              attrs: {'x1' => '40', 'y1' => '5', 'x2' => '40', 'y2' => '15',
+                                       'stroke-width' => '0.5'}})
+      placement_str = placement(term)
+      # bbox widens to 2 cells (the head extends ±7.5 px horizontally
+      # around x=390; even with stroke padding, it stays within
+      # cells 38–39). r=12 from 80→280 px + head_length 20 px stem
+      # + stroke padding spilling into the next cell.
+      assert_match(/c=2,r=12/, placement_str)
+    end
+
     test 'percent coords resolve against terminal cells, then convert to pixels' do
       term = ShapeFakeTerm.new   # 80 cols × 30 rows, cell 10×20
       r = Przn::Renderer.new(term)

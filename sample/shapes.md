@@ -33,6 +33,11 @@
 # Polygons
 <polygon points="50%,3 60%,15 50%,20 40%,15" fill="yellow"/>
 
+# Arrows
+<arrow x1="10" y1="6"  x2="70" y2="6"  stroke="cyan"   stroke-width="0.4"/>
+<arrow x1="10" y1="12" x2="70" y2="18" stroke="yellow" stroke-width="0.5"/>
+<arrow x1="40" y1="22" x2="40" y2="6"  stroke="red"    stroke-width="0.4"/>
+
 # Mixed composition
 <line x1="5" y1="50%" x2="75" y2="50%" stroke="white" stroke-width="0.3"/>
 <circle cx="20" cy="50%" r="2" fill="red"/>

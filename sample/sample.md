@@ -134,7 +134,8 @@ A `<bg>` directive applies for this slide only. The next slide reverts.
 <circle cx="60%" cy="40%" r="6" fill="yellow"/>
 <ellipse cx="85%" cy="40%" rx="8" ry="4" fill="cyan"/>
 <line x1="10" y1="20" x2="70" y2="20" stroke="white" stroke-width="0.3"/>
-<polyline points="10,22 25,28 40,22 55,28 70,22" stroke="lime" stroke-width="0.4" fill="none"/>
+<arrow x1="10" y1="24" x2="70" y2="24" stroke="cyan" stroke-width="0.4"/>
+<polyline points="10,26 25,28 40,26 55,28 70,26" stroke="lime" stroke-width="0.4" fill="none"/>
 <polygon points="50%,3 60%,15 50%,20 40%,15" fill="orange"/>
 
 # Two columns {layout=two-column}

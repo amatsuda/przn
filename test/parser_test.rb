@@ -587,6 +587,17 @@ class ParserTest < Test::Unit::TestCase
       assert_equal '50,2 60,15 40,15', block[:attrs]['points']
     end
 
+    test '<arrow> kind and endpoint attrs' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<arrow x1="10" y1="15" x2="70" y2="15" stroke="red" stroke-width="0.5"/>\n)
+      ).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal :arrow, block[:kind]
+      assert_equal '10', block[:attrs]['x1']
+      assert_equal '70', block[:attrs]['x2']
+      assert_equal 'red', block[:attrs]['stroke']
+    end
+
     test 'unquoted attribute values work on shape tags too' do
       slide = Przn::Parser.parse(%(# t\n\n<circle cx=40 cy=10 r=4 fill=cyan />\n)).slides[0]
       block = slide.blocks.find { |b| b[:type] == :shape }

@@ -421,6 +421,11 @@ module Przn
       sw_px = sw_user * cell_w
       pad = sw_px / 2.0
 
+      # Arrows need an arrowhead computed from the resolved stroke width
+      # (the head dimensions scale with stroke). expand_arrow_geometry
+      # adds the triangle vertices to `geom` and grows the bbox to fit.
+      geom = expand_arrow_geometry(geom, sw_px) if kind == :arrow
+
       gx_min = geom[:bbox_x] - pad
       gy_min = geom[:bbox_y] - pad
       gx_max = geom[:bbox_x] + geom[:bbox_w] + pad
@@ -462,7 +467,7 @@ module Przn
 
     SHAPE_DEFAULT_STROKE_WIDTH = 0.2
 
-    OPEN_SHAPES = %i[line polyline].freeze
+    OPEN_SHAPES = %i[line polyline arrow].freeze
 
     def open_shape?(kind)
       OPEN_SHAPES.include?(kind)
@@ -504,7 +509,10 @@ module Przn
         ry = to_px(attrs['ry'], :size,     :y, cell_w, cell_h)
         return nil unless cx && cy && rx && ry
         {bbox_x: cx - rx, bbox_y: cy - ry, bbox_w: 2 * rx, bbox_h: 2 * ry, cx: cx, cy: cy, rx: rx, ry: ry}
-      when :line
+      when :line, :arrow
+        # `<arrow>` shares the line's geometry surface; the renderer
+        # adds a filled triangular head at (x2, y2) once stroke_width
+        # is resolved (see expand_arrow_geometry).
         x1 = to_px(attrs['x1'], :position, :x, cell_w, cell_h)
         y1 = to_px(attrs['y1'], :position, :y, cell_w, cell_h)
         x2 = to_px(attrs['x2'], :position, :x, cell_w, cell_h)
@@ -593,11 +601,60 @@ module Przn
         %(<ellipse cx="#{fnum(geom[:cx])}" cy="#{fnum(geom[:cy])}" rx="#{fnum(geom[:rx])}" ry="#{fnum(geom[:ry])}"#{paint}/>)
       when :line
         %(<line x1="#{fnum(geom[:x1])}" y1="#{fnum(geom[:y1])}" x2="#{fnum(geom[:x2])}" y2="#{fnum(geom[:y2])}"#{paint}/>)
+      when :arrow
+        # Stem (line) + filled triangular head. The head's fill
+        # defaults to the stem's stroke color so the two read as one
+        # arrow; an explicit `fill="..."` on the tag overrides only
+        # the head, giving a two-tone arrow if that's what you want.
+        stem = %(<line x1="#{fnum(geom[:x1])}" y1="#{fnum(geom[:y1])}" x2="#{fnum(geom[:x2])}" y2="#{fnum(geom[:y2])}"#{paint}/>)
+        tip, b1, b2 = geom[:head]
+        head_pts = "#{fnum(tip[0])},#{fnum(tip[1])} #{fnum(b1[0])},#{fnum(b1[1])} #{fnum(b2[0])},#{fnum(b2[1])}"
+        head_fill = attrs['fill'] || attrs['stroke'] || 'white'
+        stem + %(<polygon points="#{head_pts}" fill="#{head_fill}"/>)
       when :polyline
         %(<polyline points="#{points_attr(geom[:points])}"#{paint}/>)
       when :polygon
         %(<polygon points="#{points_attr(geom[:points])}"#{paint}/>)
       end
+    end
+
+    # Compute the arrowhead triangle for an `<arrow>` shape and merge
+    # the result back into the geom hash. Head dimensions scale with
+    # stroke width: length 4× sw_px, width 3× sw_px — typical SVG
+    # marker proportions. Bbox grows to include the head's vertices
+    # so cell quantization reserves room for the triangle.
+    def expand_arrow_geometry(geom, sw_px)
+      x1 = geom[:x1].to_f
+      y1 = geom[:y1].to_f
+      x2 = geom[:x2].to_f
+      y2 = geom[:y2].to_f
+      dx = x2 - x1
+      dy = y2 - y1
+      len = Math.sqrt(dx * dx + dy * dy)
+      return geom if len < 1e-6
+
+      head_len = sw_px * 4.0
+      head_wid = sw_px * 3.0
+      ux = dx / len
+      uy = dy / len
+      base_cx = x2 - ux * head_len
+      base_cy = y2 - uy * head_len
+      # Perpendicular unit vector (rotate (ux,uy) by 90°).
+      perp_x = -uy * head_wid / 2.0
+      perp_y =  ux * head_wid / 2.0
+      tip = [x2, y2]
+      b1  = [base_cx + perp_x, base_cy + perp_y]
+      b2  = [base_cx - perp_x, base_cy - perp_y]
+
+      xs = [x1, x2, b1[0], b2[0]]
+      ys = [y1, y2, b1[1], b2[1]]
+      geom.merge(
+        bbox_x: xs.min,
+        bbox_y: ys.min,
+        bbox_w: xs.max - xs.min,
+        bbox_h: ys.max - ys.min,
+        head: [tip, b1, b2]
+      )
     end
 
     # `stroke-width` is overridden with the renderer-computed pixel
