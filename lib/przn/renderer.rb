@@ -1066,11 +1066,15 @@ module Przn
     # the row, which looks wrong against the larger body text.
     def render_bullet(prefix)
       size = @theme.bullet[:size]
-      if size && size < DEFAULT_SCALE
-        KittyText.sized(prefix, s: DEFAULT_SCALE, n: size, d: DEFAULT_SCALE, v: 2)
-      else
-        KittyText.sized(prefix, s: size || DEFAULT_SCALE)
-      end
+      sized =
+        if size && size < DEFAULT_SCALE
+          KittyText.sized(prefix, s: DEFAULT_SCALE, n: size, d: DEFAULT_SCALE, v: 2)
+        else
+          KittyText.sized(prefix, s: size || DEFAULT_SCALE)
+        end
+      color = @theme.bullet[:color]
+      return sized unless color && !color.to_s.empty?
+      "#{color_code(color.to_s)}#{sized}#{ANSI[:reset]}"
     end
 
     # Render a <font face="..." size="..." color="..."> run. The face goes out

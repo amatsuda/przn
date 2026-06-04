@@ -259,6 +259,26 @@ class RendererTest < Test::Unit::TestCase
       assert(!out.include?("\e[3"), "did not expect a foreground SGR: #{out.inspect}")
     end
 
+    test 'bullet.color wraps the rendered bullet in the corresponding ANSI code' do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・', color: 'cyan'}, background: {}, title: {})
+      out = Przn::Renderer.new(nil, theme: theme).send(:render_bullet, '・')
+      assert(out.start_with?("\e[36m"), "expected leading cyan SGR: #{out.inspect}")
+      assert(out.end_with?("\e[0m"), "expected trailing reset: #{out.inspect}")
+    end
+
+    test 'hex bullet.color emits a 24-bit ANSI escape' do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・', color: 'ff5555'}, background: {}, title: {})
+      out = Przn::Renderer.new(nil, theme: theme).send(:render_bullet, '・')
+      assert(out.start_with?("\e[38;2;255;85;85m"), "expected 24-bit fg open: #{out.inspect}")
+    end
+
+    test 'bullet without color is left unwrapped (inherits body color)' do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・'}, background: {}, title: {})
+      out = Przn::Renderer.new(nil, theme: theme).send(:render_bullet, '・')
+      assert(!out.include?("\e[3"), "did not expect a foreground SGR: #{out.inspect}")
+      assert(!out.include?("\e[0m"), "did not expect a reset: #{out.inspect}")
+    end
+
     test 'inline color tag overrides body color; body color re-opens after the reset' do
       theme = Przn::Theme.new(colors: {}, font: {color: 'white'}, bullet: {text: '・'}, background: {}, title: {})
       out = render_with_theme(theme, [[:text, 'a'], [:tag, 'B', 'red'], [:text, 'c']])

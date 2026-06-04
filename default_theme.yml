@@ -18,6 +18,7 @@ title:                  # h1 typography (slide titles); each attribute is indepe
 bullet:                 # unordered-list marker; also h2–h6 heading prefix
   text: "・"            # the glyph
   size:                 # OSC 66 scale (1–7) for the bullet; default = body text's scale
+  color:                # named ANSI or 6-digit hex; falls back to body text color (font.color) when unset
 
 # Default slide background, applied when a slide has no <bg .../> directive.
 # `color` / `from` / `to` / `angle` use Echoes' OSC 7772 (no-op on other
