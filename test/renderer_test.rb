@@ -471,11 +471,10 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       r = Przn::Renderer.new(term, theme: fake_theme)
       r.send(:draw_runner_bar, 30, 80, 2, 9, nil)  # slide 3 of 9
-      first_move = term.ops.find { |op, *| op == :move_to }
-      assert_equal [:move_to, 30, 1], first_move
-      first_write = term.ops.find { |op, *| op == :write }
-      assert(first_write[1].include?('3'),
-             "expected current slide # at left: #{term.ops.inspect}")
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 30, 1], 'expected anchor move at row 30 col 1'
+      anchor_write = term.ops.find { |op, s| op == :write && s.is_a?(String) && s.include?('3') }
+      assert_not_nil anchor_write, "expected current slide # somewhere: #{term.ops.inspect}"
     end
 
     test 'anchors total slide count at the right edge' do
@@ -516,6 +515,41 @@ class RendererTest < Test::Unit::TestCase
         .send(:draw_runner_bar, 30, 80, 4, 9, Time.now - 30)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
       assert(writes.include?('🐢'), "expected turtle in output: #{writes.inspect}")
+    end
+
+    test 'draw_runner_bar wipes the emoji track before drawing (no turtle ghosting)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: fake_theme).send(:draw_runner_bar, 30, 80, 4, 9, nil)
+      # The first write should be a row-29 wipe (a run of spaces) before
+      # any of the anchor-number or emoji emits.
+      first_write = term.ops.find { |op, *| op == :write }
+      assert_equal :write, first_write[0]
+      assert(first_write[1].match?(/\A *\z/), "expected leading wipe of spaces: #{first_write.inspect}")
+    end
+
+    test 'redraw_runner_bar is a no-op when counter.duration is unset' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: fake_theme(counter: {}))
+      r.redraw_runner_bar(current: 2, total: 9, started_at: Time.now - 1)
+      assert_empty term.ops
+    end
+
+    test 'redraw_runner_bar emits the wipe + draw when counter.duration is set' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: fake_theme(counter: {duration: '60s'}))
+      r.redraw_runner_bar(current: 2, total: 9, started_at: Time.now - 30)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(writes.include?('🐇'), "expected rabbit in redraw: #{writes.inspect}")
+      assert(writes.include?('🐢'), "expected turtle in redraw: #{writes.inspect}")
+    end
+
+    test 'redraw_runner_bar is a no-op in export mode (PDF capture)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term,
+                             theme: fake_theme(counter: {duration: '60s'}),
+                             export_mode: true)
+      r.redraw_runner_bar(current: 2, total: 9, started_at: Time.now - 30)
+      assert_empty term.ops
     end
 
     test 'rabbit emit carries flip=h (via OSC 7772 ;multicell inside Echoes)' do

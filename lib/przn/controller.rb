@@ -19,11 +19,17 @@ module Przn
       @preload_gen = 0
     end
 
+    # Seconds between runner-bar refresh ticks. The 🐢 only crawls
+    # across the track over the full talk's duration, so once a second
+    # is plenty for visible movement without being noisy.
+    RUNNER_BAR_TICK_SECONDS = 1.0
+
     def run
       @started_at = Time.now
       @terminal.enter_alt_screen
       @terminal.hide_cursor
       render_current
+      start_runner_bar_thread
 
       @terminal.raw do
         loop do
@@ -48,6 +54,7 @@ module Przn
         end
       end
     ensure
+      stop_runner_bar_thread
       @preload_gen += 1
       @preload_thread&.join
       if @audience_link
@@ -129,6 +136,49 @@ module Przn
       rescue StandardError
         # Background work must not crash the presentation.
       end
+    end
+
+    # Spawn a thread that calls `redraw_runner_bar` once per second so
+    # the 🐢 turtle visibly crawls across the screen against real time
+    # instead of only updating on slide navigation. No-op when the
+    # theme didn't opt into the runner bar (no `counter.duration`) or
+    # we're in export / audience-only modes.
+    def start_runner_bar_thread
+      return unless runner_bar_thread_eligible?
+      @runner_bar_stop = false
+      @runner_bar_thread = Thread.new do
+        until @runner_bar_stop
+          sleep RUNNER_BAR_TICK_SECONDS
+          break if @runner_bar_stop
+          begin
+            @renderer.redraw_runner_bar(
+              current: @presentation.current,
+              total: @presentation.total,
+              started_at: @started_at
+            )
+          rescue StandardError
+            # Background work must not crash the presentation.
+          end
+        end
+      end
+    end
+
+    def stop_runner_bar_thread
+      @runner_bar_stop = true
+      # Wake the sleep so the thread exits promptly instead of waiting
+      # out the full tick interval on quit.
+      @runner_bar_thread&.wakeup rescue nil
+      @runner_bar_thread&.join
+    end
+
+    def runner_bar_thread_eligible?
+      return false unless @renderer.respond_to?(:redraw_runner_bar)
+      return false if @renderer.respond_to?(:export_mode) && @renderer.export_mode
+      theme = @renderer.respond_to?(:theme) ? @renderer.theme : nil
+      return false unless theme
+      counter = theme.counter
+      duration = counter && counter[:duration]
+      duration && Theme.parse_duration(duration).to_i.positive?
     end
 
     def read_key

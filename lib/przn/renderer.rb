@@ -29,7 +29,8 @@ module Przn
     # Swap in a fresh theme without rebuilding the renderer (so the
     # image / kitty-upload caches survive). Used by the `r` reload
     # path so a theme.yml edit takes effect mid-session.
-    attr_writer :theme
+    attr_accessor :theme
+    attr_reader :export_mode
 
     def initialize(terminal, base_dir: '.', theme: nil, mode: :solo, export_mode: false)
       @terminal = terminal
@@ -143,6 +144,21 @@ module Przn
           next unless File.exist?(path) && ImageUtil.png?(path)
           ensure_kitty_uploaded(path)
         end
+        @terminal.flush
+      end
+    end
+
+    # Public entrypoint for the controller's runner-bar refresh thread.
+    # Recomputes just the bottom-row 🐇/🐢 / N-M counter — leaves the
+    # rest of the slide untouched. No-op when the theme didn't opt
+    # into the runner bar (no `counter.duration`) or we're in export
+    # mode. Serialized against full slide renders via the renderer's
+    # mutex so the background thread can't tear writes.
+    def redraw_runner_bar(current:, total:, started_at:)
+      return if @export_mode
+      return unless counter_duration
+      @mutex.synchronize do
+        draw_runner_bar(@terminal.height, @terminal.width, current, total, started_at)
         @terminal.flush
       end
     end
@@ -974,13 +990,22 @@ module Przn
       track_right = w - right.size - 1     # 1 cell gap before the right number
       return if track_right - track_left < EMOJI_RUNNER_CELLS
 
+      rabbit_row = [h - 1, 1].max
+
+      # Wipe the emoji track before redrawing so a previous turtle
+      # position (left over from the last runner-bar thread tick)
+      # doesn't ghost beside the new one. Row h has the anchor
+      # numbers — they're re-written right below so they don't need
+      # a wipe.
+      @terminal.move_to(rabbit_row, track_left)
+      @terminal.write ' ' * (track_right - track_left + EMOJI_RUNNER_CELLS)
+
       open_seq = counter_color_open
       @terminal.move_to(h, 1)
       @terminal.write "#{open_seq}#{left}#{ANSI[:reset]}"
       @terminal.move_to(h, w - right.size + 1)
       @terminal.write "#{open_seq}#{right}#{ANSI[:reset]}"
 
-      rabbit_row = [h - 1, 1].max
       rabbit_col = runner_col(current, [total - 1, 1].max, track_left, track_right)
       @terminal.move_to(rabbit_row, rabbit_col)
       @terminal.write KittyText.sized('🐇', s: 2, flip: 'h')
