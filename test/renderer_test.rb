@@ -975,6 +975,36 @@ class RendererTest < Test::Unit::TestCase
       new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 5)
       assert_operator new_row, :>, 5, 'flow-mode image should advance the layout row'
     end
+
+    # The image stub is a 200×200 PNG with cell_pixel_size 10×20.
+    # Image cell size: 20 cols × 10 rows. Without any cap the
+    # aspect-ratio scaler picks the smaller of available_cols /
+    # img_cell_w vs available_rows / img_cell_h. With width="20%" of
+    # an 80-cell terminal, the cap = 16 cols, so target_cols ≤ 16
+    # (and the image scales vertically to match aspect ratio).
+    test 'width="N%" caps horizontal extent (relative_width is honored)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'relative_width' => '20'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      # The renderer wrote a placement with `c=` indicating the target
+      # column count. Pull it out of the kitty_place sentinel.
+      place_args = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      assert_not_nil place_args
+      assert_operator place_args[:cols], :<=, 16,
+                      "relative_width=20% should cap cols to 20% of 80 = 16; got #{place_args[:cols]}"
+    end
+
+    test 'width-only on the markdown form: <img src=... width="20%"/> sets relative_width' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="x.png" width="20%"/>\n)).slides[0]
+      img = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal '20', img[:attrs]['relative_width']
+    end
   end
 
   sub_test_case 'render_shape' do

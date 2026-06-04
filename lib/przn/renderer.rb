@@ -960,6 +960,15 @@ module Przn
       target_rows = (@terminal.height * rh.to_i / 100.0).to_i
       available_rows = [target_rows, available_rows].min
 
+      # `relative_width="N"` (set directly, or via `width="N%"`) caps the
+      # horizontal extent at N % of the terminal width. No default —
+      # width-unspecified images stay free to fill the available cols
+      # (and then aspect-ratio scaling against `available_rows` decides).
+      if (rw = attrs['relative_width'])
+        target_cols_cap = (@terminal.width * rw.to_i / 100.0).to_i
+        available_cols = [target_cols_cap, available_cols].min if target_cols_cap.positive?
+      end
+
       # Calculate target cell size maintaining aspect ratio
       img_cell_w = img_w.to_f / cell_w
       img_cell_h = img_h.to_f / cell_h
