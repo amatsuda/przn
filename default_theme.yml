@@ -38,13 +38,14 @@ colors:
   dim: "6c7086"
   inline_code: "a6e3a1"
 
-# Bottom-of-screen progress indicator (a nod to the Rabbit presentation tool).
-# Without this key, przn shows a simple " N / M " counter at the bottom-right.
-# To opt in: uncomment the block. The 🐇 rabbit anchors slide progress between
-# the left (current) and right (total) numbers. Set `duration:` to enable the
-# 🐢 turtle tracking elapsed time against the goal.
-# rabbit:
-#   duration:           # "30m", "1h30m", "1800s", or plain integer seconds
+# Bottom-of-screen slide counter. Without `duration:`, przn shows a
+# plain " N / M " counter at the bottom-right. Set `duration:` to opt
+# into the 🐇 / 🐢 runner bar (a nod to the Rabbit presentation tool):
+# slide-progress (🐇) and elapsed-vs-goal (🐢) anchored between the
+# left (current) and right (total) numbers.
+counter:
+  color:                # named ANSI or 6-digit hex; default = dim
+  duration:             # "30m", "1h30m", "1800s", or plain integer seconds; opt in to the runner bar
 
 # Slide layouts. Each layout names an ordered list of slots; a slot is a
 # rectangular region with x / y / width / height (1-based cells, or N%

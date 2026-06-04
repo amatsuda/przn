@@ -461,10 +461,10 @@ class RendererTest < Test::Unit::TestCase
       def cell_pixel_size; [10, 20]; end
     end
 
-    FakeTheme = Struct.new(:rabbit, :font, :background, :title, :bullet, :colors, :layouts)
+    FakeTheme = Struct.new(:counter, :font, :background, :title, :bullet, :colors, :layouts)
 
-    def fake_theme(rabbit: {})
-      FakeTheme.new(rabbit, {}, {}, {}, {text: '・'}, {}, {})
+    def fake_theme(counter: {duration: '60s'})
+      FakeTheme.new(counter, {}, {}, {}, {text: '・'}, {}, {})
     end
 
     test 'anchors current slide number at column 1' do
@@ -502,16 +502,17 @@ class RendererTest < Test::Unit::TestCase
                       "last-slide rabbit (col #{rabbit_col_2}) should be right of first-slide rabbit (col #{rabbit_col_1})"
     end
 
-    test 'turtle is absent when rabbit.duration is nil' do
+    test 'turtle is absent when counter.duration is nil' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      Przn::Renderer.new(term, theme: fake_theme).send(:draw_runner_bar, 30, 80, 4, 9, Time.now - 5)
+      Przn::Renderer.new(term, theme: fake_theme(counter: {}))
+        .send(:draw_runner_bar, 30, 80, 4, 9, Time.now - 5)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
       assert(!writes.include?('🐢'), "expected no turtle: #{writes.inspect}")
     end
 
-    test 'turtle present when rabbit.duration is set' do
+    test 'turtle present when counter.duration is set' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      Przn::Renderer.new(term, theme: fake_theme(rabbit: {duration: '60s'}))
+      Przn::Renderer.new(term, theme: fake_theme(counter: {duration: '60s'}))
         .send(:draw_runner_bar, 30, 80, 4, 9, Time.now - 30)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
       assert(writes.include?('🐢'), "expected turtle in output: #{writes.inspect}")
@@ -527,9 +528,9 @@ class RendererTest < Test::Unit::TestCase
              "expected OSC 7772 ;multicell frame (Echoes-private): #{rabbit_write.inspect}")
     end
 
-    test 'render writes the simple N / M footer when theme.rabbit is nil' do
+    test 'render writes the simple N / M footer when counter.duration is unset' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      renderer = Przn::Renderer.new(term)  # Theme.default: rabbit is nil
+      renderer = Przn::Renderer.new(term)  # Theme.default: counter is empty
       slide = Przn::Slide.new([{type: :blank}])
       renderer.render(slide, current: 0, total: 9)
       joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
@@ -537,14 +538,43 @@ class RendererTest < Test::Unit::TestCase
       assert(!joined.include?('🐇'), "did not expect rabbit emoji: #{joined.inspect}")
     end
 
-    test 'render switches to the runner bar when theme.rabbit is present (even if empty)' do
+    test 'render switches to the runner bar when counter.duration is set' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      renderer = Przn::Renderer.new(term, theme: fake_theme(rabbit: {}))
+      renderer = Przn::Renderer.new(term, theme: fake_theme(counter: {duration: '60s'}))
       slide = Przn::Slide.new([{type: :blank}])
       renderer.render(slide, current: 0, total: 9)
       joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
       assert(joined.include?('🐇'), "expected rabbit in runner bar: #{joined.inspect}")
       assert(!joined.include?(' 1 / 9 '), "did not expect simple N/M footer: #{joined.inspect}")
+    end
+
+    test 'counter.color recolors the plain N / M footer' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      theme = fake_theme(counter: {color: 'cyan'})
+      renderer = Przn::Renderer.new(term, theme: theme)
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      # cyan SGR is 36
+      assert(joined.include?("\e[36m 1 / 9 "), "expected cyan-colored footer: #{joined.inspect}")
+      assert(!joined.include?("\e[2m 1 / 9 "), "expected no dim fallback: #{joined.inspect}")
+    end
+
+    test 'counter.color recolors the runner-bar anchor numbers' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: fake_theme(counter: {duration: '60s', color: 'ff5555'}))
+        .send(:draw_runner_bar, 30, 80, 2, 9, nil)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(writes.include?("\e[38;2;255;85;85m3"), "expected hex-color anchor: #{writes.inspect}")
+    end
+
+    test 'plain counter falls back to dim ANSI when counter.color is unset' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term)  # default theme, no counter color
+      slide = Przn::Slide.new([{type: :blank}])
+      renderer.render(slide, current: 0, total: 9)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(joined.include?("\e[2m 1 / 9 "), "expected dim default: #{joined.inspect}")
     end
 
     test 'render emits kitty delete-all-placements at the start (Kitty terminals only)' do
@@ -580,7 +610,7 @@ class RendererTest < Test::Unit::TestCase
     test 'export_mode hides 🐇/🐢 and falls back to the simple N/M counter' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       renderer = Przn::Renderer.new(term,
-                                    theme: fake_theme(rabbit: {duration: '60s'}),
+                                    theme: fake_theme(counter: {duration: '60s'}),
                                     export_mode: true)
       slide = Przn::Slide.new([{type: :blank}])
       renderer.render(slide, current: 0, total: 9)

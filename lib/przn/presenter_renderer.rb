@@ -29,12 +29,13 @@ module Przn
       elapsed = format_elapsed(Time.now - @started_at)
       footer = "Slide #{current + 1} / #{total}   #{elapsed}"
 
-      # When the theme opts into the rabbit/turtle indicator, the parent
-      # renderer has already drawn it on rows h-1 and h. Lift the strip up
-      # so it doesn't clobber the runner bar; the indicator itself replaces
-      # the strip's own footer line (slide #, elapsed time are visible there
-      # anyway via rabbit position and turtle position).
-      rabbit_mode = !@theme.rabbit.nil?
+      # When `theme.counter.duration` opts into the 🐇 / 🐢 indicator, the
+      # parent renderer has already drawn it on rows h-1 and h. Lift the
+      # strip up so it doesn't clobber the runner bar; the indicator
+      # itself replaces the strip's own footer line (slide #, elapsed
+      # time are visible there anyway via rabbit / turtle position).
+      counter = @theme.counter || {}
+      rabbit_mode = !counter[:duration].nil? && !counter[:duration].to_s.empty?
       notes_row = rabbit_mode ? h - 3 : h - 2
       next_row  = rabbit_mode ? h - 2 : h - 1
 

@@ -122,12 +122,12 @@ module Przn
           end
         end
 
-        if @theme.rabbit && !@export_mode
+        if counter_duration && !@export_mode
           draw_runner_bar(h, w, current, total, started_at)
         else
           status = " #{current + 1} / #{total} "
           @terminal.move_to(h, w - status.size)
-          @terminal.write "#{ANSI[:dim]}#{status}#{ANSI[:reset]}"
+          @terminal.write "#{counter_color_open}#{status}#{ANSI[:reset]}"
         end
 
         @terminal.flush
@@ -173,6 +173,22 @@ module Przn
     def body_scale
       size = @theme.font && @theme.font[:size]
       (size && Parser::SIZE_SCALES[size.to_s]) || DEFAULT_SCALE
+    end
+
+    # Parsed `theme.counter.duration` in seconds, or nil when unset /
+    # unparseable. Truthy here is what opts the bottom row into the
+    # 🐇 / 🐢 runner bar; nil falls back to the plain " N / M " counter.
+    def counter_duration
+      raw = @theme.counter && @theme.counter[:duration]
+      raw && Theme.parse_duration(raw)
+    end
+
+    # Open-SGR for the bottom-row counter (plain `N / M` and the
+    # runner-bar anchor numbers). Honors `theme.counter.color`
+    # (named ANSI or 6-digit hex); falls back to the dim ANSI default.
+    def counter_color_open
+      c = @theme.counter && @theme.counter[:color]
+      (c && !c.to_s.empty?) ? color_code(c.to_s) : ANSI[:dim]
     end
 
     # Resolve the current slot's `size:` override into an OSC 66 scale
@@ -650,10 +666,9 @@ module Przn
     # very bottom row; the emojis render at OSC 66 scale 2 and are anchored at
     # row `h-1` so their bottom half lands on row `h` next to the numbers,
     # making them visibly twice as large as the labels without needing more
-    # vertical screen real-estate. The turtle is hidden when
-    # `theme.rabbit.duration` is unset / unparseable. `flip=h` mirrors each
-    # glyph horizontally on terminals that honor it (Echoes); others ignore
-    # the parameter and the emojis face left.
+    # vertical screen real-estate. `flip=h` mirrors each glyph horizontally
+    # on terminals that honor it (Echoes); others ignore the parameter and
+    # the emojis face left.
     EMOJI_RUNNER_CELLS = 4 # 🐇/🐢 are 2 source cells wide, rendered at s=2 → 4 cells
 
     def draw_runner_bar(h, w, current, total, started_at)
@@ -663,17 +678,18 @@ module Przn
       track_right = w - right.size - 1     # 1 cell gap before the right number
       return if track_right - track_left < EMOJI_RUNNER_CELLS
 
+      open_seq = counter_color_open
       @terminal.move_to(h, 1)
-      @terminal.write "#{ANSI[:dim]}#{left}#{ANSI[:reset]}"
+      @terminal.write "#{open_seq}#{left}#{ANSI[:reset]}"
       @terminal.move_to(h, w - right.size + 1)
-      @terminal.write "#{ANSI[:dim]}#{right}#{ANSI[:reset]}"
+      @terminal.write "#{open_seq}#{right}#{ANSI[:reset]}"
 
       rabbit_row = [h - 1, 1].max
       rabbit_col = runner_col(current, [total - 1, 1].max, track_left, track_right)
       @terminal.move_to(rabbit_row, rabbit_col)
       @terminal.write KittyText.sized('🐇', s: 2, flip: 'h')
 
-      duration_s = Theme.parse_duration(@theme.rabbit[:duration])
+      duration_s = counter_duration
       return unless started_at && duration_s && duration_s.positive?
 
       elapsed = Time.now - started_at

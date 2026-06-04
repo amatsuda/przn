@@ -34,7 +34,7 @@ On a setup with a secondary display (projector / external monitor) and running i
 - Current slide rendered as normal
 - Speaker notes (`{::note}` / `<note>` markup) shown in a side strip — stripped from the audience view
 - Next slide's title hint
-- Elapsed-time clock (or, when `rabbit:` is themed, the runner-bar visualization)
+- Elapsed-time clock (or, when `counter.duration` is set in the theme, the runner-bar visualization)
 
 If only one display is attached or Echoes isn't the host terminal, `--present` falls back to today's mirror mode with a one-line warning on stderr.
 
@@ -465,8 +465,9 @@ background:               # default slide background (Echoes OSC 7772)
   to:                     # gradient endpoint
   angle:                  # gradient angle in degrees
 
-# rabbit:                 # opt into the 🐇 / 🐢 bottom progress indicator
-#   duration: "30m"       # "1h30m", "1800s", or plain integer seconds; turtle hides when unset
+counter:                  # bottom-of-screen slide counter; runner-bar opt-in via duration
+  color:                  # named ANSI or 6-digit hex; default = dim
+  duration:               # "30m", "1h30m", "1800s", or plain integer seconds; opt in to the 🐇/🐢 runner bar
 
 colors:
   code_bg: "313244"
@@ -483,7 +484,7 @@ Notes:
 - **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color.
 - **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block. h2–h6 stay body text.
 - **`background`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
-- **`rabbit`** — opt-in Rabbit-style bottom-row progress indicator. With the key absent, przn shows the simple `N / M` counter at the bottom-right. With the key present, the bottom row becomes: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress. Set `rabbit.duration` to also show 🐢 tracking elapsed time against the goal; without a duration the turtle stays hidden. Inside [Echoes](https://github.com/amatsuda/echoes) the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
+- **`counter`** — bottom-of-screen slide counter. Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. Inside [Echoes](https://github.com/amatsuda/echoes) the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
 
 ## License
 

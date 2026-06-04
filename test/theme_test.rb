@@ -43,8 +43,8 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal({}, Przn::Theme.default.title)
     end
 
-    test 'rabbit is nil by default (renderer falls back to simple N / M footer)' do
-      assert_nil Przn::Theme.default.rabbit
+    test 'counter is an empty hash by default (renderer falls back to simple N / M footer)' do
+      assert_equal({}, Przn::Theme.default.counter)
     end
 
     test 'ships built-in layouts (default, cover, title-only, takahashi, title-content, two-column, photo-caption)' do
@@ -313,13 +313,22 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 'ff5555',         title[:color]
     end
 
-    test 'user file sets rabbit.duration' do
+    test 'user file sets counter.duration (opts into the runner bar)' do
       write_theme <<~YAML
-        rabbit:
+        counter:
           duration: "30m"
       YAML
 
-      assert_equal '30m', Przn::Theme.load(theme_path).rabbit[:duration]
+      assert_equal '30m', Przn::Theme.load(theme_path).counter[:duration]
+    end
+
+    test 'user file sets counter.color' do
+      write_theme <<~YAML
+        counter:
+          color: cyan
+      YAML
+
+      assert_equal 'cyan', Przn::Theme.load(theme_path).counter[:color]
     end
   end
 

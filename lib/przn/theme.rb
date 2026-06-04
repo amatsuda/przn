@@ -22,7 +22,7 @@ module Przn
     # tags (`<size>`, `<font>`, `<color>`) still win per-segment.
     Slot = Struct.new(:name, :x, :y, :width, :height, :align, :size, :family, :color)
 
-    attr_reader :colors, :font, :bullet, :background, :title, :rabbit, :layouts
+    attr_reader :colors, :font, :bullet, :background, :title, :counter, :layouts
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -35,11 +35,10 @@ module Przn
         bullet: defaults[:bullet].merge(overrides[:bullet] || {}),
         background: defaults[:background].merge(overrides[:background] || {}),
         title: defaults[:title].merge(overrides[:title] || {}),
-        # `rabbit` is opt-in: absent → nil → renderer uses the plain N/M footer.
-        # Present (even as an empty block) → hash → renderer uses the runner bar.
-        rabbit: defaults[:rabbit] || overrides[:rabbit] ?
-          (defaults[:rabbit] || {}).merge(overrides[:rabbit] || {}) :
-          nil,
+        # `counter` is always a hash; empty by default. `counter.duration`
+        # opts into the 🐇 runner bar; without it the renderer shows the
+        # plain " N / M " footer. `counter.color` styles both modes.
+        counter: defaults[:counter].merge(overrides[:counter] || {}),
         # Layouts: per-name replacement (no deep merge across slot lists —
         # an override redefines that layout's slot list end-to-end). The
         # name `default` is special: when a slide has no `{layout=...}`
@@ -93,9 +92,7 @@ module Przn
         bullet: (data[:bullet] || {}).compact,
         background: (data[:background] || {}).compact,
         title: (data[:title] || {}).compact,
-        # nil when the `rabbit:` key isn't in the YAML at all (opt-in feature);
-        # empty hash when it's present but childless.
-        rabbit: data.key?(:rabbit) ? (data[:rabbit] || {}).compact : nil,
+        counter: (data[:counter] || {}).compact,
         layouts: parse_layouts(data[:layouts])
       }
     end
@@ -131,7 +128,7 @@ module Przn
       @bullet = config[:bullet]
       @background = config[:background]
       @title = config[:title]
-      @rabbit = config[:rabbit]
+      @counter = config[:counter] || {}
       @layouts = config[:layouts] || {}
     end
   end
