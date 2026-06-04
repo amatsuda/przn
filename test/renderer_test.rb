@@ -1054,7 +1054,7 @@ class RendererTest < Test::Unit::TestCase
       # width=20 → 200 px. height=6 → 120 px. No stroke padding.
       # Quantized: cells 10..29 × 5..10 → viewBox "90 80 200 120".
       assert_match(/viewBox="90 80 200 120"/, svg)
-      assert_match(/<rect x="90" y="80" width="200" height="120" fill="red"\/>/, svg)
+      assert_match(/<rect x="90" y="80" width="200" height="120" fill="#ff0000"\/>/, svg)
       assert_includes term.ops, [:move_to, 5, 10]
       assert_match(/c=20,r=6/, placement(term))
     end
@@ -1072,7 +1072,7 @@ class RendererTest < Test::Unit::TestCase
       # rows floor(230/20)..ceil(330/20) = 11..17 → 6 rows
       # viewBox pixel origin: 34*10=340, 11*20=220. Size: 100, 120.
       assert_match(/viewBox="340 220 100 120"/, svg)
-      assert_match(/<circle cx="390" cy="280" r="50" fill="white"\/>/, svg)
+      assert_match(/<circle cx="390" cy="280" r="50" fill="#ffffff"\/>/, svg)
       assert_includes term.ops, [:move_to, 12, 35]
       assert_match(/c=10,r=6/, placement(term))
     end
@@ -1095,7 +1095,7 @@ class RendererTest < Test::Unit::TestCase
       svg = uploaded_svg(term)
       # x1=10→90, y1=5→80, x2=70→690, y2=5→80. sw default 0.2 cell-widths
       # → 2 px. Pad ±1 px.
-      assert_match(/<line x1="90" y1="80" x2="690" y2="80" fill="none" stroke="red" stroke-width="2"\/>/, svg)
+      assert_match(/<line x1="90" y1="80" x2="690" y2="80" fill="none" stroke="#ff0000" stroke-width="2"\/>/, svg)
     end
 
     test 'polyline: points converted to pixels' do
@@ -1115,7 +1115,7 @@ class RendererTest < Test::Unit::TestCase
       r.send(:render_shape, {type: :shape, kind: :polygon,
                               attrs: {'points' => '50,2 60,15 40,15'}})
       svg = uploaded_svg(term)
-      assert_match(/<polygon points="490,20 590,280 390,280" fill="white"\/>/, svg)
+      assert_match(/<polygon points="490,20 590,280 390,280" fill="#ffffff"\/>/, svg)
     end
 
     test 'arrow: emits both a stem line and a filled triangular head' do
@@ -1128,9 +1128,9 @@ class RendererTest < Test::Unit::TestCase
                                        'stroke' => 'red', 'stroke-width' => '0.5'}})
       svg = uploaded_svg(term)
       # Stem
-      assert_match(/<line x1="90" y1="80" x2="690" y2="80" fill="none" stroke="red" stroke-width="5"\/>/, svg)
+      assert_match(/<line x1="90" y1="80" x2="690" y2="80" fill="none" stroke="#ff0000" stroke-width="5"\/>/, svg)
       # Head: tip at (690, 80); base at x=670, y=80±7.5.
-      assert_match(/<polygon points="690,80 670,87\.500 670,72\.500" fill="red"\/>/, svg)
+      assert_match(/<polygon points="690,80 670,87\.500 670,72\.500" fill="#ff0000"\/>/, svg)
     end
 
     test 'arrow: head fill defaults to stroke color, override-able via fill=' do
@@ -1140,7 +1140,44 @@ class RendererTest < Test::Unit::TestCase
                               attrs: {'x1' => '10', 'y1' => '5', 'x2' => '70', 'y2' => '5',
                                        'stroke' => 'cyan', 'fill' => 'yellow'}})
       svg = uploaded_svg(term)
-      assert_match(/<polygon points="[^"]+" fill="yellow"\/>/, svg)
+      assert_match(/<polygon points="[^"]+" fill="#ffff00"\/>/, svg)
+    end
+
+    test 'CSS named colors outside Echoes default set get translated to hex' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6', 'fill' => 'tomato'}})
+      svg = uploaded_svg(term)
+      assert_match(/fill="#ff6347"/, svg, "expected tomato translated: #{svg.inspect}")
+
+      term2 = ShapeFakeTerm.new
+      Przn::Renderer.new(term2).send(:render_shape, {type: :shape, kind: :line,
+                              attrs: {'x1' => '10', 'y1' => '5', 'x2' => '70', 'y2' => '5', 'stroke' => 'gold'}})
+      assert_match(/stroke="#ffd700"/, uploaded_svg(term2))
+    end
+
+    test 'hex codes and rgba() pass through unchanged' do
+      term = ShapeFakeTerm.new
+      r = Przn::Renderer.new(term)
+      r.send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6', 'fill' => '#ff6347'}})
+      assert_match(/fill="#ff6347"/, uploaded_svg(term))
+
+      term2 = ShapeFakeTerm.new
+      Przn::Renderer.new(term2).send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6', 'fill' => 'rgba(255,99,71,0.5)'}})
+      assert_match(/fill="rgba\(255,99,71,0\.5\)"/, uploaded_svg(term2))
+    end
+
+    test '"none" passes through (otherwise unfilled shapes would break)' do
+      term = ShapeFakeTerm.new
+      Przn::Renderer.new(term).send(:render_shape, {type: :shape, kind: :rect,
+                              attrs: {'x' => '10', 'y' => '5', 'width' => '20', 'height' => '6',
+                                       'fill' => 'none', 'stroke' => 'gold'}})
+      svg = uploaded_svg(term)
+      assert_match(/fill="none"/, svg)
+      assert_match(/stroke="#ffd700"/, svg)
     end
 
     test 'arrow: viewBox grows to include the head (vertical arrow extends bbox in x)' do
@@ -1166,7 +1203,7 @@ class RendererTest < Test::Unit::TestCase
                               attrs: {'d' => 'M 10 5 L 70 5 Z', 'stroke' => 'red', 'stroke-width' => '0.3'}})
       svg = uploaded_svg(term)
       # (10,5) → ((10-1)*10, (5-1)*20) = (90, 80); (70,5) → (690, 80).
-      assert_match(%r{<path d="M 90 80 L 690 80 Z" fill="none" stroke="red" stroke-width="3"/>}, svg)
+      assert_match(%r{<path d="M 90 80 L 690 80 Z" fill="none" stroke="#ff0000" stroke-width="3"/>}, svg)
     end
 
     test 'path: relative h/v deltas use scale (no -1 offset)' do

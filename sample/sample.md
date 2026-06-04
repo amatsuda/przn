@@ -130,8 +130,8 @@ A `<bg>` directive applies for this slide only. The next slide reverts.
 
 # Shapes and Lines
 
-<rect x="10" y="5"  width="20" height="6" rx="1" fill="green"/>
-<circle cx="60%" cy="40%" r="6" fill="yellow"/>
+<rect x="10" y="5"  width="20" height="6" rx="1" fill="tomato"/>
+<circle cx="60%" cy="40%" r="6" fill="gold"/>
 <ellipse cx="85%" cy="40%" rx="8" ry="4" fill="cyan"/>
 <line x1="10" y1="20" x2="70" y2="20" stroke="white" stroke-width="0.3"/>
 <arrow x1="10" y1="24" x2="70" y2="24" stroke="cyan" stroke-width="0.4"/>
