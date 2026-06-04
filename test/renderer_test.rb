@@ -1000,6 +1000,37 @@ class RendererTest < Test::Unit::TestCase
                       "relative_width=20% should cap cols to 20% of 80 = 16; got #{place_args[:cols]}"
     end
 
+    test 'oversize image renders at intrinsic size (terminal clips the overflow)' do
+      # The image stub is 200×200 with cell_pixel 10×20 → 20 cols × 10 rows.
+      # On an 8×5 terminal, the image overflows both axes — but with
+      # no auto-fit shrink, we still place it at 20×10.
+      term = RunnerFakeTerm.new(w: 8, h: 5)
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      place_args = nil
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      block = {type: :image, path: @png.path, attrs: {}}
+      Przn::Renderer.new(term).send(:render_image, block, 8, 1)
+      assert_equal({cols: 20, rows: 10}, place_args,
+                   'intrinsic-size placement should overflow the 8×5 terminal')
+    end
+
+    test 'image with no sizing attrs renders at intrinsic 1.0 scale (not auto-shrunk to fit)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      place_args = nil
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      block = {type: :image, path: @png.path, attrs: {}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      # Stub: 200×200 px image, cell 10×20 → 20 cols × 10 rows intrinsic.
+      assert_equal({cols: 20, rows: 10}, place_args)
+    end
+
     test 'width-only on the markdown form: <img src=... width="20%"/> sets relative_width' do
       slide = Przn::Parser.parse(%(# t\n\n<img src="x.png" width="20%"/>\n)).slides[0]
       img = slide.blocks.find { |b| b[:type] == :image }

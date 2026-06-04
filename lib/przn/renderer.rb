@@ -15,12 +15,6 @@ module Przn
 
     DEFAULT_SCALE = 2
 
-    # Default `relative_height` (as a percent of terminal height) applied to
-    # image blocks that don't carry an explicit one. Caps how much of the
-    # screen a single image can occupy; the rest leaves predictable margin
-    # for the slide footer and avoids placement-clearing edge cases in some
-    # terminals when an image lands right against the bottom row.
-    DEFAULT_IMAGE_RELATIVE_HEIGHT_PERCENT = 70
 
     # `mode:` controls whether `{::note}` / `<note>` segments are rendered:
     #   :solo      — dim-inline (today's behavior), default for stand-alone runs.
@@ -1242,43 +1236,28 @@ module Przn
       abs_y = resolve_at_coord(attrs['y'], @terminal.height)
       absolute = abs_x && abs_y
 
-      origin_row = absolute ? abs_y : row
-      available_rows = [@terminal.height - origin_row - 2, 1].max
-      if absolute
-        available_cols = [@terminal.width - abs_x + 1, 1].max
-      else
-        left = content_left(width)
-        available_cols = width - left * 2
-      end
-
-      # Cap the default vertical area to 70 % of the screen, matching what
-      # `{:relative_height="70"}` would do explicitly. Large images that
-      # extend to within a couple of rows of the screen edge render
-      # unreliably in some terminals — they're known-good at 70 %, and
-      # smaller images sit well within this cap so they're unaffected.
-      # An explicit `relative_height` still overrides.
-      default_rh = DEFAULT_IMAGE_RELATIVE_HEIGHT_PERCENT
-      rh = attrs['relative_height'] || default_rh
-      target_rows = (@terminal.height * rh.to_i / 100.0).to_i
-      available_rows = [target_rows, available_rows].min
-
-      # `relative_width="N"` (set directly, or via `width="N%"`) caps the
-      # horizontal extent at N % of the terminal width. No default —
-      # width-unspecified images stay free to fill the available cols
-      # (and then aspect-ratio scaling against `available_rows` decides).
-      if (rw = attrs['relative_width'])
-        target_cols_cap = (@terminal.width * rw.to_i / 100.0).to_i
-        available_cols = [target_cols_cap, available_cols].min if target_cols_cap.positive?
-      end
-
-      # Calculate target cell size maintaining aspect ratio
+      # Compute the image's intrinsic size in cells. Default is to draw
+      # at intrinsic size — no auto-fit shrinking. If the image is
+      # larger than the available pane, the terminal clips the overflow
+      # (same as a tall string of text scrolling off the bottom).
+      #
+      # `relative_height="N"` / `relative_width="N"` (set directly, or
+      # via the `height="N%"` / `width="N%"` aliases) are explicit
+      # author caps: they shrink the image proportionally so that no
+      # axis exceeds N % of the terminal. They never grow it.
       img_cell_w = img_w.to_f / cell_w
       img_cell_h = img_h.to_f / cell_h
-      scale = [available_cols / img_cell_w, available_rows / img_cell_h, 1.0].min
-      target_cols = (img_cell_w * scale).to_i
-      target_rows = (img_cell_h * scale).to_i
-      target_cols = [target_cols, 1].max
-      target_rows = [target_rows, 1].max
+      scale = 1.0
+      if (rh = attrs['relative_height']) && rh.to_i.positive?
+        max_cell_h = @terminal.height * rh.to_i / 100.0
+        scale = [scale, max_cell_h / img_cell_h].min
+      end
+      if (rw = attrs['relative_width']) && rw.to_i.positive?
+        max_cell_w = @terminal.width * rw.to_i / 100.0
+        scale = [scale, max_cell_w / img_cell_w].min
+      end
+      target_cols = [(img_cell_w * scale).to_i, 1].max
+      target_rows = [(img_cell_h * scale).to_i, 1].max
 
       if absolute
         y_cell, x_cell = abs_y, abs_x

@@ -108,7 +108,11 @@ A `<bg>` directive applies for this slide only. The next slide reverts.
 
 `<bg image="ruby.png"/>` uses the Kitty Graphics Protocol at `z: -1` so text layers on top.
 
-# Image — flow
+# Image — flow (intrinsic size)
+
+<img src="ruby.png"/>
+
+# Image — relative_height="70"
 
 <img src="ruby.png" relative_height="70"/>
 

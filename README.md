@@ -269,15 +269,17 @@ Rabbit-compatible kramdown form is also accepted: `{::at x="10" y="20"}content{:
 Embed an image with the standard markdown form, or the `<img>` XML form when you want to absolute-position it. Both produce identical output — `<img>` just opens the door to extra attributes like `x` / `y`.
 
 ```markdown
-![](doge.png){:relative_height="70"}
-<img src="doge.png" relative_height="70"/>
+![](ruby.png)
+<img src="ruby.png"/>
 
-<img src="doge.png" x="5"   y="3"   relative_height="40"/>
-<img src="doge.png" x="50%" y="50%" height="40%"/>
+<img src="ruby.png" relative_height="70"/>
+<img src="ruby.png" x="5"   y="3"   relative_height="40"/>
+<img src="ruby.png" x="50%" y="50%" height="40%"/>
 ```
 
 - `src` is required; `alt` and `title` are accepted and ignored at render time (kept for accessibility / future use).
-- `relative_height="N"` caps the image at N % of the terminal height (default 70). Aspect ratio is preserved. `relative_width="N"` is the same for the horizontal dimension.
+- By default the image renders at its **intrinsic size** — no auto-shrink to fit. If it's bigger than the visible pane, the overflowing edge is clipped (same as a tall list of paragraphs scrolling off the bottom).
+- `relative_height="N"` caps the image at N % of the terminal height (no default — without it, intrinsic size). Aspect ratio is preserved. `relative_width="N"` is the same for the horizontal dimension. Caps shrink, never grow.
 - `height="N%"` / `width="N%"` are short-form aliases for `relative_height` / `relative_width` (both forms — `<img>` and `![]{:...}` — accept the alias). An explicit `relative_*` on the same block wins; a non-`%` value (`height="40"`) is left alone since pixel units aren't supported.
 - `x` / `y` (optional) anchor the image's top-left at an absolute cell. Same two forms as [`<at>`](#absolute-position-text):
   - **Plain integer** — 1-based terminal cells.
