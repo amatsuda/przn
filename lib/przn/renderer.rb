@@ -1331,7 +1331,13 @@ module Przn
       attrs = block[:attrs] || {}
       abs_x = resolve_at_coord(attrs['x'], @terminal.width)
       abs_y = resolve_at_coord(attrs['y'], @terminal.height)
-      absolute = abs_x && abs_y
+      # `x` or `y` (either / both) pins the image at that absolute cell;
+      # the unspecified axis falls back to the flow default (centered
+      # in `width` for x, the current `row` for y). Any explicit
+      # positioning makes the image contribute 0 to the layout flow
+      # — same as `<at>` — so a single-axis pin doesn't push the next
+      # block past where the image landed.
+      positioned = !abs_x.nil? || !abs_y.nil?
 
       # Compute the image's intrinsic size in cells. Default is to draw
       # at intrinsic size — no auto-fit shrinking. If the image is
@@ -1356,15 +1362,14 @@ module Przn
       target_cols = [(img_cell_w * scale).to_i, 1].max
       target_rows = [(img_cell_h * scale).to_i, 1].max
 
-      if absolute
-        y_cell, x_cell = abs_y, abs_x
-      else
-        y_cell = row
-        # In flow mode, fold the active slot offset into x_cell so both
-        # move_to and the kitty_icat coordinate land in the right column.
-        # Absolute mode (`<img x y>`) already names the screen cell.
-        x_cell = [(width - target_cols) / 2, 0].max + 1 + @x_offset
-      end
+      # Per-axis position: explicit `x` / `y` win; absent axes pick
+      # up the flow default. `x_cell` folds the active slot offset
+      # into the centered flow position so both move_to and
+      # kitty_icat land in the right column when rendering inside a
+      # layout slot. The absolute coords already name the screen
+      # cell directly.
+      y_cell = abs_y || row
+      x_cell = abs_x || ([(width - target_cols) / 2, 0].max + 1 + @x_offset)
 
       # Direct kitty-graphics upload for PNGs always; for non-PNG
       # raster formats only on Echoes — its NSBitmapImageRep-based
@@ -1391,7 +1396,7 @@ module Przn
         @terminal.write sixel if sixel && !sixel.empty?
       end
 
-      absolute ? row : row + target_rows
+      positioned ? row : row + target_rows
     end
 
     def resolve_image_path(path)

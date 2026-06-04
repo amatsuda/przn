@@ -288,7 +288,7 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 - `x` / `y` (optional) anchor the image's top-left at an absolute cell. Same two forms as [`<at>`](#absolute-position-text):
   - **Plain integer** — 1-based terminal cells.
   - **Percent** — resolves against the terminal's current width / height.
-  - With `x` and `y` set, the image layers on top of the slide and contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. Without `x` / `y`, the image stays horizontally centered and takes up its natural height in the flow.
+  - **Either / both axes pin** — setting `x` only pins the horizontal column (vertical falls back to the flow row); setting `y` only pins the row (horizontal falls back to the centered flow position); setting both pins both. As soon as either is set, the image contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. With neither `x` nor `y`, the image stays horizontally centered and takes up its natural height in the flow.
 - Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.
 
 ### Shapes and Lines

@@ -1003,6 +1003,27 @@ class RendererTest < Test::Unit::TestCase
       assert_includes moves, [:move_to, 15, 40]
     end
 
+    test 'x only: pins horizontal, uses flow row for vertical, skips flow advance' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '10'}}
+      new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 7)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # y stays at the incoming flow row (7); x lands at the requested cell.
+      assert_includes moves, [:move_to, 7, 10]
+      assert_equal 7, new_row, 'x-only positioning should not advance the flow row'
+    end
+
+    test 'y only: pins vertical, uses centered flow column for horizontal, skips flow advance' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'y' => '12'}}
+      new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # 200×200 px image with cell 10×20 stub → 20 cells wide. Centered
+      # in width=80: (80-20)/2 + 1 = 31. y is the explicit 12.
+      assert_includes moves, [:move_to, 12, 31]
+      assert_equal 5, new_row, 'y-only positioning should not advance the flow row'
+    end
+
     test 'without x and y, image stays horizontally centered and advances the flow' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       block = {type: :image, path: @png.path, attrs: {}}
