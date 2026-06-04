@@ -444,10 +444,10 @@ Theme resolution:
 All keys are optional — anything you don't set falls back to the bundled defaults.
 
 ```yaml
-font:
-  family:                 # body text font; terminal: OSC 66 f=, PDF: Prawn font
-  size: 18                # base PDF font size in pt
-  color:                  # body text color; named ANSI or 6-digit hex
+font:                     # body text typography (paragraphs, lists, h2–h6, code, tables, …)
+  family:                 # font family; terminal: OSC 66 f= (requires Echoes)
+  size:                   # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default 2 (small)
+  color:                  # named ANSI or 6-digit hex; falls back to terminal default fg when unset
 
 title:                    # h1 typography (slide titles)
   family:                 # font family
@@ -476,10 +476,12 @@ colors:
 
 Notes:
 
-- **`font.color`** — deck-wide default text color (terminal: ANSI fg; PDF: Prawn fg). Inline `<color=...>` / `<font color="...">` runs still win per-segment.
+- **`font`** — body text typography for everything that isn't an h1: paragraphs, lists, h2–h6, blockquotes, code blocks, tables, definition lists. Mirrors `title`'s three knobs:
+  - **`font.family`** — applied via OSC 66 `f=` (requires Echoes); PDF: registered via fontconfig. Inline `<font face="...">` runs override it per-segment.
+  - **`font.size`** — OSC 66 scale; controls the visual size of body text (numeric `1`–`7` or named `xx-small` … `xxxx-large`). Default `2` (small). Inline `<size=...>` runs override it per-segment.
+  - **`font.color`** — deck-wide default text color. Inline `<color=...>` / `<font color="...">` runs still win per-segment.
 - **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color.
-- **`font.family`** — applied to body text (terminal: via OSC 66 `f=`, requires Echoes; PDF: registered via fontconfig). Inline `<font face="...">` runs override it per-segment.
-- **`title`** — h1 typography. Each attribute is independent from `font`: `title.family` does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block. h2–h6 stay body text.
+- **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block. h2–h6 stay body text.
 - **`background`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
 - **`rabbit`** — opt-in Rabbit-style bottom-row progress indicator. With the key absent, przn shows the simple `N / M` counter at the bottom-right. With the key present, the bottom row becomes: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress. Set `rabbit.duration` to also show 🐢 tracking elapsed time against the goal; without a duration the turtle stays hidden. Inside [Echoes](https://github.com/amatsuda/echoes) the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
 

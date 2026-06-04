@@ -291,6 +291,33 @@ class RendererTest < Test::Unit::TestCase
       assert(out.count("\e[37m") >= 2, "expected body color to re-open after the inline reset: #{out.inspect}")
     end
 
+    test 'font.size sets the body OSC 66 scale (numeric)' do
+      theme = Przn::Theme.new(colors: {}, font: {size: 3}, bullet: {text: '・'}, background: {}, title: {})
+      assert_equal 3, Przn::Renderer.new(nil, theme: theme).send(:body_scale)
+    end
+
+    test 'font.size accepts named sizes via Parser::SIZE_SCALES' do
+      theme = Przn::Theme.new(colors: {}, font: {size: 'large'}, bullet: {text: '・'}, background: {}, title: {})
+      assert_equal 3, Przn::Renderer.new(nil, theme: theme).send(:body_scale)
+    end
+
+    test 'body_scale falls back to DEFAULT_SCALE when font.size is unset' do
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・'}, background: {}, title: {})
+      assert_equal Przn::Renderer::DEFAULT_SCALE,
+                   Przn::Renderer.new(nil, theme: theme).send(:body_scale)
+    end
+
+    test 'font.size threads into the body render path (paragraph emits s=N)' do
+      theme = Przn::Theme.new(colors: {}, font: {size: 3}, bullet: {text: '・'}, background: {}, title: {})
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      ps = Przn::Parser.parse("# t\n\nhello world\n")
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 0, total: 1)
+      joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert(joined.include?('s=3'), "expected OSC 66 s=3 in body emit: #{joined.inspect}")
+      assert(!joined.include?('s=2'),
+             "did not expect s=2 anywhere when font.size=3: #{joined.inspect}")
+    end
+
     test 'theme= swaps the active theme (used by the reload key)' do
       theme_a = Przn::Theme.new(colors: {}, font: {color: 'red'},   bullet: {text: '・'}, background: {}, title: {})
       theme_b = Przn::Theme.new(colors: {}, font: {color: 'green'}, bullet: {text: '・'}, background: {}, title: {})

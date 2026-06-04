@@ -164,10 +164,21 @@ module Przn
       @terminal.move_to(row, col + @x_offset)
     end
 
+    # Body-text OSC 66 scale (1-7). Reads `theme.font.size` and resolves
+    # via Parser::SIZE_SCALES (so `xx-small` / `2` / `large` all map to
+    # the same table title.size uses), falling back to DEFAULT_SCALE
+    # when unset. Consulted everywhere body text is rendered or
+    # vertically advanced — paragraphs, list items, blockquotes,
+    # code blocks, definition lists, table rows, blank rows, h2–h6.
+    def body_scale
+      size = @theme.font && @theme.font[:size]
+      (size && Parser::SIZE_SCALES[size.to_s]) || DEFAULT_SCALE
+    end
+
     # Resolve the current slot's `size:` override into an OSC 66 scale
     # (1-7). nil when no slot styling applies or the slot didn't set
     # a size — caller falls back to its own default (HEADING_SCALES,
-    # DEFAULT_SCALE, etc.).
+    # body_scale, etc.).
     def slot_scale
       return nil unless @slot_style
       name = @slot_style[:size]
@@ -266,7 +277,7 @@ module Przn
       when :table           then render_table(block, width, row)
       when :image           then render_image(block, width, row)
       when :shape           then row   # rendered in render()'s pre-pass
-      when :blank           then row + DEFAULT_SCALE
+      when :blank           then row + body_scale
       when :bg              then row
       when :slot            then row
       when :at              then render_at(block); row
@@ -355,7 +366,7 @@ module Przn
 
       segments = Parser.parse_inline(block[:content].to_s)
       @terminal.move_to(y, x)
-      @terminal.write render_segments_scaled(segments, DEFAULT_SCALE)
+      @terminal.write render_segments_scaled(segments, body_scale)
     end
 
     # Draw a Keynote-style shape primitive (rect, circle, ellipse, line,
@@ -708,18 +719,18 @@ module Przn
         left = content_left(width)
         prefix = @theme.bullet[:text]
         prefix_w = display_width(prefix)
-        max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
+        max_w = max_text_width(width, left, body_scale) - prefix_w
         segments = Parser.parse_inline(text)
-        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
+        wrapped = wrap_segments(segments, max_w, body_scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, body_scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
           end
-          row += DEFAULT_SCALE
+          row += body_scale
         end
         row
       end
@@ -727,7 +738,7 @@ module Przn
 
     def render_paragraph(block, width, row, align: nil)
       text = block[:content]
-      scale = max_inline_scale(text) || slot_scale || DEFAULT_SCALE
+      scale = max_inline_scale(text) || slot_scale || body_scale
       left = content_left(width)
 
       if align
@@ -749,10 +760,10 @@ module Przn
 
     def render_code_block(block, width, row)
       code_lines = block[:content].lines.map(&:chomp)
-      return row + DEFAULT_SCALE if code_lines.empty?
+      return row + body_scale if code_lines.empty?
 
       left = content_left(width)
-      max_content_w = max_text_width(width, left, DEFAULT_SCALE) - 4
+      max_content_w = max_text_width(width, left, body_scale) - 4
       max_len = code_lines.map { |l| display_width(l) }.max
       box_content_w = [max_len, max_content_w].min
 
@@ -760,8 +771,8 @@ module Przn
         truncated = truncate_to_width(code_line, box_content_w)
         padded = pad_to_width(truncated, box_content_w)
         term_move(row, left + 1)
-        @terminal.write "#{ANSI[:gray_bg]}#{KittyText.sized("  #{padded}  ", s: DEFAULT_SCALE)}#{ANSI[:reset]}"
-        row += DEFAULT_SCALE
+        @terminal.write "#{ANSI[:gray_bg]}#{KittyText.sized("  #{padded}  ", s: body_scale)}#{ANSI[:reset]}"
+        row += body_scale
       end
 
       row
@@ -774,19 +785,19 @@ module Przn
         indent = '  ' * depth
         prefix = "#{indent}#{@theme.bullet[:text]}"
         prefix_w = display_width(prefix)
-        max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
+        max_w = max_text_width(width, left, body_scale) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
+        wrapped = wrap_segments(segments, max_w, body_scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, body_scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
           end
-          row += DEFAULT_SCALE
+          row += body_scale
         end
         row += 1
       end
@@ -800,19 +811,19 @@ module Przn
         indent = '  ' * depth
         prefix = "#{indent}#{i + 1}. "
         prefix_w = display_width(prefix)
-        max_w = max_text_width(width, left, DEFAULT_SCALE) - prefix_w
+        max_w = max_text_width(width, left, body_scale) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
+        wrapped = wrap_segments(segments, max_w, body_scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(prefix, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
           end
-          row += DEFAULT_SCALE
+          row += body_scale
         end
         row += 1
       end
@@ -821,24 +832,24 @@ module Przn
 
     def render_definition_list(block, width, row)
       left = content_left(width)
-      max_w = max_text_width(width, left, DEFAULT_SCALE)
+      max_w = max_text_width(width, left, body_scale)
 
       segments = Parser.parse_inline(block[:term])
-      wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
+      wrapped = wrap_segments(segments, max_w, body_scale)
       wrapped.each do |line_segs|
         term_move(row, left)
-        @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
-        row += DEFAULT_SCALE
+        @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, body_scale)}#{ANSI[:reset]}"
+        row += body_scale
       end
 
       def_max_w = [max_w - 4, 1].max
       block[:definition].each_line do |line|
         segments = Parser.parse_inline(line.chomp)
-        wrapped = wrap_segments(segments, def_max_w, DEFAULT_SCALE)
+        wrapped = wrap_segments(segments, def_max_w, body_scale)
         wrapped.each do |line_segs|
           term_move(row, left + 4)
-          @terminal.write render_segments_scaled(line_segs, DEFAULT_SCALE)
-          row += DEFAULT_SCALE
+          @terminal.write render_segments_scaled(line_segs, body_scale)
+          row += body_scale
         end
       end
       row
@@ -848,18 +859,18 @@ module Przn
       left = content_left(width)
       prefix = '| '
       prefix_w = display_width(prefix)
-      max_w = max_text_width(width, left + 1, DEFAULT_SCALE) - prefix_w
+      max_w = max_text_width(width, left + 1, body_scale) - prefix_w
 
       block[:content].each_line do |line|
         text = line.chomp
         segments = [[:text, text]]
-        wrapped = wrap_segments(segments, max_w, DEFAULT_SCALE)
+        wrapped = wrap_segments(segments, max_w, body_scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left + 1)
           p = li == 0 ? prefix : ' ' * prefix_w
-          @terminal.write "#{ANSI[:dim]}#{KittyText.sized(p, s: DEFAULT_SCALE)}#{render_segments_scaled(line_segs, DEFAULT_SCALE)}#{ANSI[:reset]}"
-          row += DEFAULT_SCALE
+          @terminal.write "#{ANSI[:dim]}#{KittyText.sized(p, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}#{ANSI[:reset]}"
+          row += body_scale
         end
       end
       row
@@ -883,16 +894,16 @@ module Przn
           pad_to_width(cell, col_widths[ci] || 0)
         }.join('  |  ')
         if ri == 0
-          @terminal.write "#{ANSI[:bold]}#{KittyText.sized(line, s: DEFAULT_SCALE)}#{ANSI[:reset]}"
+          @terminal.write "#{ANSI[:bold]}#{KittyText.sized(line, s: body_scale)}#{ANSI[:reset]}"
         else
-          @terminal.write KittyText.sized(line, s: DEFAULT_SCALE)
+          @terminal.write KittyText.sized(line, s: body_scale)
         end
-        row += DEFAULT_SCALE
+        row += body_scale
 
         if ri == 0
           term_move(row, left)
-          @terminal.write KittyText.sized(col_widths.map { |w| '-' * w }.join('--+--'), s: DEFAULT_SCALE)
-          row += DEFAULT_SCALE
+          @terminal.write KittyText.sized(col_widths.map { |w| '-' * w }.join('--+--'), s: body_scale)
+          row += body_scale
         end
       end
       row
@@ -900,10 +911,10 @@ module Przn
 
     def render_image(block, width, row)
       path = resolve_image_path(block[:path])
-      return row + DEFAULT_SCALE unless File.exist?(path)
+      return row + body_scale unless File.exist?(path)
 
       img_size = ImageUtil.image_size(path)
-      return row + DEFAULT_SCALE unless img_size
+      return row + body_scale unless img_size
 
       img_w, img_h = img_size
       cell_w, cell_h = @terminal.cell_pixel_size
@@ -1072,10 +1083,10 @@ module Przn
     def render_bullet(prefix)
       size = @theme.bullet[:size]
       sized =
-        if size && size < DEFAULT_SCALE
-          KittyText.sized(prefix, s: DEFAULT_SCALE, n: size, d: DEFAULT_SCALE, v: 2)
+        if size && size < body_scale
+          KittyText.sized(prefix, s: body_scale, n: size, d: body_scale, v: 2)
         else
-          KittyText.sized(prefix, s: size || DEFAULT_SCALE)
+          KittyText.sized(prefix, s: size || body_scale)
         end
       color = @theme.bullet[:color]
       return sized unless color && !color.to_s.empty?
@@ -1144,7 +1155,7 @@ module Przn
     # Wrap parsed inline segments into lines that fit within max_width units,
     # where 1 unit = `para_scale` terminal cells. Per-segment scaling (e.g.
     # size tags) is honored so a span with a larger scale consumes more budget.
-    def wrap_segments(segments, max_width, para_scale = DEFAULT_SCALE)
+    def wrap_segments(segments, max_width, para_scale = body_scale)
       return [segments] if max_width <= 0
 
       max_cells = max_width * para_scale

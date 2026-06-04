@@ -5,10 +5,10 @@
 # or pass `--theme path/to/your.yml` to override that.
 # All keys are optional — unspecified values fall back to these defaults.
 
-font:
-  family:               # body text font; terminal: OSC 66 f= (Echoes); PDF: Prawn font (auto-detected if blank)
-  size: 18              # base font size in pt for PDF export
-  color:                # body text color (terminal: ANSI fg, PDF: Prawn fg); named ANSI or 6-digit hex
+font:                   # body text typography (paragraphs, lists, h2–h6, code, tables, …)
+  family:               # font family (terminal: OSC 66 f=, requires Echoes)
+  size:                 # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default 2 (small)
+  color:                # named ANSI or 6-digit hex; falls back to the terminal's default fg when unset
 
 title:                  # h1 typography (slide titles); each attribute is independent of `font`
   family:               # font family (terminal: OSC 66 f=, requires Echoes)

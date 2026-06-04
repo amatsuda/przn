@@ -72,9 +72,10 @@ module Przn
       @code_bg = @theme.colors[:code_bg]
       @dim_color = @theme.colors[:dim]
       @inline_code_color = @theme.colors[:inline_code]
-      base = (@theme.font[:size] || DEFAULT_FONT_SIZE).to_f
-      ratio = base / DEFAULT_FONT_SIZE
-      @scale_to_pt = DEFAULT_SCALE_TO_PT.transform_values { |v| v * ratio }
+      # `theme.font.size` is now an OSC 66 scale (1–7), matching
+      # title.size — meaningful to the terminal renderer, not to
+      # this PDF path. Prawn keeps its own fixed point-size table.
+      @scale_to_pt = DEFAULT_SCALE_TO_PT
     end
 
     # Fallback font paths when fc-match is not available.
