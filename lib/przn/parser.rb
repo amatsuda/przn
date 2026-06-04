@@ -400,6 +400,12 @@ module Przn
           segments << [:note, scanner[1]]
         elsif scanner.scan(/<wait\s*\/>/) || scanner.scan('{::wait/}')
           # skip wait markers in inline text
+        elsif scanner.scan(/<br\s*\/?>/i)
+          # Force a line break inside the current paragraph. All three
+          # spellings — `<br>`, `<br/>`, `<br />` — collapse to a
+          # `:break` sentinel that wrap_segments closes the current
+          # line on.
+          segments << [:break]
         elsif scanner.scan('&lt;')
           segments << [:text, '<']
         elsif scanner.scan('&gt;')

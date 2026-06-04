@@ -439,7 +439,7 @@ To show literal markup characters that would otherwise be interpreted as a tag, 
 A &amp; B               renders as: A & B
 ```
 
-A bare `<` not followed by a recognized tag name renders literally as well, so most accidental `<` characters are fine. The entities are only needed when you'd otherwise hit one of the tag patterns (`<size=...>`, `<color=...>`, `<font ...>`, `<note>`, `<wait/>`, `<center>`, `<right>`, `<at ...>`, `<bg .../>`, `<img .../>`, shape tags like `<rect/>` / `<circle/>`, or `<!-- ... -->`).
+A bare `<` not followed by a recognized tag name renders literally as well, so most accidental `<` characters are fine. The entities are only needed when you'd otherwise hit one of the tag patterns (`<size=...>`, `<color=...>`, `<font ...>`, `<note>`, `<wait/>`, `<br>`, `<center>`, `<right>`, `<at ...>`, `<bg .../>`, `<img .../>`, shape tags like `<rect/>` / `<circle/>`, or `<!-- ... -->`).
 
 ### Wait marker
 
@@ -450,6 +450,18 @@ Self-closing presentation flow marker, consumed at parse time:
 ```
 
 Rabbit-compatible kramdown form is also accepted: `{::wait/}`.
+
+### Line break
+
+Force a line break inside a paragraph with `<br>`, `<br/>`, or `<br />`. Each break closes the current line — surrounding inline styling (`<color>`, `<font>`, `<center>`, etc.) carries across, so a centered paragraph with explicit breaks stays centered on every line. Two `<br>`s in a row insert a blank line between the chunks.
+
+```markdown
+<center>title in the middle<br>subtitle on the next line</center>
+
+first line<br><br>second line, after a blank
+```
+
+Paragraphs that would overflow the slide width wrap automatically — `<br>` is only for the cases where you want a break at a specific spot.
 
 ## Theming
 

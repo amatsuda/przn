@@ -39,6 +39,31 @@ class RendererTest < Test::Unit::TestCase
       assert_equal segments, lines[0]
     end
 
+    test ':break splits the segment stream into separate lines (force <br>)' do
+      segments = [[:text, 'one'], [:break], [:text, 'two']]
+      lines = wrap(segments, 40, 2)
+      assert_equal 2, lines.size
+      assert_equal [[:text, 'one']], lines[0]
+      assert_equal [[:text, 'two']], lines[1]
+    end
+
+    test 'consecutive :break segments produce a blank line between' do
+      segments = [[:text, 'a'], [:break], [:break], [:text, 'b']]
+      lines = wrap(segments, 40, 2)
+      assert_equal 3, lines.size
+      assert_equal [[:text, 'a']], lines[0]
+      assert_equal [], lines[1]
+      assert_equal [[:text, 'b']], lines[2]
+    end
+
+    test 'each :break chunk still wraps against max_width independently' do
+      long = 'word ' * 20    # ~100 cells when typeset at scale 2 with body_scale
+      segments = [[:text, long], [:break], [:text, 'short']]
+      lines = wrap(segments, 10, 2)   # very narrow → forces wrap inside chunk 1
+      assert_operator lines.size, :>, 2, "expected the long chunk to wrap plus the post-break line"
+      assert_equal [[:text, 'short']], lines.last
+    end
+
     test 'wraps a long text segment across lines' do
       # max_width = 3 units at scale 2 = 6 cells, "abcdefgh" needs 16 cells -> 3 lines
       segments = [[:text, 'abcdefgh']]

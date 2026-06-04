@@ -1574,6 +1574,19 @@ module Przn
     # where 1 unit = `para_scale` terminal cells. Per-segment scaling (e.g.
     # size tags) is honored so a span with a larger scale consumes more budget.
     def wrap_segments(segments, max_width, para_scale = body_scale)
+      # Force-break support: split at `:break` segments (from <br>),
+      # wrap each chunk independently against `max_width`, then
+      # concatenate the resulting lines. An empty chunk (two `<br>`s
+      # in a row, or a leading / trailing `<br>`) yields one blank
+      # line, matching HTML semantics.
+      if segments.any? { |s| s[0] == :break }
+        groups = [[]]
+        segments.each do |seg|
+          seg[0] == :break ? (groups << []) : (groups.last << seg)
+        end
+        return groups.flat_map { |g| wrap_segments(g, max_width, para_scale) }
+      end
+
       return [segments] if max_width <= 0
 
       max_cells = max_width * para_scale

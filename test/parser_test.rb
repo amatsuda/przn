@@ -323,6 +323,23 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:text, 'text']], Przn::Parser.parse_inline('<wait/>text')
     end
 
+    test 'parses <br>, <br/>, <br /> into a :break segment (force line break)' do
+      assert_equal [[:text, 'a'], [:break], [:text, 'b']],
+                   Przn::Parser.parse_inline('a<br>b')
+      assert_equal [[:text, 'a'], [:break], [:text, 'b']],
+                   Przn::Parser.parse_inline('a<br/>b')
+      assert_equal [[:text, 'a'], [:break], [:text, 'b']],
+                   Przn::Parser.parse_inline('a<br />b')
+      # Case-insensitive too.
+      assert_equal [[:text, 'a'], [:break], [:text, 'b']],
+                   Przn::Parser.parse_inline('a<BR>b')
+    end
+
+    test 'consecutive <br><br> yield two :break segments (one blank line between)' do
+      assert_equal [[:text, 'a'], [:break], [:break], [:text, 'b']],
+                   Przn::Parser.parse_inline('a<br><br>b')
+    end
+
     test 'interleaves XML tags with surrounding text' do
       result = Przn::Parser.parse_inline('hi <size=3>X</size> there')
       assert_equal [[:text, 'hi '], [:tag, 'X', '3'], [:text, ' there']], result
