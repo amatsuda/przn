@@ -1017,6 +1017,39 @@ class RendererTest < Test::Unit::TestCase
                    'intrinsic-size placement should overflow the 8×5 terminal')
     end
 
+    test 'on Echoes, JPGs go through the direct kitty-upload path (no kitten icat)' do
+      jpg = Tempfile.new(['render', '.jpg'])
+      jpg.binmode
+      jpg.write("\xFF\xD8\xFF\xE0".b)  # JPEG SOI marker
+      jpg.flush
+
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      uploads = 0
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) { |**_kw| 'PLACE' }
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_upload_png)
+      Przn::ImageUtil.define_singleton_method(:kitty_upload_png) do |_path, image_id:|
+        uploads += 1
+        'UPLOAD'
+      end
+
+      prev_term = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      begin
+        block = {type: :image, path: jpg.path, attrs: {}}
+        Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      ensure
+        ENV['TERM_PROGRAM'] = prev_term
+      end
+
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert_equal 1, uploads, 'expected one direct kitty upload for JPG on Echoes'
+      assert(writes.include?('UPLOAD'), 'expected upload sentinel: ' + writes.inspect)
+      assert(writes.include?('PLACE'),  'expected place sentinel: ' + writes.inspect)
+    ensure
+      jpg&.close!
+    end
+
     test 'image with no sizing attrs renders at intrinsic 1.0 scale (not auto-shrunk to fit)' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)

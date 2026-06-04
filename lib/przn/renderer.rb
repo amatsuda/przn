@@ -1269,7 +1269,17 @@ module Przn
         x_cell = [(width - target_cols) / 2, 0].max + 1 + @x_offset
       end
 
-      if ImageUtil.kitty_terminal? && ImageUtil.png?(path)
+      # Direct kitty-graphics upload for PNGs always; for non-PNG
+      # raster formats only on Echoes — its NSBitmapImageRep-based
+      # decoder treats `f=100` permissively (PNG / JPEG / TIFF / GIF /
+      # BMP all decode through the same code path), so we can ship a
+      # JPG via the same transmit + place pair the PNG path uses and
+      # avoid the `kitten icat` subprocess. Stock kitty rejects non-
+      # PNG bytes at `f=100` (EBADDATA), so we keep the icat fallback
+      # for it. icat doesn't cope with placements that exceed the
+      # visible cells, so the PNG path is also where intrinsic-size
+      # oversize images work cleanly.
+      if ImageUtil.kitty_terminal? && (ImageUtil.png?(path) || KittyText.echoes?)
         image_id = ensure_kitty_uploaded(path)
         @terminal.move_to(y_cell, x_cell)
         @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows)
