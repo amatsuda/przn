@@ -297,7 +297,7 @@ class RendererTest < Test::Unit::TestCase
     test 'named font.color wraps the rendered body in the corresponding ANSI code' do
       theme = Przn::Theme.new(colors: {}, font: {color: 'red'}, bullet: {text: '・'}, background: {}, title: {})
       out = render_with_theme(theme, [[:text, 'hi']])
-      assert(out.start_with?("\e[31m"), "expected leading red SGR: #{out.inspect}")
+      assert(out.start_with?("\e[38;2;255;0;0m"), "expected leading CSS-red truecolor SGR: #{out.inspect}")
       assert(out.end_with?("\e[0m"), "expected trailing reset: #{out.inspect}")
     end
 
@@ -335,7 +335,7 @@ class RendererTest < Test::Unit::TestCase
     test 'bullet.color wraps the rendered bullet in the corresponding ANSI code' do
       theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・', color: 'cyan'}, background: {}, title: {})
       out = Przn::Renderer.new(nil, theme: theme).send(:render_bullet, '・')
-      assert(out.start_with?("\e[36m"), "expected leading cyan SGR: #{out.inspect}")
+      assert(out.start_with?("\e[38;2;0;255;255m"), "expected leading CSS-cyan truecolor SGR: #{out.inspect}")
       assert(out.end_with?("\e[0m"), "expected trailing reset: #{out.inspect}")
     end
 
@@ -355,13 +355,17 @@ class RendererTest < Test::Unit::TestCase
     test 'inline color tag overrides body color; body color re-opens after the reset' do
       theme = Przn::Theme.new(colors: {}, font: {color: 'white'}, bullet: {text: '・'}, background: {}, title: {})
       out = render_with_theme(theme, [[:text, 'a'], [:tag, 'B', 'red'], [:text, 'c']])
-      # white SGR (37) opens, red (31) overrides for the tag, reset+white re-opens after.
-      red_idx   = out.index("\e[31m")
-      white_idx = out.index("\e[37m")
+      # white and red both come from CSS_NAMED_COLORS now — truecolor SGR
+      # (\e[38;2;R;G;Bm). White opens at the top, red overrides for the
+      # tag, then white re-opens after the reset.
+      red_sgr   = "\e[38;2;255;0;0m"
+      white_sgr = "\e[38;2;255;255;255m"
+      red_idx   = out.index(red_sgr)
+      white_idx = out.index(white_sgr)
       assert_not_nil red_idx
       assert_not_nil white_idx
       assert_operator white_idx, :<, red_idx, "body color should open before the inline color: #{out.inspect}"
-      assert(out.count("\e[37m") >= 2, "expected body color to re-open after the inline reset: #{out.inspect}")
+      assert(out.count(white_sgr) >= 2, "expected body color to re-open after the inline reset: #{out.inspect}")
     end
 
     test 'font.size sets the body OSC 66 scale (numeric)' do
@@ -395,9 +399,55 @@ class RendererTest < Test::Unit::TestCase
       theme_a = Przn::Theme.new(colors: {}, font: {color: 'red'},   bullet: {text: '・'}, background: {}, title: {})
       theme_b = Przn::Theme.new(colors: {}, font: {color: 'green'}, bullet: {text: '・'}, background: {}, title: {})
       r = Przn::Renderer.new(nil, theme: theme_a)
-      assert(r.send(:render_segments_scaled, [[:text, 'x']], 2).start_with?("\e[31m"))
+      # `red` and `green` now resolve through CSS_NAMED_COLORS to
+      # truecolor SGRs. `green` is the CSS-standard `#008000` (the
+      # dark green), not ANSI 32's bright theme green.
+      assert(r.send(:render_segments_scaled, [[:text, 'x']], 2).start_with?("\e[38;2;255;0;0m"))
       r.theme = theme_b
-      assert(r.send(:render_segments_scaled, [[:text, 'x']], 2).start_with?("\e[32m"))
+      assert(r.send(:render_segments_scaled, [[:text, 'x']], 2).start_with?("\e[38;2;0;128;0m"))
+    end
+  end
+
+  sub_test_case 'color_code: font / shape colour parity' do
+    def code(name)
+      Przn::Renderer.new(nil).send(:color_code, name)
+    end
+
+    test 'CSS-only names (tomato, lavender, …) work for fonts as truecolor' do
+      # Pre-fix these resolved to '' since they weren't in Parser::NAMED_COLORS.
+      assert_equal "\e[38;2;255;99;71m",   code('tomato')
+      assert_equal "\e[38;2;230;230;250m", code('lavender')
+    end
+
+    test 'shared CSS/ANSI names resolve to the same RGB shapes use' do
+      # The whole point: <font color="red"> and <rect stroke="red"/>
+      # must render the same colour on screen. Shapes go through
+      # normalize_svg_color → CSS_NAMED_COLORS hex. Fonts go through
+      # color_code; with the unification it also reads CSS_NAMED_COLORS
+      # for the truecolor SGR. The byte-level RGB triple must match.
+      r = Przn::Renderer.new(nil)
+      shape_hex = r.send(:normalize_svg_color, 'red')   # → "#ff0000"
+      font_sgr  = code('red')                           # → "\e[38;2;255;0;0m"
+      assert_equal '#ff0000', shape_hex
+      assert_equal "\e[38;2;255;0;0m", font_sgr,
+                   'expected font red to be the truecolor encoding of shape red'
+    end
+
+    test 'bright_* (no CSS equivalent) still falls back to the ANSI palette' do
+      # bright_red / bright_cyan etc. aren't in CSS_NAMED_COLORS, so
+      # color_code keeps emitting the ANSI palette code — preserves
+      # access to the theme's bright shades for power users.
+      assert_equal "\e[91m", code('bright_red')
+      assert_equal "\e[96m", code('bright_cyan')
+    end
+
+    test '#hex and bare-hex inputs still emit truecolor (unchanged path)' do
+      assert_equal "\e[38;2;255;85;85m", code('ff5555')
+      assert_equal "\e[38;2;255;85;85m", code('#ff5555')
+    end
+
+    test 'unknown names still return empty so callers can no-op' do
+      assert_equal '', code('not-a-color')
     end
   end
 
@@ -788,8 +838,8 @@ class RendererTest < Test::Unit::TestCase
       slide = Przn::Slide.new([{type: :blank}])
       renderer.render(slide, current: 0, total: 9)
       joined = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
-      # cyan SGR is 36
-      assert(joined.include?("\e[36m 1 / 9 "), "expected cyan-colored footer: #{joined.inspect}")
+      # `cyan` is `#00ffff` via CSS_NAMED_COLORS → truecolor SGR.
+      assert(joined.include?("\e[38;2;0;255;255m 1 / 9 "), "expected cyan-colored footer: #{joined.inspect}")
       assert(!joined.include?("\e[2m 1 / 9 "), "expected no dim fallback: #{joined.inspect}")
     end
 
@@ -1098,9 +1148,10 @@ class RendererTest < Test::Unit::TestCase
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
-      # `red` resolves to ANSI fg 31. The paragraph emit should include it.
-      assert(writes.include?("\e[31m"),
-             "expected ANSI red opener in body writes: #{writes.inspect[0, 200]}")
+      # `red` resolves to CSS truecolor `#ff0000` so font and shape
+      # `red` look the same on screen.
+      assert(writes.include?("\e[38;2;255;0;0m"),
+             "expected truecolor red opener in body writes: #{writes.inspect[0, 200]}")
     ensure
       theme.layouts['default'] = original
     end

@@ -2216,9 +2216,22 @@ module Przn
     # Accepts: a named ANSI color (`red`, `bright_cyan`, …), a 6-digit
     # hex code (`ff5555`, with or without a leading `#`). Returns `''`
     # for an unrecognized value so callers can no-op safely.
+    #
+    # Named colors prefer the CSS table over the ANSI palette so that
+    # `<color=red>` (font) and `<rect stroke="red"/>` (shape) render
+    # the same `#ff0000` on screen — they used to drift because shape
+    # paint went through `normalize_svg_color` (CSS hex) while text
+    # went through Parser::NAMED_COLORS (terminal-theme ANSI). The
+    # 147-name CSS table covers every basic colour name plus dozens
+    # of CSS-only names like tomato / lavender that previously
+    # rendered as no-op on fonts. `bright_*` and any other name not
+    # in CSS still falls through to the ANSI palette.
     def color_code(color)
       c = color.to_s.sub(/\A#/, '')
-      if (code = Parser::NAMED_COLORS[c])
+      if (hex = CSS_NAMED_COLORS[c.downcase])
+        r, g, b = hex.scan(/../).map { |h| h.to_i(16) }
+        "\e[38;2;#{r};#{g};#{b}m"
+      elsif (code = Parser::NAMED_COLORS[c])
         "\e[#{code}m"
       elsif c.match?(/\A[0-9a-fA-F]{6}\z/)
         r, g, b = c.scan(/../).map { |h| h.to_i(16) }
