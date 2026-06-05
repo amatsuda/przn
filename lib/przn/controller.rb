@@ -130,15 +130,67 @@ module Przn
     # Space / right / down: reveal the next step on the current slide
     # if there's one left; otherwise jump to the next slide (and reset
     # the step counter to 0 so the new slide starts collapsed).
+    #
+    # When the just-revealed step contains an animated `<action
+    # duration="...">`, run a synchronous animation loop that emits
+    # `progress` frames at 30fps before settling on the final
+    # `render_current`. The loop blocks the key handler — additional
+    # key presses queue and process after the animation finishes.
     def advance_step_or_slide
       total = @renderer.step_count(@presentation.current_slide)
       if @slide_step < total - 1
         @slide_step += 1
+        duration_ms = @renderer.max_duration_for_step(@presentation.current_slide, @slide_step)
+        if duration_ms > 0
+          animate_step(duration_ms)
+        else
+          render_current
+        end
       else
         @presentation.next_slide
         @slide_step = 0
+        render_current
+      end
+    end
+
+    # Default frame rate for the animation loop. 30fps is plenty for
+    # the kinds of single-element moves przn does — and on a busy
+    # slide every frame triggers a full slide re-render plus an SVG
+    # re-upload for any moving shape, so doubling to 60fps would
+    # double Echoes' upload churn without obvious benefit.
+    ANIMATION_FPS = 30.0
+
+    # Monotonic-clock animation loop. Emits intermediate
+    # `Renderer#render(progress:)` calls until `progress` hits 1.0,
+    # then calls `render_current` once more so the post-render
+    # audience_link push and `schedule_preload` (skipped per-frame)
+    # run at the canonical state.
+    def animate_step(duration_ms)
+      frame_ms = 1000.0 / ANIMATION_FPS
+      slide = @presentation.current_slide
+      current = @presentation.current
+      total = @presentation.total
+      started = monotonic_ms
+      loop do
+        elapsed = monotonic_ms - started
+        progress = (elapsed / duration_ms).clamp(0.0, 1.0)
+        @renderer.render(
+          slide,
+          current: current,
+          total: total,
+          started_at: @started_at,
+          step: @slide_step,
+          progress: progress
+        )
+        break if progress >= 1.0
+        sleep_for = (frame_ms - (monotonic_ms - started - elapsed)) / 1000.0
+        sleep(sleep_for) if sleep_for > 0
       end
       render_current
+    end
+
+    def monotonic_ms
+      Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
     end
 
     # Left / up: step backward within the current slide if there's

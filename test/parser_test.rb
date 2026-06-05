@@ -527,6 +527,37 @@ class ParserTest < Test::Unit::TestCase
       assert_equal '-1',  action[:attrs][:z]
       assert_equal '0.5', action[:attrs][:opacity]
     end
+
+    test 'duration="500ms" lands as block[:duration_ms] == 500.0' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<action target="box" x="50" duration="500ms"/>\n)
+      ).slides[0]
+      action = slide.blocks.find { |b| b[:type] == :action }
+      assert_equal 500.0, action[:duration_ms]
+    end
+
+    test 'duration="0.5s" → 500.0 ms' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<action target="box" x="50" duration="0.5s"/>\n)
+      ).slides[0]
+      assert_equal 500.0, slide.blocks.find { |b| b[:type] == :action }[:duration_ms]
+    end
+
+    test 'unit-less duration="500" defaults to milliseconds' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<action target="box" x="50" duration="500"/>\n)
+      ).slides[0]
+      assert_equal 500.0, slide.blocks.find { |b| b[:type] == :action }[:duration_ms]
+    end
+
+    test 'unparseable duration is silently dropped (no duration_ms key)' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<action target="box" x="50" duration="garbage"/>\n)
+      ).slides[0]
+      action = slide.blocks.find { |b| b[:type] == :action }
+      assert_not_nil action, 'the action itself should still be captured'
+      refute action.key?(:duration_ms), 'garbage duration must not produce a duration_ms key'
+    end
   end
 
   sub_test_case 'Slide background: <bg .../>' do

@@ -498,6 +498,7 @@ Now press Space →
 - Actions fire on the step at which they appear in the block sequence (positional, same model as element reveals). The latest action against each target wins at the current step, so a sequence of `<action>`s walks the target through positions.
 - An action with no `target=` is silently dropped. An action targeting an id that doesn't exist is a no-op (no crash). An action against an id whose element hasn't been revealed yet still sets the state — when the element later appears, it lands at the action's position.
 - Layer interaction: the target block's flow vs. positioned status doesn't change. A pinned `<img x y>` stays out of the flow whether moved or not; a flow `<img>` stays in flow.
+- `duration="500ms"` (also `"0.5s"` or plain `"500"` for ms) animates the action smoothly over that span when its step is revealed, instead of snapping. Numeric attrs blend at 30fps from the target's prior value to the new value. Both sides of each interpolated attr must share a unit — `x1="15"` → `x1="50"` blends fine, but `x1="15"` → `x1="50%"` snaps because cells and percentages can't be averaged. Key presses during the animation queue and process after it settles.
 
 ### Line break
 

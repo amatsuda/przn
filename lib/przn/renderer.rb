@@ -61,7 +61,7 @@ module Przn
       @bg_image_id = nil
     end
 
-    def render(slide, current:, total:, started_at: nil, step: 0)
+    def render(slide, current:, total:, started_at: nil, step: 0, progress: 1.0)
       @mutex.synchronize do
         # Per-block visibility for incremental reveals. Each `<wait/>`
         # block bumps the step counter, so block_step[b] = "step at
@@ -72,8 +72,11 @@ module Przn
         @current_step = step
         # Action overrides accumulated up to the current step. Keyed
         # by target id; merged into a block's attrs at render time.
-        # See `compute_effective_state` and `effective_attrs`.
-        @effective_state = compute_effective_state(slide.blocks, @block_step, step)
+        # When `progress < 1.0`, actions at the JUST-REVEALED step
+        # (block_step == current_step) blend partway between their
+        # prior state and final values — that's what animates the
+        # smooth move. See `compute_effective_state`.
+        @effective_state = compute_effective_state(slide.blocks, @block_step, step, progress)
         @terminal.clear
         # Wipe the previous slide's `<img>` / shape placements (cached
         # image data stays alive). The current slide re-emits its own
@@ -217,6 +220,21 @@ module Przn
       slide.blocks.count { |b| b[:type] == :wait } + 1
     end
 
+    # Longest `duration_ms` among the `:action` blocks whose
+    # `block_step` matches the given step. Returns 0 if no action
+    # at that step carries a duration — the controller takes the
+    # snap path when this is 0, the animation loop otherwise.
+    def max_duration_for_step(slide, step)
+      bstep = compute_block_step(slide.blocks)
+      max = 0.0
+      slide.blocks.each do |b|
+        next unless b[:type] == :action && b[:duration_ms]
+        next unless (bstep[b] || 0) == step
+        max = b[:duration_ms] if b[:duration_ms] > max
+      end
+      max
+    end
+
     private
 
     # Tiny stand-in for @terminal that swallows writes. Used by
@@ -263,26 +281,90 @@ module Przn
     # the same id overwrite earlier ones, so the final state is "the
     # latest action that fired against each target."
     #
-    # Returns `{target_id => {key => value, ...}}` where keys are the
-    # action's raw attr names (string `id` if from `<img>`-style attrs,
-    # symbol `:x` if from `<at>`-style — `effective_attrs` reconciles
-    # against the target block's own key style at merge time).
-    def compute_effective_state(blocks, block_step, current_step)
+    # When `progress < 1.0`, an action at `block_step == current_step`
+    # is treated as partway through its `duration_ms` interpolation:
+    # each numeric attr blends from its prior value (whatever earlier
+    # actions left, or the target block's original attr) toward the
+    # action's new value. Actions on EARLIER steps are always fully
+    # applied — progress only affects the just-revealed ones.
+    #
+    # Returns `{target_id => {key => value, ...}}` where keys are
+    # stringified attr names — `effective_attrs` reconciles against
+    # the target block's own key style at merge time.
+    def compute_effective_state(blocks, block_step, current_step, progress = 1.0)
+      # Pre-index id'd blocks so an animating action can look up its
+      # target's *original* attr values when no earlier action has
+      # claimed the same key yet.
+      by_id = {}
+      blocks.each do |b|
+        a = b[:attrs] || {}
+        bid = a['id'] || a[:id]
+        by_id[bid] = b if bid
+      end
+
       state = {}
       blocks.each do |block|
         next unless block[:type] == :action
-        next if (block_step[block] || 0) > current_step
+        bstep = block_step[block] || 0
+        next if bstep > current_step
+
         attrs = block[:attrs] || {}
         target = attrs[:target] || attrs['target']
         next unless target
+
+        # An action animates only when (a) it carries duration_ms,
+        # (b) its step is the just-revealed one, and (c) we were
+        # called with progress < 1.0. Otherwise it snaps (v2 behavior).
+        animating = block[:duration_ms] && bstep == current_step && progress < 1.0
+
         bucket = (state[target] ||= {})
+        target_block = by_id[target]
+        target_attrs = (target_block && target_block[:attrs]) || {}
+
         attrs.each do |k, v|
           key = k.to_s
-          next if key == 'target'
-          bucket[key] = v
+          next if key == 'target' || key == 'duration'
+          if animating
+            prev = bucket[key] || target_attrs[key] || target_attrs[key.to_sym]
+            bucket[key] = lerp_attr(prev, v, progress)
+          else
+            bucket[key] = v
+          end
         end
       end
       state
+    end
+
+    # Split a coordinate-ish string into `[numeric_float, unit_string]`.
+    # `"15"` → `[15.0, ""]`, `"50%"` → `[50.0, "%"]`, `"100px"` →
+    # `[100.0, "px"]`, `"4c"` → `[4.0, "c"]`. Returns nil for garbage —
+    # `lerp_attr` uses that as the "can't interpolate, snap" signal.
+    def parse_dimension(str)
+      return nil if str.nil?
+      m = str.to_s.strip.match(/\A(-?\d+(?:\.\d+)?)([a-zA-Z%]*)\z/)
+      m && [m[1].to_f, m[2]]
+    end
+
+    # Blend two attr strings at `progress` in [0, 1].
+    #
+    #   lerp_attr("15", "50", 0.5)   → "32.5"
+    #   lerp_attr("20%", "80%", 0.5) → "50.0%"
+    #
+    # Returns `target_str` unchanged when:
+    #   - prev is nil (no prior value to blend from),
+    #   - either side fails to parse as a dimension,
+    #   - the two sides use different units (can't meaningfully blend),
+    #   - progress is at or past 1.0 (settled).
+    # These are graceful instant-fallback paths — the animation just
+    # snaps for that attr instead of trying to fake an interpolation.
+    def lerp_attr(prev_str, target_str, progress)
+      return target_str if prev_str.nil? || progress >= 1.0
+      prev = parse_dimension(prev_str)
+      targ = parse_dimension(target_str)
+      return target_str unless prev && targ && prev[1] == targ[1]
+      blended = prev[0] + progress * (targ[0] - prev[0])
+      num = blended == blended.to_i ? blended.to_i.to_s : blended.to_s
+      "#{num}#{prev[1]}"
     end
 
     # Merge a block's stored attrs with any action-driven overrides

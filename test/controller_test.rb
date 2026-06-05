@@ -24,6 +24,9 @@ class ControllerTest < Test::Unit::TestCase
     def step_count(slide)
       slide.blocks.count { |b| b[:type] == :wait } + 1
     end
+    # No animations in controller tests — every step snaps. Mirrors
+    # Renderer#max_duration_for_step's "no duration_ms anywhere" return.
+    def max_duration_for_step(_slide, _step); 0; end
   end
 
   def setup

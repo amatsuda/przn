@@ -195,11 +195,11 @@ A vertical arrow points up, well below the text. Press Space to step it across.
 
 <wait/>
 
-<action target="arrow" x1="50" x2="50"/>
+<action target="arrow" x1="50" x2="50" duration="500ms"/>
 
 <wait/>
 
-<action target="arrow" x1="85" x2="85"/>
+<action target="arrow" x1="85" x2="85" duration="500ms"/>
 
 # Thank you
 

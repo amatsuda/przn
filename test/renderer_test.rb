@@ -2275,6 +2275,82 @@ class RendererTest < Test::Unit::TestCase
       assert_equal '80c', eff['x'], 'last action wins at step 2'
     end
 
+    test 'parse_dimension splits numeric prefix and unit suffix' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      assert_equal [15.0, ''],   r.send(:parse_dimension, '15')
+      assert_equal [50.0, '%'],  r.send(:parse_dimension, '50%')
+      assert_equal [100.0, 'px'], r.send(:parse_dimension, '100px')
+      assert_equal [4.0, 'c'],   r.send(:parse_dimension, '4c')
+      assert_equal [32.5, ''],   r.send(:parse_dimension, '32.5')
+      assert_nil r.send(:parse_dimension, 'tomato'), 'non-numeric garbage returns nil'
+      assert_nil r.send(:parse_dimension, nil),      'nil returns nil'
+    end
+
+    test 'lerp_attr blends matching-unit numerics at the given progress' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      assert_equal '32.5', r.send(:lerp_attr, '15', '50', 0.5)
+      assert_equal '50%',  r.send(:lerp_attr, '20%', '80%', 0.5)
+      assert_equal '150px', r.send(:lerp_attr, '100px', '200px', 0.5)
+    end
+
+    test 'lerp_attr settles to target at progress >= 1.0' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      assert_equal '50', r.send(:lerp_attr, '15', '50', 1.0)
+      assert_equal '50', r.send(:lerp_attr, '15', '50', 1.5)  # past end
+    end
+
+    test 'lerp_attr falls back to target on unit mismatch (graceful instant)' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      # "15" (cells) vs "50%" — can't meaningfully blend, snap to target.
+      assert_equal '50%', r.send(:lerp_attr, '15', '50%', 0.5)
+    end
+
+    test 'lerp_attr returns the target string when prev is nil' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      assert_equal '50', r.send(:lerp_attr, nil, '50', 0.5)
+    end
+
+    test 'compute_effective_state at progress:0.5 blends the just-revealed action' do
+      # Arrow at x1=15 with an action moving it to x1=50, duration=500ms.
+      # At step:1 progress:0.5 we expect x1 ≈ 32.5.
+      arrow = {type: :shape, kind: :arrow,
+               attrs: {'id' => 'arrow', 'x1' => '15', 'y1' => '20', 'x2' => '15', 'y2' => '10'}}
+      action = {type: :action, attrs: {target: 'arrow', x1: '50', x2: '50'}, duration_ms: 500.0}
+      slide = step_slide([arrow, {type: :wait}, action])
+
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      r.send(:render, slide, current: 0, total: 1, step: 1, progress: 0.5)
+      eff = r.send(:effective_attrs, arrow)
+      assert_equal '32.5', eff['x1']
+      assert_equal '32.5', eff['x2']
+      assert_equal '20',   eff['y1'], 'y1 was never animated, untouched'
+    end
+
+    test 'compute_effective_state at progress:1.0 matches v2 snap behavior exactly' do
+      arrow = {type: :shape, kind: :arrow,
+               attrs: {'id' => 'arrow', 'x1' => '15'}}
+      action = {type: :action, attrs: {target: 'arrow', x1: '50'}, duration_ms: 500.0}
+      slide = step_slide([arrow, {type: :wait}, action])
+
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      r.send(:render, slide, current: 0, total: 1, step: 1, progress: 1.0)
+      assert_equal '50', r.send(:effective_attrs, arrow)['x1']
+    end
+
+    test 'max_duration_for_step picks the largest duration_ms among same-step actions' do
+      arrow = {type: :shape, kind: :arrow, attrs: {'id' => 'a'}}
+      slide = step_slide([
+        arrow,
+        {type: :wait},
+        {type: :action, attrs: {target: 'a', x1: '20'}, duration_ms: 250.0},
+        {type: :action, attrs: {target: 'a', y1: '5'},  duration_ms: 500.0},
+      ])
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      assert_equal 500.0, r.max_duration_for_step(slide, 1)
+      assert_equal 0,     r.max_duration_for_step(slide, 0),
+                          'step 0 has no actions → 0 (no animation needed)'
+    end
+
     test 'hidden positioned `<img x y>` is NOT pre-placed (no kitty_place emitted for it)' do
       # The pre-pass writes the placement bytes; if the block is hidden,
       # nothing should reach the terminal for that image.

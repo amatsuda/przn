@@ -182,7 +182,17 @@ module Przn
         # but anything the target's renderer reads can be moved.
         when %r{\A\s*<action((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
           attrs = parse_xml_attrs(Regexp.last_match(1))
-          blocks << {type: :action, attrs: attrs} if attrs[:target]
+          if attrs[:target]
+            block = {type: :action, attrs: attrs}
+            # `duration="500ms"` / `"0.5s"` / plain `"500"` turns the
+            # snap into a smooth interpolation. Unparseable values
+            # silently fall back to instant — keeps a typo from
+            # crashing the deck. See `parse_duration_ms`.
+            if attrs[:duration] && (ms = parse_duration_ms(attrs[:duration]))
+              block[:duration_ms] = ms
+            end
+            blocks << block
+          end
 
         # h2-h6 (sub-headings within slide)
         when /\A(\#{2,6})\s+(.*)/
@@ -363,6 +373,25 @@ module Przn
         attrs[key.to_sym] = dq || sq || uq
       end
       attrs
+    end
+
+    # Parse a `duration=` value off `<action>` into milliseconds as a
+    # Float. Accepts:
+    #   "500ms"  → 500.0
+    #   "0.5s"   →  500.0
+    #   "500"    → 500.0   (unit-less = ms)
+    # Returns nil for anything unparseable so a typo lets the action
+    # quietly fall back to the snap (v2) behavior.
+    def parse_duration_ms(raw)
+      return nil if raw.nil?
+      s = raw.to_s.strip
+      if (m = s.match(/\A(\d+(?:\.\d+)?)ms\z/))
+        m[1].to_f
+      elsif (m = s.match(/\A(\d+(?:\.\d+)?)s\z/))
+        m[1].to_f * 1000.0
+      elsif (m = s.match(/\A(\d+(?:\.\d+)?)\z/))
+        m[1].to_f
+      end
     end
 
     def parse_image_attrs(str, attrs)
