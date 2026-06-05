@@ -408,6 +408,133 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'h1 title: server-side centering when font face is set' do
+    class CenterFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def heading_theme(family: 'Yu Gothic', size: 'xx-large')
+      # Lock title.size so the test math doesn't drift if the default
+      # heading scale (KittyText::HEADING_SCALES[1]) changes. xx-large = 5.
+      Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・'}, background: {}, title: {family: family, size: size}, counter: {})
+    end
+
+    def with_echoes
+      prev = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      yield
+    ensure
+      ENV['TERM_PROGRAM'] = prev
+    end
+
+    test 'centered + proportional face + Echoes → one slot-spanning multicell with w= and h=2' do
+      with_echoes do
+        term = CenterFakeTerm.new(w: 80, h: 30)
+        r = Przn::Renderer.new(term, theme: heading_theme(family: 'Yu Gothic'))
+        block = {type: :heading, level: 1, content: 'Hello'}
+        r.send(:render_heading, block, 80, 3, align: :center)
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        assert_match(/s=5:w=16:h=2:f=Yu Gothic/, writes,
+                     'expected one OSC 7772 multicell with explicit slot-spanning w= and halign=2')
+      end
+    end
+
+    test 'cursor lands at the lead-cells offset so the slot-undersized block is slot-centered' do
+      with_echoes do
+        # Slot width = 72, scale = 5 → block_w_units = 14, block_w = 70.
+        # Lead cells = (72 - 70) / 2 = 1; cursor expected at col 1+1 = 2.
+        term = CenterFakeTerm.new(w: 80, h: 30)
+        r = Przn::Renderer.new(term, theme: heading_theme(family: 'Yu Gothic'))
+        block = {type: :heading, level: 1, content: 'Hi'}
+        r.send(:render_heading, block, 72, 3, align: :center)
+        moves = term.ops.select { |op, *| op == :move_to }
+        assert_equal [3, 2], moves.first[1..2],
+                     "expected move_to (row=3, col=2); got #{moves.first.inspect}"
+      end
+    end
+
+    test 'falls back to compute_pad when no font face is set (monospace path unaffected)' do
+      with_echoes do
+        term = CenterFakeTerm.new(w: 80, h: 30)
+        # title.family not set → face is nil → shortcut skipped.
+        theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・'}, background: {}, title: {}, counter: {})
+        r = Przn::Renderer.new(term, theme: theme)
+        block = {type: :heading, level: 1, content: 'Hello'}
+        r.send(:render_heading, block, 80, 3, align: :center)
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        refute_match(/:w=/, writes, 'no font face → no explicit w= block, current per-segment path kept')
+      end
+    end
+
+    test 'falls back when running outside Echoes (strict kitty caps w= at 7)' do
+      term = CenterFakeTerm.new(w: 80, h: 30)
+      ENV.delete('TERM_PROGRAM')  # any non-Echoes value defeats KittyText.echoes?
+      r = Przn::Renderer.new(term, theme: heading_theme(family: 'Yu Gothic'))
+      block = {type: :heading, level: 1, content: 'Hello'}
+      r.send(:render_heading, block, 80, 3, align: :center)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      refute_match(/:w=16/, writes,
+                   'outside Echoes the slot-spanning w= shortcut must not fire')
+    end
+
+    test 'multi-segment titles (e.g. inline color) fall back to per-segment path' do
+      with_echoes do
+        term = CenterFakeTerm.new(w: 80, h: 30)
+        r = Przn::Renderer.new(term, theme: heading_theme(family: 'Yu Gothic'))
+        # `<color=red>Hot</color> news` parses into [tag, text, ...] —
+        # multiple segments, server-side shortcut bows out.
+        block = {type: :heading, level: 1, content: '<color=red>Hot</color> news'}
+        r.send(:render_heading, block, 80, 3, align: :center)
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        refute_match(/:w=16/, writes,
+                     'multi-segment title must not use the single-block shortcut')
+      end
+    end
+
+    test 'centered paragraph in a proportional theme font uses the same server-side shortcut' do
+      # This is the actual user-reported case: the second line in
+      # the screenshot ("lilililili Class Methods" rendered in Yu
+      # Gothic) was drifting because compute_pad's cell-grid math
+      # disagreed with the font's proportional rendering. The
+      # paragraph path should now take the same shortcut titles use.
+      with_echoes do
+        term = CenterFakeTerm.new(w: 80, h: 30)
+        theme = Przn::Theme.new(colors: {}, font: {family: 'Yu Gothic'},
+                                 bullet: {text: '・'}, background: {}, title: {}, counter: {})
+        r = Przn::Renderer.new(term, theme: theme)
+        block = {type: :paragraph, content: 'lilililili Class Methods'}
+        r.send(:render_paragraph, block, 80, 5, align: :center)
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        # body_scale = 2, so w = floor(80 / 2) = 40.
+        assert_match(/s=2:w=40:h=2:f=Yu Gothic;lilililili Class Methods/, writes,
+                     'expected one slot-spanning multicell with halign=2 for the centered proportional paragraph')
+      end
+    end
+
+    test 'centered paragraph with no proportional face still uses the pad-based path' do
+      with_echoes do
+        term = CenterFakeTerm.new(w: 80, h: 30)
+        # No font.family in theme → no proportional face → shortcut bows out.
+        theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・'},
+                                 background: {}, title: {}, counter: {})
+        r = Przn::Renderer.new(term, theme: theme)
+        block = {type: :paragraph, content: 'just centered'}
+        r.send(:render_paragraph, block, 80, 5, align: :center)
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        refute_match(/:w=40:h=2/, writes,
+                     'monospace theme.font path keeps the cell-grid centering — no slot-spanning block')
+      end
+    end
+  end
+
   sub_test_case 'color_code: font / shape colour parity' do
     def code(name)
       Przn::Renderer.new(nil).send(:color_code, name)

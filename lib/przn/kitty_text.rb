@@ -19,8 +19,9 @@ module Przn
     # 66, which renders without the flip / custom font on any kitty-
     # compatible terminal (better than emitting an OSC 7772 frame the
     # terminal would ignore entirely).
-    def sized(text, s:, h: nil, v: nil, n: nil, d: nil, f: nil, flip: nil)
+    def sized(text, s:, h: nil, v: nil, n: nil, d: nil, f: nil, flip: nil, w: nil)
       params = +"s=#{s}"
+      params << ":w=#{w}" if w
       params << ":n=#{n}" if n
       params << ":d=#{d}" if d
       params << ":h=#{h}" if h

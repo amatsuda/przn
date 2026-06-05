@@ -1396,10 +1396,17 @@ module Przn
         wrapped = wrap_segments(segments, max_w, scale)
 
         wrapped.each do |line_segs|
-          vis = segments_visible_cells(line_segs, scale)
-          pad = compute_pad(width, vis, align)
-          term_move(row, pad + 1)
-          @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2, default_color: color)}#{ANSI[:reset]}"
+          if server_centered_eligible?(line_segs, face, align, width, scale)
+            col, body = server_centered_emit(line_segs.first[1], scale, face, width)
+            body = "#{color_code(color)}#{body}#{ANSI[:reset]}" if color && !color.to_s.empty?
+            term_move(row, col)
+            @terminal.write "#{ANSI[:bold]}#{body}#{ANSI[:reset]}"
+          else
+            vis = segments_visible_cells(line_segs, scale)
+            pad = compute_pad(width, vis, align)
+            term_move(row, pad + 1)
+            @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2, default_color: color)}#{ANSI[:reset]}"
+          end
           row += scale
         end
         row + 4
@@ -1435,6 +1442,8 @@ module Przn
       #     `max_segment_scale` so a tall span only inflates the row
       #     it actually appears on.
       base_scale = slot_scale || body_scale
+      face = slot_family || @theme.font[:family]
+      color = slot_color || @theme.font[:color]
       left = content_left(width)
 
       if align
@@ -1448,8 +1457,23 @@ module Przn
 
       wrapped.each do |line_segs|
         line_h = max_segment_scale(line_segs, base_scale)
-        term_move(row, left + 1)
-        @terminal.write render_segments_scaled(line_segs, base_scale, line_height: line_h)
+        if server_centered_eligible?(line_segs, face, align, width, base_scale)
+          # Hand the centering to Echoes' halign + proportional
+          # measurement so a Yu Gothic / Helvetica Neue / etc. line
+          # lands at the true pixel center rather than the cell-grid
+          # estimate compute_pad would use. Body color is wrapped
+          # around the multicell the same way render_segments_scaled
+          # would have done — otherwise this line falls through to
+          # the terminal default fg and visibly drifts from the
+          # theme.font.color / slot.color the rest of the deck uses.
+          col, body = server_centered_emit(line_segs.first[1], base_scale, face, width)
+          body = "#{color_code(color)}#{body}#{ANSI[:reset]}" if color && !color.to_s.empty?
+          term_move(row, col)
+          @terminal.write body
+        else
+          term_move(row, left + 1)
+          @terminal.write render_segments_scaled(line_segs, base_scale, line_height: line_h)
+        end
         row += line_h
       end
       row
@@ -1905,6 +1929,49 @@ module Przn
       when :center then [(width - content_width) / 2, 0].max
       else content_left(width)
       end
+    end
+
+    # Can this line use the server-side centering shortcut? Four
+    # conditions must hold:
+    #   - The line is centered (align == :center). The shortcut is a
+    #     centering tool; left- and right-aligned lines keep the
+    #     existing pad-based path.
+    #   - A proportional `face` is set. Monospace lines center fine
+    #     under the cell-grid estimate; the shortcut only matters
+    #     when the font's actual rendered width disagrees with cell
+    #     count, which is the proportional case.
+    #   - We're running in Echoes. The shortcut relies on Echoes'
+    #     widened OSC 7772 `w=` parameter and its pixel-precise
+    #     halign engine. Strict-kitty terminals cap w at 7 (insufficient
+    #     for a slot-spanning block) and don't measure proportional
+    #     glyphs anyway, so the fallback path is the right answer there.
+    #   - The line is a single :text segment. Multi-segment lines
+    #     (a `<color=red>...` halfway through, say) need per-segment
+    #     SGR/face changes that one multicell can't express; they
+    #     keep the per-segment path and accept the cell-grid drift.
+    #
+    # `width / scale >= 1` is also required so the OSC 7772 `w=`
+    # field has a positive integer to take.
+    def server_centered_eligible?(line_segs, face, align, width, scale)
+      align == :center &&
+        face && !face.to_s.empty? &&
+        KittyText.echoes? &&
+        line_segs.size == 1 && line_segs.first[0] == :text &&
+        scale && scale > 0 && (width.to_f / scale).floor >= 1
+    end
+
+    # Compute the slot-relative cursor column + the multicell body
+    # bytes for a server-side-centered line. The block is
+    # `floor(width/scale) * scale` cells wide so it fits inside the
+    # slot; any leftover slot space splits evenly via `lead_cells`
+    # so the BLOCK is slot-centered. Halign=2 then centers the text
+    # pixel-precisely inside the block.
+    def server_centered_emit(text, scale, face, width)
+      block_w_units = (width.to_f / scale).floor
+      block_w = block_w_units * scale
+      lead_cells = (width - block_w) / 2
+      body = KittyText.sized(text, s: scale, w: block_w_units, h: 2, f: face)
+      [lead_cells + 1, body]
     end
 
     def render_inline(text)
