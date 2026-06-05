@@ -245,12 +245,13 @@ module Przn
     def render_layout(slide, slots, width, height)
       buckets = route_blocks_to_slots(slide.blocks, slots)
 
+      cell_w, cell_h = @terminal.cell_pixel_size
       slots.each do |slot|
         blocks = buckets[slot.name] || []
         next if blocks.empty?
-        x = resolve_at_coord(slot.x, width)
-        y = resolve_at_coord(slot.y, height)
-        w = resolve_at_coord(slot.width, width)
+        x = resolve_at_coord(slot.x, width, cell_px: cell_w)
+        y = resolve_at_coord(slot.y, height, cell_px: cell_h)
+        w = resolve_at_coord(slot.width, width, cell_px: cell_w)
         next unless x && y && w
 
         prev_offset = @x_offset
@@ -401,8 +402,9 @@ module Przn
     # push subsequent content down.
     def render_at(block)
       attrs = block[:attrs] || {}
-      x = resolve_at_coord(attrs[:x], @terminal.width)
-      y = resolve_at_coord(attrs[:y], @terminal.height)
+      cell_w, cell_h = @terminal.cell_pixel_size
+      x = resolve_at_coord(attrs[:x], @terminal.width, cell_px: cell_w)
+      y = resolve_at_coord(attrs[:y], @terminal.height, cell_px: cell_h)
       return if x.nil? || y.nil?
 
       segments = Parser.parse_inline(block[:content].to_s)
@@ -972,11 +974,22 @@ module Przn
       f == i ? i.to_s : format('%.3f', f)
     end
 
-    # Resolve an `<at>` coordinate string against the dimension it indexes.
-    # `"50%"` → halfway along `max`; plain integer string → that number of
-    # cells. Out-of-range values clamp into [1, max]. Returns nil when the
+    # Resolve a coordinate string against the dimension it indexes.
+    # Accepts four suffix forms; the bare-number case picks between cells
+    # and pixels based on `default_unit:` so each tag can pick the unit
+    # that matches its native vocabulary (`<at>` → cells, `<img>` → px).
+    #
+    #   "50%"  → halfway along `max` cells
+    #   "100px"→ 100 pixels, converted to its containing cell
+    #   "10c"  → cell 10 (1-based; explicit)
+    #   "10"   → cell 10 OR 10 px (per default_unit)
+    #
+    # Pixel→cell uses floor (the cell *containing* that pixel) so e.g.
+    # `x="0"` → cell 1 regardless of cell width. `cell_px` is required
+    # for any px form; if it's nil and a px-form value is given, returns
+    # nil. Out-of-range values clamp into [1, max]. Returns nil when the
     # input is missing or unparseable so the renderer skips silently.
-    def resolve_at_coord(raw, max)
+    def resolve_at_coord(raw, max, cell_px: nil, default_unit: :cell)
       return nil if raw.nil?
 
       s = raw.to_s.strip
@@ -986,8 +999,18 @@ module Przn
         if s.end_with?('%')
           pct = s.chomp('%').to_f
           (pct / 100.0 * max).round
-        elsif s =~ /\A-?\d+\z/
-          s.to_i
+        elsif (m = s.match(/\A(-?\d+(?:\.\d+)?)px\z/))
+          return nil unless cell_px && cell_px > 0
+          (m[1].to_f / cell_px).floor + 1
+        elsif (m = s.match(/\A(-?\d+)c\z/))
+          m[1].to_i
+        elsif s =~ /\A-?\d+(?:\.\d+)?\z/
+          if default_unit == :px
+            return nil unless cell_px && cell_px > 0
+            (s.to_f / cell_px).floor + 1
+          else
+            s.to_i
+          end
         end
       return nil if cells.nil?
 
@@ -1371,8 +1394,8 @@ module Przn
       cell_w, cell_h = @terminal.cell_pixel_size
 
       attrs = block[:attrs] || {}
-      abs_x = resolve_at_coord(attrs['x'], @terminal.width)
-      abs_y = resolve_at_coord(attrs['y'], @terminal.height)
+      abs_x = resolve_at_coord(attrs['x'], @terminal.width, cell_px: cell_w, default_unit: :px)
+      abs_y = resolve_at_coord(attrs['y'], @terminal.height, cell_px: cell_h, default_unit: :px)
       # `x` or `y` (either / both) pins the image at that absolute cell;
       # the unspecified axis falls back to the flow default (centered
       # in `width` for x, the current `row` for y). Any explicit

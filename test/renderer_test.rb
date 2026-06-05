@@ -1079,13 +1079,31 @@ class RendererTest < Test::Unit::TestCase
       @png.close!
     end
 
-    test 'x and y position the image at those 1-based cells and skip flow advance' do
+    test 'x and y in cells (Nc suffix) position the image at those 1-based cells and skip flow advance' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      block = {type: :image, path: @png.path, attrs: {'x' => '10', 'y' => '5'}}
+      block = {type: :image, path: @png.path, attrs: {'x' => '10c', 'y' => '5c'}}
       new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 1)
       moves = term.ops.select { |op, *| op == :move_to }
       assert_includes moves, [:move_to, 5, 10]
       assert_equal 1, new_row, 'absolute placement must not advance the layout row'
+    end
+
+    test 'bare numeric x/y on <img> default to pixels (FakeTerm cell 10x20: x=20px → col 3, y=40px → row 3)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      # cell_w=10 → x=20 px lands inside cell ⌊20/10⌋+1 = 3.
+      # cell_h=20 → y=40 px lands inside cell ⌊40/20⌋+1 = 3.
+      block = {type: :image, path: @png.path, attrs: {'x' => '20', 'y' => '40'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 3, 3]
+    end
+
+    test 'explicit px suffix on <img> matches bare-numeric default' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '20px', 'y' => '40px'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 3, 3]
     end
 
     test 'positioned image (both x and y) defaults to z=-1 so text layers on top' do
@@ -1156,9 +1174,9 @@ class RendererTest < Test::Unit::TestCase
       assert_includes moves, [:move_to, 15, 40]
     end
 
-    test 'x only: pins horizontal, uses flow row for vertical, skips flow advance' do
+    test 'x only (cells): pins horizontal, uses flow row for vertical, skips flow advance' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      block = {type: :image, path: @png.path, attrs: {'x' => '10'}}
+      block = {type: :image, path: @png.path, attrs: {'x' => '10c'}}
       new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 7)
       moves = term.ops.select { |op, *| op == :move_to }
       # y stays at the incoming flow row (7); x lands at the requested cell.
@@ -1166,9 +1184,9 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 7, new_row, 'x-only positioning should not advance the flow row'
     end
 
-    test 'y only: pins vertical, uses centered flow column for horizontal, skips flow advance' do
+    test 'y only (cells): pins vertical, uses centered flow column for horizontal, skips flow advance' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
-      block = {type: :image, path: @png.path, attrs: {'y' => '12'}}
+      block = {type: :image, path: @png.path, attrs: {'y' => '12c'}}
       new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 5)
       moves = term.ops.select { |op, *| op == :move_to }
       # 200×200 px image with cell 10×20 stub → 20 cells wide. Centered

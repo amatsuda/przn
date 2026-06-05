@@ -122,7 +122,7 @@ A `<bg>` directive applies for this slide only. The next slide reverts.
 
 # Image — absolute position
 
-<img src="ruby.png" x="5"   y="3"   relative_height="40"/>
+<img src="ruby.png" x="5c"  y="3c"  relative_height="40"/>
 <img src="ruby.png" x="50%" y="50%" relative_height="40"/>
 
 # Absolute-position text — `<at>`

@@ -262,9 +262,11 @@ Place text at an arbitrary `(column, row)` on the slide, escaping the normal top
 
 Rabbit-compatible kramdown form is also accepted: `{::at x="10" y="20"}content{:/at}`.
 
-- `x` / `y` accept two forms:
-  - **Plain integer** — 1-based terminal cells, matching the cursor-position escape (`\e[y;xH`). `x="1" y="1"` is the very top-left of the slide pane.
-  - **Percent** (`x="50%"`, `y="100%"`) — resolves against the terminal's current width / height. Auto-adjusts when the pane is resized.
+- `x` / `y` accept four forms — the suffix picks the unit:
+  - **Plain integer** — 1-based terminal cells (cells are the default for `<at>` since it places text). `x="1" y="1"` is the very top-left of the slide pane.
+  - **`Nc`** — same as plain integer; the `c` is explicit cells, useful when sitting next to an `<img>` that defaults the other way.
+  - **`Npx`** — pixels. Converted to the cell containing that pixel (text can only land on cell boundaries, so a px value is rounded to its enclosing cell).
+  - **`N%`** — percent of the terminal's current width / height. Auto-adjusts when the pane is resized.
 - Content is parsed inline, so all the usual styling works inside an `<at>` — `<size>`, `<color>`, `<font>`, `**bold**`, `*italic*`, etc.
 - The block doesn't take up vertical space in the slide's layout — paragraphs around it render in their normal positions and the absolute placement layers on top. Useful for overlaying labels on a `<bg .../>` gradient or pinning annotations to specific cells.
 - Out-of-range coordinates clamp into the visible area; missing / unparseable coordinates skip silently.
@@ -278,7 +280,8 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 <img src="ruby.png"/>
 
 <img src="ruby.png" relative_height="70"/>
-<img src="ruby.png" x="5"   y="3"   relative_height="40"/>
+<img src="ruby.png" x="200" y="100" relative_height="40"/>     <!-- 200 px from left, 100 px from top -->
+<img src="ruby.png" x="5c"  y="3c"  relative_height="40"/>     <!-- cell column 5, row 3 -->
 <img src="ruby.png" x="50%" y="50%" height="40%"/>
 ```
 
@@ -287,9 +290,11 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 - `relative_height="N"` caps the image at N % of the terminal height (no default — without it, intrinsic size). Aspect ratio is preserved. `relative_width="N"` is the same for the horizontal dimension. Caps shrink, never grow.
 - `height="N%"` / `width="N%"` are short-form aliases for `relative_height` / `relative_width` (both forms — `<img>` and `![]{:...}` — accept the alias). An explicit `relative_*` on the same block wins.
 - `height="N"` / `width="N"` (plain integer, with optional `px` suffix) target an exact pixel size on that axis — aspect ratio is preserved, and the other axis is derived from it. Unlike the `relative_*` caps, pixel values can scale the image **up** past intrinsic size as well as down. Setting both pixel attrs fits the image inside the smaller of the two scales. `relative_*` caps still apply on top of a pixel target (`width="500" relative_width="40"` shrinks the 500-pixel result if it would exceed 40 % of the terminal).
-- `x` / `y` (optional) anchor the image's top-left at an absolute cell. Same two forms as [`<at>`](#absolute-position-text):
-  - **Plain integer** — 1-based terminal cells.
-  - **Percent** — resolves against the terminal's current width / height.
+- `x` / `y` (optional) anchor the image's top-left. Same suffix vocabulary as [`<at>`](#absolute-position-text), but `<img>` flips the default: a bare number means **pixels**, since that's the image's native unit.
+  - **Plain integer** — pixels (`x="200"` = 200 px from the left edge of the slide pane). The image's top-left lands in the cell containing that pixel.
+  - **`Npx`** — same as plain integer; the `px` is explicit.
+  - **`Nc`** — 1-based terminal cell, when you want grid alignment instead of pixel alignment.
+  - **`N%`** — percent of the terminal's current width / height.
   - **Either / both axes pin** — setting `x` only pins the horizontal column (vertical falls back to the flow row); setting `y` only pins the row (horizontal falls back to the centered flow position); setting both pins both. As soon as either is set, the image contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. With neither `x` nor `y`, the image stays horizontally centered and takes up its natural height in the flow.
 - **Z-order**: `z="N"` lets you put the image above or below cell text. A pinned `<img x y/>` defaults to `z="-1"` (behind text) so paragraphs and headings layered on the same cells stay readable; flow `<img>` (no `x` / `y`) stays at the Kitty default of `z=0` (on top of cells) because that's almost always what a standalone image wants. Pass `z="0"` / `z="1"` etc. to put a pinned image on top.
 - Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.
