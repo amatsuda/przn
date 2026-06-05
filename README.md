@@ -291,7 +291,7 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 - `height="N%"` / `width="N%"` are short-form aliases for `relative_height` / `relative_width` (both forms — `<img>` and `![]{:...}` — accept the alias). An explicit `relative_*` on the same block wins.
 - `height="N"` / `width="N"` (plain integer, with optional `px` suffix) target an exact pixel size on that axis — aspect ratio is preserved, and the other axis is derived from it. Unlike the `relative_*` caps, pixel values can scale the image **up** past intrinsic size as well as down. Setting both pixel attrs fits the image inside the smaller of the two scales. `relative_*` caps still apply on top of a pixel target (`width="500" relative_width="40"` shrinks the 500-pixel result if it would exceed 40 % of the terminal).
 - `x` / `y` (optional) anchor the image's top-left. Same suffix vocabulary as [`<at>`](#absolute-position-text), but `<img>` flips the default: a bare number means **pixels**, since that's the image's native unit.
-  - **Plain integer** — pixels (`x="200"` = 200 px from the left edge of the slide pane). The image's top-left lands in the cell containing that pixel.
+  - **Plain integer** — pixels (`x="200"` = exactly 200 px from the left edge of the slide pane). True 1-px precision via Kitty Graphics' `X=` / `Y=` sub-cell offsets — `x="201"` and `x="202"` land at distinct pixels, not snapped to the cell grid. Backend-dependent: Echoes honors sub-cell offsets reliably; pure-Kitty implementations vary.
   - **`Npx`** — same as plain integer; the `px` is explicit.
   - **`Nc`** — 1-based terminal cell, when you want grid alignment instead of pixel alignment.
   - **`N%`** — percent of the terminal's current width / height.

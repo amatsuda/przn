@@ -1106,12 +1106,42 @@ class RendererTest < Test::Unit::TestCase
       assert_includes moves, [:move_to, 3, 3]
     end
 
+    test 'px x/y forward sub-cell offsets to kitty_place X=/Y= for true 1-px positioning' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      captured = {}
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
+        captured = {x_off: x_off, y_off: y_off}
+        'IMG'
+      end
+      # cell_w=10, cell_h=20. x=23 px → anchor cell ⌊23/10⌋+1 = 3,
+      # remainder 23 - 2*10 = 3. y=45 px → cell 3, remainder 5.
+      block = {type: :image, path: @png.path, attrs: {'x' => '23', 'y' => '45'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal({x_off: 3, y_off: 5}, captured,
+                   'sub-cell pixel remainder should land in kitty_place X=/Y=')
+    end
+
+    test 'cell-form x/y carry no sub-cell offset (X=/Y= not emitted)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      captured = {}
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
+        captured = {x_off: x_off, y_off: y_off}
+        'IMG'
+      end
+      block = {type: :image, path: @png.path, attrs: {'x' => '5c', 'y' => '3c'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal({x_off: 0, y_off: 0}, captured,
+                   'cell-form coords already land on a cell edge; sub-cell offset must be 0')
+    end
+
     test 'positioned image (both x and y) defaults to z=-1 so text layers on top' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       # Stub kitty_place to record the z arg.
       captured_z = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         captured_z = z
         'IMG'
       end
@@ -1126,7 +1156,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       captured_z = :unset
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         captured_z = z
         'IMG'
       end
@@ -1139,7 +1169,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       captured_z = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         captured_z = z
         'IMG'
       end
@@ -1212,7 +1242,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       place_args = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end
@@ -1227,7 +1257,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       place_args = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end
@@ -1241,7 +1271,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       place_args = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end
@@ -1255,7 +1285,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       place_args = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end
@@ -1273,7 +1303,7 @@ class RendererTest < Test::Unit::TestCase
       # column count. Pull it out of the kitty_place sentinel.
       place_args = nil
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end
@@ -1290,7 +1320,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 8, h: 5)
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
       place_args = nil
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end
@@ -1337,7 +1367,7 @@ class RendererTest < Test::Unit::TestCase
       term = RunnerFakeTerm.new(w: 80, h: 30)
       Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
       place_args = nil
-      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil, x_off: 0, y_off: 0|
         place_args = {cols: cols, rows: rows}
         ''
       end

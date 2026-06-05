@@ -83,6 +83,17 @@ class ImageUtilTest < Test::Unit::TestCase
       out = Przn::ImageUtil.kitty_place(image_id: 1, cols: 999, rows: 999)
       assert(out.include?(',C=1,'), "expected C=1 in oversize placement: #{out.inspect}")
     end
+
+    test 'positive x_off / y_off emit X= / Y= for sub-cell pixel placement' do
+      out = Przn::ImageUtil.kitty_place(image_id: 7, cols: 30, rows: 12, x_off: 3, y_off: 5)
+      assert_equal "\e_Ga=p,i=7,c=30,r=12,C=1,q=2,X=3,Y=5\e\\", out
+    end
+
+    test 'zero x_off / y_off omit X= / Y= so cell-aligned placements stay compact' do
+      out = Przn::ImageUtil.kitty_place(image_id: 7, cols: 30, rows: 12, x_off: 0, y_off: 0)
+      assert_equal "\e_Ga=p,i=7,c=30,r=12,C=1,q=2\e\\", out,
+                   'zero offsets should not appear in the APC at all'
+    end
   end
 
   sub_test_case 'kitty_delete_placements' do

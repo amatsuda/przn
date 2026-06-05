@@ -980,41 +980,63 @@ module Przn
     # that matches its native vocabulary (`<at>` → cells, `<img>` → px).
     #
     #   "50%"  → halfway along `max` cells
-    #   "100px"→ 100 pixels, converted to its containing cell
+    #   "100px"→ 100 pixels (anchor cell + sub-cell pixel offset)
     #   "10c"  → cell 10 (1-based; explicit)
     #   "10"   → cell 10 OR 10 px (per default_unit)
     #
-    # Pixel→cell uses floor (the cell *containing* that pixel) so e.g.
-    # `x="0"` → cell 1 regardless of cell width. `cell_px` is required
-    # for any px form; if it's nil and a px-form value is given, returns
-    # nil. Out-of-range values clamp into [1, max]. Returns nil when the
-    # input is missing or unparseable so the renderer skips silently.
-    def resolve_at_coord(raw, max, cell_px: nil, default_unit: :cell)
+    # Pixel forms compute both the *anchor cell* (the 1-based cell
+    # containing that pixel) and the pixel remainder *within* that cell
+    # — useful for Kitty Graphics' `X=`/`Y=` sub-cell offsets, which
+    # give true 1-px positioning instead of snap-to-cell.
+    #
+    # By default this returns just the anchor cell (preserving the old
+    # `<at>`/`<slot>` shape). Pass `with_offset: true` to get back
+    # `[cell, px_offset_within_anchor]` instead — `<img>` uses the pair
+    # form because images can place at any sub-cell pixel; text and
+    # slots stay cell-snapped because they have to.
+    #
+    # `cell_px` is required for any px form; if it's nil and a px-form
+    # value is given, returns nil. Out-of-range values clamp into
+    # [1, max] and the sub-cell offset is zeroed if the clamp moved the
+    # cell (the placement is going off-screen anyway, no point keeping
+    # a stale offset). Returns nil when the input is missing or
+    # unparseable so the renderer skips silently.
+    def resolve_at_coord(raw, max, cell_px: nil, default_unit: :cell, with_offset: false)
       return nil if raw.nil?
 
       s = raw.to_s.strip
       return nil if s.empty?
 
-      cells =
-        if s.end_with?('%')
-          pct = s.chomp('%').to_f
-          (pct / 100.0 * max).round
-        elsif (m = s.match(/\A(-?\d+(?:\.\d+)?)px\z/))
-          return nil unless cell_px && cell_px > 0
-          (m[1].to_f / cell_px).floor + 1
-        elsif (m = s.match(/\A(-?\d+)c\z/))
-          m[1].to_i
-        elsif s =~ /\A-?\d+(?:\.\d+)?\z/
-          if default_unit == :px
-            return nil unless cell_px && cell_px > 0
-            (s.to_f / cell_px).floor + 1
-          else
-            s.to_i
-          end
-        end
-      return nil if cells.nil?
+      cell = nil
+      px_off = 0
 
-      cells.clamp(1, max)
+      if s.end_with?('%')
+        pct = s.chomp('%').to_f
+        cell = (pct / 100.0 * max).round
+      elsif (m = s.match(/\A(-?\d+(?:\.\d+)?)px\z/))
+        return nil unless cell_px && cell_px > 0
+        px = m[1].to_f
+        cell = (px / cell_px).floor + 1
+        px_off = (px - (cell - 1) * cell_px).to_i
+      elsif (m = s.match(/\A(-?\d+)c\z/))
+        cell = m[1].to_i
+      elsif s =~ /\A-?\d+(?:\.\d+)?\z/
+        if default_unit == :px
+          return nil unless cell_px && cell_px > 0
+          px = s.to_f
+          cell = (px / cell_px).floor + 1
+          px_off = (px - (cell - 1) * cell_px).to_i
+        else
+          cell = s.to_i
+        end
+      end
+      return nil if cell.nil?
+
+      clamped = cell.clamp(1, max)
+      px_off = 0 if clamped != cell
+      cell = clamped
+
+      with_offset ? [cell, px_off] : cell
     end
 
     # Bottom-row progress indicator (Rabbit-style):
@@ -1394,8 +1416,16 @@ module Przn
       cell_w, cell_h = @terminal.cell_pixel_size
 
       attrs = block[:attrs] || {}
-      abs_x = resolve_at_coord(attrs['x'], @terminal.width, cell_px: cell_w, default_unit: :px)
-      abs_y = resolve_at_coord(attrs['y'], @terminal.height, cell_px: cell_h, default_unit: :px)
+      # `<img>` x/y resolve with sub-cell pixel precision: each axis
+      # comes back as `[anchor_cell, px_offset_within_anchor]`. The
+      # anchor cell handles where to move the cursor for layering /
+      # fallback paths; the px offset feeds Kitty Graphics' `X=`/`Y=`
+      # so a "100px from the left" request lands at 100 px, not at
+      # the nearest cell edge.
+      abs_x_pair = resolve_at_coord(attrs['x'], @terminal.width, cell_px: cell_w, default_unit: :px, with_offset: true)
+      abs_y_pair = resolve_at_coord(attrs['y'], @terminal.height, cell_px: cell_h, default_unit: :px, with_offset: true)
+      abs_x, abs_x_off = abs_x_pair if abs_x_pair
+      abs_y, abs_y_off = abs_y_pair if abs_y_pair
       # `x` or `y` (either / both) pins the image at that absolute cell;
       # the unspecified axis falls back to the flow default (centered
       # in `width` for x, the current `row` for y). Any explicit
@@ -1457,6 +1487,11 @@ module Przn
       # cell directly.
       y_cell = abs_y || row
       x_cell = abs_x || ([(width - target_cols) / 2, 0].max + 1 + @x_offset)
+      # Sub-cell pixel offsets only flow through when that axis was
+      # explicitly positioned in pixel-form. Flow / centered / cell-
+      # form values land on cell boundaries and pass 0.
+      x_off = abs_x_off || 0
+      y_off = abs_y_off || 0
 
       # Direct kitty-graphics upload for PNGs always; for non-PNG
       # raster formats only on Echoes — its NSBitmapImageRep-based
@@ -1486,7 +1521,7 @@ module Przn
             else
               nil
             end
-        @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows, z: z)
+        @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows, z: z, x_off: x_off, y_off: y_off)
       elsif ImageUtil.kitty_terminal?
         data = cached_kitty_icat(path, cols: target_cols, rows: target_rows, x: x_cell - 1, y: y_cell - 1)
         @terminal.write data if data && !data.empty?
