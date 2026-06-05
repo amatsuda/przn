@@ -313,6 +313,25 @@ class RendererTest < Test::Unit::TestCase
       assert(!out.include?("\e[3"), "did not expect a foreground SGR: #{out.inspect}")
     end
 
+    test '<color=HEX> emits the same 24-bit ANSI as <font color="HEX">' do
+      tag_segs  = Przn::Parser.parse_inline('<color=ff5555>hi</color>')
+      font_segs = Przn::Parser.parse_inline('<font color="ff5555">hi</font>')
+      tag_out  = @renderer.send(:render_segments_scaled, tag_segs, 2)
+      font_out = @renderer.send(:render_segments_scaled, font_segs, 2)
+      assert(tag_out.include?("\e[38;2;255;85;85m"),
+             "<color=HEX> should produce a 24-bit SGR: #{tag_out.inspect}")
+      assert(font_out.include?("\e[38;2;255;85;85m"),
+             "<font color=HEX> should produce a 24-bit SGR: #{font_out.inspect}")
+    end
+
+    test '<color=#HEX> (with leading #) renders the same as plain hex' do
+      out = @renderer.send(:render_segments_scaled,
+                           Przn::Parser.parse_inline('<color=#ff5555>hi</color>'),
+                           2)
+      assert(out.include?("\e[38;2;255;85;85m"),
+             "expected leading # tolerated and resolved: #{out.inspect}")
+    end
+
     test 'bullet.color wraps the rendered bullet in the corresponding ANSI code' do
       theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・', color: 'cyan'}, background: {}, title: {})
       out = Przn::Renderer.new(nil, theme: theme).send(:render_bullet, '・')

@@ -1639,8 +1639,12 @@ module Przn
           tag_name = segment[2]
           if (scale = Parser::SIZE_SCALES[tag_name])
             KittyText.sized(content, s: scale, f: f, h: h)
-          elsif Parser::NAMED_COLORS.key?(tag_name)
-            "#{color_code(tag_name)}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+          elsif !(code = color_code(tag_name)).empty?
+            # `<color=NAME>`, `<color=ff5555>`, `<color=#ff5555>`, the
+            # kramdown `{::tag name="red"}` form — anything color_code
+            # can resolve gets wrapped in that SGR. Same engine
+            # `<font color="...">` uses, so the two stay in sync.
+            "#{code}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
           else
             KittyText.sized(content, s: para_scale, f: f, h: h)
           end
@@ -1790,11 +1794,12 @@ module Przn
       max = 0
       [
         /\{::tag\s+name="([^"]+)"\}/,
-        /<size=([^>\s]+)>/,
+        /<size=(?:"([^"]*)"|'([^']*)'|([^>\s]+))>/,
         /<font\b[^>]*\bsize=["']?([^"'\s>]+)/
       ].each do |re|
-        text.scan(re) do
-          scale = Parser::SIZE_SCALES[$1]
+        text.scan(re) do |groups|
+          value = Array(groups).compact.first
+          scale = Parser::SIZE_SCALES[value]
           max = scale if scale && scale > max
         end
       end
@@ -1815,11 +1820,16 @@ module Przn
       }
     end
 
+    # Resolve a CSS-ish color value into an opening ANSI SGR escape.
+    # Accepts: a named ANSI color (`red`, `bright_cyan`, …), a 6-digit
+    # hex code (`ff5555`, with or without a leading `#`). Returns `''`
+    # for an unrecognized value so callers can no-op safely.
     def color_code(color)
-      if (code = Parser::NAMED_COLORS[color])
+      c = color.to_s.sub(/\A#/, '')
+      if (code = Parser::NAMED_COLORS[c])
         "\e[#{code}m"
-      elsif color.match?(/\A[0-9a-fA-F]{6}\z/)
-        r, g, b = color.scan(/../).map { |h| h.to_i(16) }
+      elsif c.match?(/\A[0-9a-fA-F]{6}\z/)
+        r, g, b = c.scan(/../).map { |h| h.to_i(16) }
         "\e[38;2;#{r};#{g};#{b}m"
       else
         ''

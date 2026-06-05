@@ -310,6 +310,28 @@ class ParserTest < Test::Unit::TestCase
       assert_equal [[:tag, 'hex', 'ff5555']],  Przn::Parser.parse_inline('<color=ff5555>hex</color>')
     end
 
+    test '<color> accepts quoted values (HTML / kramdown parity with <font color>)' do
+      assert_equal [[:tag, 'warn', 'red']],
+                   Przn::Parser.parse_inline('<color="red">warn</color>')
+      assert_equal [[:tag, 'warn', 'red']],
+                   Przn::Parser.parse_inline("<color='red'>warn</color>")
+      assert_equal [[:tag, 'hex', 'ff5555']],
+                   Przn::Parser.parse_inline('<color="ff5555">hex</color>')
+    end
+
+    test '<color> accepts leading # on hex codes' do
+      assert_equal [[:tag, 'hex', '#ff5555']],
+                   Przn::Parser.parse_inline('<color=#ff5555>hex</color>')
+      assert_equal [[:tag, 'hex', '#ff5555']],
+                   Przn::Parser.parse_inline('<color="#ff5555">hex</color>')
+    end
+
+    test '<size> accepts quoted values too' do
+      assert_equal [[:tag, 'big', '5']], Przn::Parser.parse_inline('<size="5">big</size>')
+      assert_equal [[:tag, 'big', 'x-large']],
+                   Przn::Parser.parse_inline("<size='x-large'>big</size>")
+    end
+
     test '<font color="..."> remains supported (HTML4 form)' do
       assert_equal [[:font, 'warn', {color: 'red'}]],
                    Przn::Parser.parse_inline('<font color="red">warn</font>')

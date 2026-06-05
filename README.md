@@ -176,11 +176,12 @@ On [Kitty](https://sw.kovidgoyal.net/kitty/)-compatible terminals, sized text is
 
 ### Color
 
-Named ANSI colors (`red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, plus `bright_*` variants) and 6-digit hex.
+Named ANSI colors (`red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, plus `bright_*` variants) and 6-digit hex (with or without a leading `#`). The value is forgiving about quoting — bare, single-quoted, or double-quoted — and the same engine resolves color names for the standalone `<color>` tag and for the `color` attribute on `<font>`, so the two stay in sync.
 
 ```markdown
 <color=red>warning</color>
 <color=ff5555>custom hex</color>
+<color="#ff5555">CSS-style hex</color>
 ```
 
 For combined styling, the `color` attribute on `<font>` works too (see [Font](#font)). Rabbit-compatible kramdown form is also accepted: `{::tag name="red"}warning{:/tag}`.

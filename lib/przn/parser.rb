@@ -383,10 +383,12 @@ module Przn
       scanner = StringScanner.new(text)
 
       until scanner.eos?
-        if scanner.scan(/<size=([^>\s]+)>(.*?)<\/size>/)
-          push_with_breaks(segments, scanner[2]) { |chunk| [:tag, chunk, scanner[1]] }
-        elsif scanner.scan(/<color=([^>\s]+)>(.*?)<\/color>/)
-          push_with_breaks(segments, scanner[2]) { |chunk| [:tag, chunk, scanner[1]] }
+        if scanner.scan(/<size=(?:"([^"]*)"|'([^']*)'|([^>\s]+))>(.*?)<\/size>/)
+          value = scanner[1] || scanner[2] || scanner[3]
+          push_with_breaks(segments, scanner[4]) { |chunk| [:tag, chunk, value] }
+        elsif scanner.scan(/<color=(?:"([^"]*)"|'([^']*)'|([^>\s]+))>(.*?)<\/color>/)
+          value = scanner[1] || scanner[2] || scanner[3]
+          push_with_breaks(segments, scanner[4]) { |chunk| [:tag, chunk, value] }
         elsif scanner.scan(/\{::tag\s+name="([^"]+)"\}(.*?)\{:\/tag\}/)
           # Rabbit-compatible kramdown spelling; covers both size and color.
           push_with_breaks(segments, scanner[2]) { |chunk| [:tag, chunk, scanner[1]] }
