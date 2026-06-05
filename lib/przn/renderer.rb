@@ -75,17 +75,32 @@ module Przn
         w = @terminal.width
         h = @terminal.height
 
-        # Pre-pass: register shape placements BEFORE any text writes.
-        # Echoes' kitty graphics implementation erases the cells covered
-        # by a placement when the placement is registered, then text
-        # writes to those cells later restore the cell buffer (via
+        # Pre-pass: register shape placements AND fully-positioned `<img>`
+        # placements (both x and y set) BEFORE any text writes. Echoes'
+        # kitty graphics implementation erases the cells covered by a
+        # placement when the placement is registered, then text writes
+        # to those cells later restore the cell buffer (via
         # erase_multicell_at). The placement itself stays in the GUI's
-        # @placements list and re-blits on top — but where the SVG is
-        # transparent, the underlying text shows through. Solid-filled
-        # shapes still occlude text (Echoes has no z-index yet); thin
-        # strokes / outlines coexist with text just fine.
+        # @placements list and re-blits on top — so where the SVG / PNG
+        # is transparent, the underlying text shows through. Solid
+        # fills and opaque PNGs still occlude (Echoes has no z-index
+        # yet); thin strokes and outlined shapes coexist with text
+        # cleanly. Without this pass, text rendered BEFORE a positioned
+        # image was clobbered by the placement's cell-buffer wipe and
+        # disappeared even where the image had no opaque pixels.
         slide.blocks.each do |block|
-          render_shape(block) if block[:type] == :shape
+          case block[:type]
+          when :shape
+            render_shape(block)
+          when :image
+            attrs = block[:attrs] || {}
+            # Only "both-axes" positioned images can be pre-placed —
+            # x-only / y-only images still need the flow `row` to
+            # decide the unpinned axis, so they stay in the
+            # layout/flow pass below.
+            next unless attrs['x'] && attrs['y']
+            render_image(block, w, 1)
+          end
         end
 
         # Resolve the slide's effective layout name:
@@ -301,7 +316,7 @@ module Przn
       when :definition_list then render_definition_list(block, width, row)
       when :blockquote      then render_blockquote(block, width, row)
       when :table           then render_table(block, width, row)
-      when :image           then render_image(block, width, row)
+      when :image           then render_image_or_skip(block, width, row)
       when :shape           then row   # rendered in render()'s pre-pass
       when :blank           then row + body_scale
       when :bg              then row
@@ -1326,6 +1341,17 @@ module Przn
         end
       end
       row
+    end
+
+    # Layout/flow dispatch for :image blocks. Fully-positioned images
+    # (both x and y set) were already rendered in the slide's pre-pass
+    # — skip them here so we don't re-emit the placement (which would
+    # re-erase the cells that subsequent text writes have since
+    # restored).
+    def render_image_or_skip(block, width, row)
+      attrs = block[:attrs] || {}
+      return row if attrs['x'] && attrs['y']
+      render_image(block, width, row)
     end
 
     def render_image(block, width, row)

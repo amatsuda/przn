@@ -1040,6 +1040,24 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 1, new_row, 'absolute placement must not advance the layout row'
     end
 
+    test 'positioned image placement precedes prior text writes (pre-pass)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      # The sub_test_case setup stubs kitty_place → 'IMG'. The pre-pass
+      # should emit that sentinel BEFORE any of the slide's text writes.
+      md = "# t\n- before\n<img src=\"#{@png.path}\" x=\"10\" y=\"5\" />\n- after\n"
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      ps = Przn::Parser.parse(md)
+      Przn::Renderer.new(term).render(ps.slides[0], current: 0, total: 1)
+
+      image_idx = term.ops.find_index { |op, s| op == :write && s == 'IMG' }
+      before_idx = term.ops.find_index { |op, s| op == :write && s.is_a?(String) && s.include?('before') }
+      assert_not_nil image_idx, 'image placement (IMG) must be emitted'
+      assert_not_nil before_idx, '"before" text must be emitted'
+      assert_operator image_idx, :<, before_idx,
+                      'positioned image must place before prior text writes ' \
+                      "(image at op #{image_idx}, 'before' at op #{before_idx})"
+    end
+
     test 'percent x/y resolve against terminal width / height' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       block = {type: :image, path: @png.path, attrs: {'x' => '50%', 'y' => '50%'}}
