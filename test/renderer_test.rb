@@ -159,6 +159,35 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'max_inline_scale' do
+    def mis(text)
+      @renderer.send(:max_inline_scale, text)
+    end
+
+    test 'returns nil when no size-bearing markup is present' do
+      assert_nil mis('plain words')
+      assert_nil mis('with **bold** and `code`')
+    end
+
+    test 'detects <size=N> in XML form' do
+      assert_equal 5, mis('<size=5>Hello</size>')
+      assert_equal 4, mis('plain <size=x-large>X</size> tail')
+    end
+
+    test 'detects kramdown {::tag name="N"} form' do
+      assert_equal 5, mis('{::tag name="5"}Hi{:/tag}')
+    end
+
+    test 'detects <font size="N"> attribute' do
+      assert_equal 5, mis('<font size="5">Hi</font>')
+      assert_equal 4, mis('<font face="Menlo" size="x-large">code</font>')
+    end
+
+    test 'returns the largest size across multiple matches' do
+      assert_equal 5, mis('<size=2>a</size> and <size=5>b</size>')
+    end
+  end
+
   sub_test_case 'split_by_display_width word-awareness' do
     def split(text, max_width)
       @renderer.send(:split_by_display_width, text, max_width)

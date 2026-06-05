@@ -1219,19 +1219,24 @@ module Przn
         indent = '  ' * depth
         prefix = "#{indent}#{@theme.bullet[:text]}"
         prefix_w = display_width(prefix)
-        max_w = max_text_width(width, left, body_scale) - prefix_w
+        # An inline `<size=N>` (or its kramdown / `<font size>` siblings)
+        # makes the line N cells tall instead of `body_scale` cells —
+        # advance the row by the actual height so the next item's
+        # multicells don't overlap into the previous one and erase it.
+        scale = max_inline_scale(item[:text]) || body_scale
+        max_w = max_text_width(width, left, scale) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, body_scale)
+        wrapped = wrap_segments(segments, max_w, scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, body_scale)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: scale)}#{render_segments_scaled(line_segs, scale)}"
           end
-          row += body_scale
+          row += scale
         end
         row += 1
       end
@@ -1245,19 +1250,20 @@ module Przn
         indent = '  ' * depth
         prefix = "#{indent}#{i + 1}. "
         prefix_w = display_width(prefix)
-        max_w = max_text_width(width, left, body_scale) - prefix_w
+        scale = max_inline_scale(item[:text]) || body_scale
+        max_w = max_text_width(width, left, scale) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, body_scale)
+        wrapped = wrap_segments(segments, max_w, scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
+            @terminal.write "#{KittyText.sized(prefix, s: scale)}#{render_segments_scaled(line_segs, scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: scale)}#{render_segments_scaled(line_segs, scale)}"
           end
-          row += body_scale
+          row += scale
         end
         row += 1
       end
@@ -1739,11 +1745,25 @@ module Przn
       text + ' ' * [target_width - current, 0].max
     end
 
+    # Largest OSC 66 scale used inside the paragraph's inline markup,
+    # used by callers to decide how many rows to advance the layout
+    # row by per text line. Recognizes all three size-bearing
+    # spellings: the kramdown `{::tag name="..."}`, the XML
+    # `<size=N>`, and `<font size="..."/>` — each emits OSC 66 text
+    # that occupies `N` cells tall, so a list item or paragraph
+    # carrying any of them needs the row to advance by N rather
+    # than the body scale.
     def max_inline_scale(text)
       max = 0
-      text.scan(/\{::tag\s+name="([^"]+)"\}/) do
-        scale = Parser::SIZE_SCALES[$1]
-        max = scale if scale && scale > max
+      [
+        /\{::tag\s+name="([^"]+)"\}/,
+        /<size=([^>\s]+)>/,
+        /<font\b[^>]*\bsize=["']?([^"'\s>]+)/
+      ].each do |re|
+        text.scan(re) do
+          scale = Parser::SIZE_SCALES[$1]
+          max = scale if scale && scale > max
+        end
       end
       max > 0 ? max : nil
     end
