@@ -289,6 +289,7 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
   - **Plain integer** — 1-based terminal cells.
   - **Percent** — resolves against the terminal's current width / height.
   - **Either / both axes pin** — setting `x` only pins the horizontal column (vertical falls back to the flow row); setting `y` only pins the row (horizontal falls back to the centered flow position); setting both pins both. As soon as either is set, the image contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. With neither `x` nor `y`, the image stays horizontally centered and takes up its natural height in the flow.
+- **Z-order**: `z="N"` lets you put the image above or below cell text. A pinned `<img x y/>` defaults to `z="-1"` (behind text) so paragraphs and headings layered on the same cells stay readable; flow `<img>` (no `x` / `y`) stays at the Kitty default of `z=0` (on top of cells) because that's almost always what a standalone image wants. Pass `z="0"` / `z="1"` etc. to put a pinned image on top.
 - Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.
 
 ### Shapes and Lines

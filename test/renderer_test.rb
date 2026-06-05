@@ -1040,6 +1040,48 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 1, new_row, 'absolute placement must not advance the layout row'
     end
 
+    test 'positioned image (both x and y) defaults to z=-1 so text layers on top' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      # Stub kitty_place to record the z arg.
+      captured_z = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        captured_z = z
+        'IMG'
+      end
+
+      block = {type: :image, path: @png.path, attrs: {'x' => '10', 'y' => '5'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal(-1, captured_z,
+                   'a pinned <img x y> should land at z=-1 so the cells the placement covers stay readable when text writes restore them in the pre-pass flow')
+    end
+
+    test 'flow image stays at the default Kitty z (no z= sent)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      captured_z = :unset
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        captured_z = z
+        'IMG'
+      end
+      block = {type: :image, path: @png.path, attrs: {}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 5)
+      assert_nil captured_z, 'flow images should not pass a z= so Echoes uses its default (0, on top)'
+    end
+
+    test 'explicit z="N" on <img> wins over the positioned-default of z=-1' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      captured_z = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        captured_z = z
+        'IMG'
+      end
+      block = {type: :image, path: @png.path, attrs: {'x' => '10', 'y' => '5', 'z' => '2'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal 2, captured_z, 'explicit z="2" should override the positioned default of -1'
+    end
+
     test 'positioned image placement precedes prior text writes (pre-pass)' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       # The sub_test_case setup stubs kitty_place → 'IMG'. The pre-pass

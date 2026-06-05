@@ -1420,7 +1420,22 @@ module Przn
       if ImageUtil.kitty_terminal? && (ImageUtil.png?(path) || KittyText.echoes?)
         image_id = ensure_kitty_uploaded(path)
         @terminal.move_to(y_cell, x_cell)
-        @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows)
+        # z layering: explicit `z="..."` attr wins. With no z attr, an
+        # image rendered in slide flow stays on top of cells (default
+        # Kitty z=0 behavior) — that's what authors want for the
+        # common single-image-per-slide case. A pinned image (both x
+        # and y given) is more likely to be sitting under other slide
+        # content, so it defaults to z=-1 (behind text) — same trick
+        # `<bg image="..."/>` uses. Authors can override with z="0"
+        # / z="1" / etc. when they want the image on top of text.
+        z = if attrs['z']
+              attrs['z'].to_i
+            elsif abs_x && abs_y
+              -1
+            else
+              nil
+            end
+        @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: target_cols, rows: target_rows, z: z)
       elsif ImageUtil.kitty_terminal?
         data = cached_kitty_icat(path, cols: target_cols, rows: target_rows, x: x_cell - 1, y: y_cell - 1)
         @terminal.write data if data && !data.empty?
