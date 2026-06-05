@@ -284,7 +284,8 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
 - `src` is required; `alt` and `title` are accepted and ignored at render time (kept for accessibility / future use).
 - By default the image renders at its **intrinsic size** — no auto-shrink to fit. If it's bigger than the visible pane, the overflowing edge is clipped (same as a tall list of paragraphs scrolling off the bottom).
 - `relative_height="N"` caps the image at N % of the terminal height (no default — without it, intrinsic size). Aspect ratio is preserved. `relative_width="N"` is the same for the horizontal dimension. Caps shrink, never grow.
-- `height="N%"` / `width="N%"` are short-form aliases for `relative_height` / `relative_width` (both forms — `<img>` and `![]{:...}` — accept the alias). An explicit `relative_*` on the same block wins; a non-`%` value (`height="40"`) is left alone since pixel units aren't supported.
+- `height="N%"` / `width="N%"` are short-form aliases for `relative_height` / `relative_width` (both forms — `<img>` and `![]{:...}` — accept the alias). An explicit `relative_*` on the same block wins.
+- `height="N"` / `width="N"` (plain integer, with optional `px` suffix) target an exact pixel size on that axis — aspect ratio is preserved, and the other axis is derived from it. Unlike the `relative_*` caps, pixel values can scale the image **up** past intrinsic size as well as down. Setting both pixel attrs fits the image inside the smaller of the two scales. `relative_*` caps still apply on top of a pixel target (`width="500" relative_width="40"` shrinks the 500-pixel result if it would exceed 40 % of the terminal).
 - `x` / `y` (optional) anchor the image's top-left at an absolute cell. Same two forms as [`<at>`](#absolute-position-text):
   - **Plain integer** — 1-based terminal cells.
   - **Percent** — resolves against the terminal's current width / height.

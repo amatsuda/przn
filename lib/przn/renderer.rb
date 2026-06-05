@@ -1393,6 +1393,28 @@ module Przn
       img_cell_w = img_w.to_f / cell_w
       img_cell_h = img_h.to_f / cell_h
       scale = 1.0
+
+      # Pixel sizing — `height="200"` / `width="300"` (plain integer,
+      # optional `px` suffix) force-resizes the image to that pixel
+      # target. Unlike `relative_*` caps, a pixel value can scale the
+      # image UP as well as down — they're an exact "render at this
+      # size" request, not a cap. Setting both shrinks to fit inside
+      # the smaller of the two ratios (aspect ratio preserved).
+      px_scale = nil
+      if (h_px = parse_px_size(attrs['height']))
+        px_scale = h_px / img_h.to_f
+      end
+      if (w_px = parse_px_size(attrs['width']))
+        w_scale = w_px / img_w.to_f
+        px_scale = px_scale ? [px_scale, w_scale].min : w_scale
+      end
+      scale = px_scale if px_scale
+
+      # `relative_height="N"` / `relative_width="N"` (set directly, or
+      # via the `height="N%"` / `width="N%"` aliases) are explicit
+      # author caps: they shrink the image proportionally so that no
+      # axis exceeds N % of the terminal. They never grow it, and they
+      # win over a px sizing request when smaller.
       if (rh = attrs['relative_height']) && rh.to_i.positive?
         max_cell_h = @terminal.height * rh.to_i / 100.0
         scale = [scale, max_cell_h / img_cell_h].min
@@ -1454,6 +1476,17 @@ module Przn
       end
 
       positioned ? row : row + target_rows
+    end
+
+    # Parse an `<img>` height / width attribute as a pixel target.
+    # Accepts `"200"` and `"200px"` (CSS-style suffix, forgiving). A
+    # bare integer with no unit is interpreted as pixels. `nil` /
+    # empty / a percent value / anything non-numeric returns nil so
+    # the caller falls back to relative or intrinsic sizing.
+    def parse_px_size(raw)
+      return nil unless raw.is_a?(String)
+      m = raw.match(/\A(\d+)(?:px)?\z/)
+      m ? m[1].to_i : nil
     end
 
     def resolve_image_path(path)

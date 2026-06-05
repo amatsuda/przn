@@ -1171,6 +1171,63 @@ class RendererTest < Test::Unit::TestCase
     # img_cell_w vs available_rows / img_cell_h. With width="20%" of
     # an 80-cell terminal, the cap = 16 cols, so target_cols ≤ 16
     # (and the image scales vertically to match aspect ratio).
+    test 'height="N" (plain integer) is read as a pixel target' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      place_args = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      # Stub image is 200×200 with cell_pixel_size [10, 20]. height=100 →
+      # scale 100/200 = 0.5 → target_rows = 200/20*0.5 = 5; target_cols = 200/10*0.5 = 10.
+      block = {type: :image, path: @png.path, attrs: {'height' => '100'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal({cols: 10, rows: 5}, place_args)
+    end
+
+    test 'width="Npx" is read as a pixel target (px suffix tolerated)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      place_args = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      # width=50px → 50/200 = 0.25 → 5 cols, 2 rows (200/20*0.25).
+      block = {type: :image, path: @png.path, attrs: {'width' => '50px'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal({cols: 5, rows: 2}, place_args)
+    end
+
+    test 'pixel sizing can grow the image past intrinsic' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      place_args = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      # height=400 → scale 400/200 = 2.0 → target_rows = 20, target_cols = 40.
+      block = {type: :image, path: @png.path, attrs: {'height' => '400'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal({cols: 40, rows: 20}, place_args)
+    end
+
+    test 'pixel height and width both set: fit-inside (smaller scale wins)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      place_args = nil
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) do |image_id:, cols:, rows:, z: nil|
+        place_args = {cols: cols, rows: rows}
+        ''
+      end
+      # height=100 → 0.5 ratio. width=200 → 1.0 ratio. min(0.5, 1.0) = 0.5.
+      block = {type: :image, path: @png.path, attrs: {'height' => '100', 'width' => '200'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal({cols: 10, rows: 5}, place_args)
+    end
+
     test 'width="N%" caps horizontal extent (relative_width is honored)' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       block = {type: :image, path: @png.path, attrs: {'relative_width' => '20'}}
