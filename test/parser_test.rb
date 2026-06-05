@@ -503,6 +503,32 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Action: <action target= .../>' do
+    test '<action target="..." x="..." y="..."/> is captured as an :action block' do
+      slide = Przn::Parser.parse(%(# t\n\n<action target="box" x="50%" y="80%"/>\n)).slides[0]
+      action = slide.blocks.find { |b| b[:type] == :action }
+      assert_not_nil action
+      assert_equal 'box', action[:attrs][:target]
+      assert_equal '50%', action[:attrs][:x]
+      assert_equal '80%', action[:attrs][:y]
+    end
+
+    test 'an <action> without a target attr is silently dropped' do
+      slide = Przn::Parser.parse(%(# t\n\n<action x="10c"/>\n)).slides[0]
+      refute(slide.blocks.any? { |b| b[:type] == :action },
+             'an <action> with no target= must not produce a block')
+    end
+
+    test 'arbitrary overrides ride through (z=, opacity=, width=, etc.)' do
+      slide = Przn::Parser.parse(
+        %(# t\n\n<action target="box" x="10c" y="5c" z="-1" opacity="0.5"/>\n)
+      ).slides[0]
+      action = slide.blocks.find { |b| b[:type] == :action }
+      assert_equal '-1',  action[:attrs][:z]
+      assert_equal '0.5', action[:attrs][:opacity]
+    end
+  end
+
   sub_test_case 'Slide background: <bg .../>' do
     test 'self-closing block with from/to/angle is captured as :bg' do
       slide = Przn::Parser.parse(%(# t\n\n<bg from="#1a1a2e" to="#16213e" angle="90"/>\n)).slides[0]

@@ -70,6 +70,10 @@ module Przn
         # but no bytes reach the terminal. See `suppressed_render`.
         @block_step = compute_block_step(slide.blocks)
         @current_step = step
+        # Action overrides accumulated up to the current step. Keyed
+        # by target id; merged into a block's attrs at render time.
+        # See `compute_effective_state` and `effective_attrs`.
+        @effective_state = compute_effective_state(slide.blocks, @block_step, step)
         @terminal.clear
         # Wipe the previous slide's `<img>` / shape placements (cached
         # image data stays alive). The current slide re-emits its own
@@ -106,7 +110,7 @@ module Przn
           when :shape
             render_shape(block)
           when :image
-            attrs = block[:attrs] || {}
+            attrs = effective_attrs(block)
             # Only "both-axes" positioned images can be pre-placed —
             # x-only / y-only images still need the flow `row` to
             # decide the unpinned axis, so they stay in the
@@ -137,8 +141,9 @@ module Przn
           pending_align = nil
           slide.blocks.each do |block|
             case block[:type]
-            when :align then pending_align = block[:align]
-            when :wait  then next
+            when :align  then pending_align = block[:align]
+            when :wait   then next
+            when :action then next  # mutation already applied via @effective_state
             else
               row = render_block_or_reserve(block, w, row, align: pending_align)
               pending_align = nil
@@ -249,6 +254,58 @@ module Przn
         step += 1 if block[:type] == :wait
       end
       map
+    end
+
+    # Build the "effective state" map for the current step: walk every
+    # `:action` block in slide order, and for each one that's already
+    # been triggered (block_step[a] <= current_step), accumulate its
+    # attr overrides under `state[target_id]`. Later actions targeting
+    # the same id overwrite earlier ones, so the final state is "the
+    # latest action that fired against each target."
+    #
+    # Returns `{target_id => {key => value, ...}}` where keys are the
+    # action's raw attr names (string `id` if from `<img>`-style attrs,
+    # symbol `:x` if from `<at>`-style — `effective_attrs` reconciles
+    # against the target block's own key style at merge time).
+    def compute_effective_state(blocks, block_step, current_step)
+      state = {}
+      blocks.each do |block|
+        next unless block[:type] == :action
+        next if (block_step[block] || 0) > current_step
+        attrs = block[:attrs] || {}
+        target = attrs[:target] || attrs['target']
+        next unless target
+        bucket = (state[target] ||= {})
+        attrs.each do |k, v|
+          key = k.to_s
+          next if key == 'target'
+          bucket[key] = v
+        end
+      end
+      state
+    end
+
+    # Merge a block's stored attrs with any action-driven overrides
+    # for that block's id. The block's original key style (string vs
+    # symbol) is preserved so the downstream render path keeps
+    # reading attrs the same way it always has — only the values
+    # change.
+    def effective_attrs(block)
+      attrs = block[:attrs] || {}
+      return attrs unless @effective_state
+      id = attrs['id'] || attrs[:id]
+      override = id && @effective_state[id]
+      return attrs unless override
+
+      result = attrs.dup
+      override.each do |k, v|
+        if attrs.key?(k.to_sym)
+          result[k.to_sym] = v
+        else
+          result[k.to_s] = v
+        end
+      end
+      result
     end
 
     # True when this block hasn't been revealed yet at the current
@@ -370,8 +427,9 @@ module Przn
           pending_align = nil
           blocks.each do |block|
             case block[:type]
-            when :align then pending_align = block[:align]
-            when :wait  then next
+            when :align  then pending_align = block[:align]
+            when :wait   then next
+            when :action then next  # mutation already applied via @effective_state
             else
               row = render_block_or_reserve(block, w, row, align: pending_align || slot.align)
               pending_align = nil
@@ -430,6 +488,7 @@ module Przn
       when :bg              then row
       when :slot            then row
       when :wait            then row   # step boundary marker, not a renderable
+      when :action          then row   # state mutation, applied via effective_attrs
       when :at              then render_at(block); row
       else row + 1
       end
@@ -509,7 +568,7 @@ module Przn
     # The block contributes 0 to the slide's layout height so it doesn't
     # push subsequent content down.
     def render_at(block)
-      attrs = block[:attrs] || {}
+      attrs = effective_attrs(block)
       cell_w, cell_h = @terminal.cell_pixel_size
       x = resolve_at_coord(attrs[:x], @terminal.width, cell_px: cell_w)
       y = resolve_at_coord(attrs[:y], @terminal.height, cell_px: cell_h)
@@ -581,7 +640,7 @@ module Przn
     def render_shape(block)
       return unless ImageUtil.kitty_terminal?
       kind = block[:kind]
-      attrs = (block[:attrs] || {})
+      attrs = effective_attrs(block)
       cell_w, cell_h = @terminal.cell_pixel_size
       return unless cell_w&.positive? && cell_h&.positive?
 
@@ -1551,7 +1610,7 @@ module Przn
     # re-erase the cells that subsequent text writes have since
     # restored).
     def render_image_or_skip(block, width, row)
-      attrs = block[:attrs] || {}
+      attrs = effective_attrs(block)
       return row if attrs['x'] && attrs['y']
       render_image(block, width, row)
     end
@@ -1566,7 +1625,7 @@ module Przn
       img_w, img_h = img_size
       cell_w, cell_h = @terminal.cell_pixel_size
 
-      attrs = block[:attrs] || {}
+      attrs = effective_attrs(block)
       # `<img>` x/y resolve with sub-cell pixel precision: each axis
       # comes back as `[anchor_cell, px_offset_within_anchor]`. The
       # anchor cell handles where to move the cursor for layering /

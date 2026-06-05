@@ -2173,6 +2173,108 @@ class RendererTest < Test::Unit::TestCase
                    'reserved-space render at step 0 should produce the same overall layout extent as step 1'
     end
 
+    test '<action> on a moveable <img> shifts its kitty_place coords between steps' do
+      png = Tempfile.new(['action', '.png'])
+      png.binmode
+      png.write("\x89PNG\r\n\x1a\n".b)
+      png.flush
+
+      # Stub the image-pipeline guard methods that render_image consults
+      # before reaching kitty_place. Mirrors the existing
+      # "render_image: x/y absolute positioning" test setup.
+      stubs = {
+        image_size:      Przn::ImageUtil.method(:image_size),
+        png?:            Przn::ImageUtil.method(:png?),
+        kitty_terminal?: Przn::ImageUtil.method(:kitty_terminal?),
+        kitty_place:     Przn::ImageUtil.method(:kitty_place),
+      }
+      placed = []
+      Przn::ImageUtil.singleton_class.remove_method(:image_size)
+      Przn::ImageUtil.define_singleton_method(:image_size)      { |_| [200, 200] }
+      Przn::ImageUtil.singleton_class.remove_method(:png?)
+      Przn::ImageUtil.define_singleton_method(:png?)            { |_| true }
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) { |**kw| placed << kw; 'PLACE' }
+
+      begin
+        slide = step_slide([
+          {type: :image, path: png.path, attrs: {'id' => 'pic', 'x' => '5c', 'y' => '5c'}},
+          {type: :wait},
+          {type: :action, attrs: {target: 'pic', x: '50c', y: '20c'}}
+        ])
+        # Step 0: action hasn't fired yet → pic at its declared (5c, 5c).
+        term0 = StepFakeTerm.new(w: 80, h: 30)
+        Przn::Renderer.new(term0).render(slide, current: 0, total: 1, step: 0)
+        step0_calls = placed.dup
+        refute_empty step0_calls, 'pic should be pre-placed at step 0'
+
+        # Step 1: action moves pic to (50c, 20c).
+        placed.clear
+        term1 = StepFakeTerm.new(w: 80, h: 30)
+        Przn::Renderer.new(term1).render(slide, current: 0, total: 1, step: 1)
+        step1_calls = placed.dup
+        refute_empty step1_calls, 'pic should be pre-placed at step 1 too'
+
+        # The kitty_place calls must differ between steps because the
+        # action moved the anchor. (Same image_id, same cols/rows, but
+        # the move_to upstream lands at a different cell.)
+        # We compare via move_to ops captured by the fake terminal.
+        moves0 = term0.ops.select { |op, *| op == :move_to }
+        moves1 = term1.ops.select { |op, *| op == :move_to }
+        refute_equal moves0, moves1,
+                     'move_to coordinates should differ between step 0 and step 1 after the action fires'
+      ensure
+        stubs.each do |name, orig|
+          Przn::ImageUtil.singleton_class.remove_method(name)
+          Przn::ImageUtil.define_singleton_method(name, orig)
+        end
+        png.close!
+      end
+    end
+
+    test '<action> targeting an unknown id is a no-op (no crash)' do
+      term = StepFakeTerm.new(w: 80, h: 30)
+      slide = step_slide([
+        {type: :paragraph, content: 'before'},
+        {type: :wait},
+        {type: :action, attrs: {target: 'nothing', x: '50%'}}
+      ])
+      assert_nothing_raised do
+        Przn::Renderer.new(term).render(slide, current: 0, total: 1, step: 1)
+      end
+    end
+
+    test 'effective_attrs preserves non-overridden attrs from the original block' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      blocks = [
+        {type: :image, attrs: {'id' => 'pic', 'x' => '5c', 'y' => '5c', 'z' => '-1'}},
+        {type: :wait},
+        {type: :action, attrs: {target: 'pic', x: '50c'}}  # only x changes
+      ]
+      r.send(:render, step_slide(blocks), current: 0, total: 1, step: 1) rescue nil
+      eff = r.send(:effective_attrs, blocks.first)
+      assert_equal '50c', eff['x'], 'x is moved by action'
+      assert_equal '5c',  eff['y'], 'y is untouched — keeps the original value'
+      assert_equal '-1',  eff['z'], 'z is untouched'
+      assert_equal 'pic', eff['id']
+    end
+
+    test 'a later <action> overrides an earlier one for the same target' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      blocks = [
+        {type: :image, attrs: {'id' => 'pic', 'x' => '5c', 'y' => '5c'}},
+        {type: :wait},
+        {type: :action, attrs: {target: 'pic', x: '50c'}},
+        {type: :wait},
+        {type: :action, attrs: {target: 'pic', x: '80c'}}
+      ]
+      r.send(:render, step_slide(blocks), current: 0, total: 1, step: 2) rescue nil
+      eff = r.send(:effective_attrs, blocks.first)
+      assert_equal '80c', eff['x'], 'last action wins at step 2'
+    end
+
     test 'hidden positioned `<img x y>` is NOT pre-placed (no kitty_place emitted for it)' do
       # The pre-pass writes the placement bytes; if the block is hidden,
       # nothing should reach the terminal for that image.

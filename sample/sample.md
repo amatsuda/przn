@@ -187,6 +187,20 @@ Press Space again — the next group reveals.
 
 And again — the layout doesn't reflow, the hidden text was already reserved.
 
+# Actions — `<action>`
+
+<arrow id="arrow" x1="15" y1="27" x2="15" y2="20" stroke="cyan" stroke-width="0.5"/>
+
+A vertical arrow points up, well below the text. Press Space to step it across.
+
+<wait/>
+
+<action target="arrow" x1="50" x2="50"/>
+
+<wait/>
+
+<action target="arrow" x1="85" x2="85"/>
+
 # Thank you
 
 That's all — enjoy.

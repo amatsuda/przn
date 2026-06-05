@@ -173,6 +173,17 @@ module Przn
         when %r{\A\s*<wait\s*/>\s*\z}, %r{\A\s*<wait>\s*</wait>\s*\z}, %r{\A\s*\{::wait/\}\s*\z}
           blocks << {type: :wait}
 
+        # Action targeting a previously-id'd block. The renderer
+        # accumulates these by step into an "effective state" map
+        # (`{id => override_attrs}`) so when the target block renders
+        # at the current step it picks up the new x / y / etc. instead
+        # of its original attrs. `target=` is required; other attrs
+        # ride through as overrides — typically x / y / z / opacity
+        # but anything the target's renderer reads can be moved.
+        when %r{\A\s*<action((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
+          attrs = parse_xml_attrs(Regexp.last_match(1))
+          blocks << {type: :action, attrs: attrs} if attrs[:target]
+
         # h2-h6 (sub-headings within slide)
         when /\A(\#{2,6})\s+(.*)/
           level = Regexp.last_match(1).size

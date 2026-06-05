@@ -472,7 +472,32 @@ Conclusion — revealed on the second Space press.
 - Reload (`r`) rewinds the current slide to step 0 so a re-parsed deck always starts collapsed.
 - Both forms are accepted: `<wait/>` (XML self-closing), `<wait></wait>` (paired), and the kramdown spelling `{::wait/}`.
 
-An `id="..."` attribute on any block (`<img>`, shapes, `<at>`, `<bg>`, …) is parsed and stored today as silent groundwork for future Action targeting (move / fade / scale on a named element). The renderer ignores it for now.
+### Actions — `<action target="..."/>`
+
+Give any positioned block an `id="..."`, then push attribute overrides onto it at a later step with `<action target="id" ...attrs.../>`. The most common use is moving an element across the slide as builds advance:
+
+```markdown
+# Move demo
+
+<rect id="box" x="5c" y="5c" width="20" height="6" fill="tomato"/>
+
+Now press Space →
+
+<wait/>
+
+<action target="box" x="50c" y="20c"/>
+
+… and again →
+
+<wait/>
+
+<action target="box" x="80%" y="80%"/>
+```
+
+- Any attr on `<action>` that isn't `target` overrides the same attr on the target block. `x` / `y` move it (the position resolver — the same one used by `<img>` and `<at>` — re-runs at each step); `z`, `width`, `height`, shape `fill` / `stroke` / `opacity`, etc. all work the same way.
+- Actions fire on the step at which they appear in the block sequence (positional, same model as element reveals). The latest action against each target wins at the current step, so a sequence of `<action>`s walks the target through positions.
+- An action with no `target=` is silently dropped. An action targeting an id that doesn't exist is a no-op (no crash). An action against an id whose element hasn't been revealed yet still sets the state — when the element later appears, it lands at the action's position.
+- Layer interaction: the target block's flow vs. positioned status doesn't change. A pinned `<img x y>` stays out of the flow whether moved or not; a flow `<img>` stays in flow.
 
 ### Line break
 
