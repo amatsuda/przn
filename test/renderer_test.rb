@@ -429,6 +429,78 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'paragraph: inline size affects only the sized span, not the rest of the line' do
+    # Reuse RunnerFakeTerm — same shape as the runner-bar tests.
+    class ParaFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    test '<font size="xx-large"> only scales its own span (`at once` stays s=2)' do
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :paragraph, content: '<font face="Georgia" size="xx-large" color="cyan">all three</font> at once'}
+      Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      # The xx-large span must carry s=5 (the xx-large scale).
+      assert_match(/s=5[^;]*;all three/, writes,
+                   'expected the <font size="xx-large"> span to be emitted at s=5')
+      # The trailing " at once" must NOT carry s=5; it should ride body_scale s=2.
+      assert_match(/s=2[^;]*; at once/, writes,
+                   'expected " at once" to render at body_scale (s=2), not xx-large')
+    end
+
+    test '<size=5>BIG</size> only scales BIG; surrounding text stays at body_scale' do
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :paragraph, content: 'before <size=5>BIG</size> after'}
+      Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert_match(/s=2[^;]*;before /, writes,  'plain "before " should be s=2')
+      assert_match(/s=5[^;]*;BIG/,      writes, '"BIG" should be s=5')
+      assert_match(/s=2[^;]*; after/,   writes, 'plain " after" should be s=2')
+    end
+
+    test 'row advance uses the line max scale so a tall span pushes the next block down' do
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :paragraph, content: 'tiny <size=5>HUGE</size> rest'}
+      new_row = Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
+      # Single visual line, height = max scale (5) → row advances 5.
+      assert_equal 10, new_row, "expected row 5 + 5 = 10, got #{new_row}"
+    end
+
+    test 'paragraph without inline size advances by body_scale per line' do
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :paragraph, content: 'just regular text'}
+      new_row = Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
+      assert_equal 7, new_row, "expected row 5 + body_scale(2) = 7, got #{new_row}"
+    end
+
+    test 'unordered list: <size=5>BIG</size> only scales BIG; rest stays s=2' do
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :unordered_list, items: [{text: 'before <size=5>BIG</size> after', depth: 0}]}
+      Przn::Renderer.new(term).send(:render_unordered_list, block, 80, 5)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert_match(/s=2[^;]*;before /, writes)
+      assert_match(/s=5[^;]*;BIG/,      writes)
+      assert_match(/s=2[^;]*; after/,   writes)
+    end
+
+    test 'ordered list: <font size="xx-large"> only scales its own span' do
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :ordered_list, items: [{text: '<font size="xx-large">big</font> small', depth: 0}]}
+      Przn::Renderer.new(term).send(:render_ordered_list, block, 80, 5)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert_match(/s=5[^;]*;big/,    writes)
+      assert_match(/s=2[^;]*; small/, writes)
+    end
+  end
+
   sub_test_case 'image cache' do
     def setup
       super

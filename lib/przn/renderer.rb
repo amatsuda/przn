@@ -1188,22 +1188,30 @@ module Przn
 
     def render_paragraph(block, width, row, align: nil)
       text = block[:content]
-      scale = max_inline_scale(text) || slot_scale || body_scale
+      # Two scales, not one:
+      #   - `base_scale` is the cell size for plain (unsized) text.
+      #     Always body_scale (or the active slot's override) — a
+      #     `<font size=xx-large>` somewhere in the paragraph must
+      #     NOT pull body text up with it.
+      #   - row advance happens per line and uses each line's own
+      #     `max_segment_scale` so a tall span only inflates the row
+      #     it actually appears on.
+      base_scale = slot_scale || body_scale
       left = content_left(width)
 
       if align
-        vis = visible_width_scaled(text, scale)
+        vis = visible_width_scaled(text, base_scale)
         left = compute_pad(width, vis, align)
       end
 
-      max_w = max_text_width(width, left, scale)
+      max_w = max_text_width(width, left, base_scale)
       segments = Parser.parse_inline(text)
-      wrapped = wrap_segments(segments, max_w, scale)
+      wrapped = wrap_segments(segments, max_w, base_scale)
 
       wrapped.each do |line_segs|
         term_move(row, left + 1)
-        @terminal.write render_segments_scaled(line_segs, scale)
-        row += scale
+        @terminal.write render_segments_scaled(line_segs, base_scale)
+        row += max_segment_scale(line_segs, base_scale)
       end
       row
     end
@@ -1307,24 +1315,24 @@ module Przn
         indent = '  ' * depth
         prefix = "#{indent}#{@theme.bullet[:text]}"
         prefix_w = display_width(prefix)
-        # An inline `<size=N>` (or its kramdown / `<font size>` siblings)
-        # makes the line N cells tall instead of `body_scale` cells —
-        # advance the row by the actual height so the next item's
-        # multicells don't overlap into the previous one and erase it.
-        scale = max_inline_scale(item[:text]) || body_scale
-        max_w = max_text_width(width, left, scale) - prefix_w
+        # Plain text renders at body_scale; lines containing a sized
+        # span (e.g. `<size=5>BIG</size>`) advance the row by that
+        # span's height per-line. Mixing `body` and `BIG` on the same
+        # line keeps body at body size — only the BIG span grows.
+        base_scale = body_scale
+        max_w = max_text_width(width, left, base_scale) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, scale)
+        wrapped = wrap_segments(segments, max_w, base_scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, scale)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: scale)}#{render_segments_scaled(line_segs, scale)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale)}"
           end
-          row += scale
+          row += max_segment_scale(line_segs, base_scale)
         end
         row += 1
       end
@@ -1338,20 +1346,20 @@ module Przn
         indent = '  ' * depth
         prefix = "#{indent}#{i + 1}. "
         prefix_w = display_width(prefix)
-        scale = max_inline_scale(item[:text]) || body_scale
-        max_w = max_text_width(width, left, scale) - prefix_w
+        base_scale = body_scale
+        max_w = max_text_width(width, left, base_scale) - prefix_w
 
         segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, scale)
+        wrapped = wrap_segments(segments, max_w, base_scale)
 
         wrapped.each_with_index do |line_segs, li|
           term_move(row, left)
           if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: scale)}#{render_segments_scaled(line_segs, scale)}"
+            @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: scale)}#{render_segments_scaled(line_segs, scale)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale)}"
           end
-          row += scale
+          row += max_segment_scale(line_segs, base_scale)
         end
         row += 1
       end
@@ -1909,15 +1917,8 @@ module Przn
 
     def visible_width_scaled(text, default_scale)
       Parser.parse_inline(text).sum { |segment|
-        type = segment[0]
-        content = segment[1]
-        case type
-        when :tag
-          scale = Parser::SIZE_SCALES[segment[2]] || default_scale
-          display_width(content) * scale
-        else
-          display_width(content) * default_scale
-        end
+        content = segment[1] || ''
+        display_width(content) * effective_seg_scale(segment, default_scale)
       }
     end
 

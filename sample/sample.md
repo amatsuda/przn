@@ -80,7 +80,7 @@ Plus 6-digit hex: <color=ff5555>tomato-ish</color>, <color=50fa7b>mint</color>, 
 
 <font face="Menlo" color="green" size="large">monospace in green</font>
 
-<font face="Georgia" size="xx-large" color="cyan">all three at once</font>
+<font face="Georgia" size="xx-large" color="cyan">all three</font> at once
 
 # Alignment — `<center>` / `<right>`
 
