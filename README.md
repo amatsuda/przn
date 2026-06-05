@@ -3,6 +3,8 @@
 A terminal-based presentation tool written in Ruby.
 Renders Markdown slides with [Kitty text sizing protocol](https://sw.kovidgoyal.net/kitty/text-sizing-protocol/) support for beautifully scaled headings.
 
+> For the full feature set, it is **strongly recommended** to run przn inside [Echoes](https://github.com/amatsuda/echoes). Features that depend on Echoes' OSC 7772 extensions, proportional-font measurement, or vector-capture pipeline are marked _(Echoes only)_ below; everything else works on any Kitty-graphics-compatible terminal (silently degrading where the protocol isn't available).
+
 ## Installation
 
 ```
@@ -23,7 +25,7 @@ przn your_slides.md @42
 
 Out-of-range numbers are clamped to the last slide, so `@9999` jumps to the end.
 
-### Extended-display presenter mode
+### Extended-display presenter mode _(Echoes only)_
 
 ```
 przn --present your_slides.md
@@ -53,7 +55,7 @@ przn --export prawn your_slides.md                 # Prawn (headless fallback)
 przn --export prawn -o output.pdf your_slides.md
 ```
 
-**`--export pdf`** (default) drives the live renderer for each slide and asks the terminal to save the rendered pane as a one-page **vector PDF**, then concatenates the per-slide PDFs into a single multi-page PDF. Output is an exact match of what's on screen — gradients, proportional fonts, OSC 66 sized text, custom bullets, all show up exactly as you'd see them — but vector, so the file stays small, scales infinitely, and text remains selectable. Requires running inside a terminal that implements the OSC 7772 `capture` command to a `.pdf` path (currently [Echoes](https://github.com/amatsuda/echoes)). The slides flicker through the visible pane during export.
+**`--export pdf`** (default) _(Echoes only)_ drives the live renderer for each slide and asks the terminal to save the rendered pane as a one-page **vector PDF**, then concatenates the per-slide PDFs into a single multi-page PDF. Output is an exact match of what's on screen — gradients, proportional fonts, OSC 66 sized text, custom bullets, all show up exactly as you'd see them — but vector, so the file stays small, scales infinitely, and text remains selectable. Requires running inside a terminal that implements the OSC 7772 `capture` command to a `.pdf` path (currently [Echoes](https://github.com/amatsuda/echoes)). The slides flicker through the visible pane during export.
 
 **`--export prawn`** is the headless fallback: it renders the deck directly into a vector PDF via Prawn, without touching the terminal. Useful for CI or environments where Echoes isn't available, but diverges from the on-screen rendering for any feature the live renderer adds (OSC 66 sized text, OSC 7772 backgrounds, proportional fonts). Requires a TrueType font (with `glyf` outlines) for proper rendering — Prawn does not support CFF-based fonts (most `.otf` files). Fonts are auto-detected in this order: NotoSansJP TTF, HackGen, Arial Unicode.
 
@@ -68,13 +70,9 @@ przn --export prawn -o output.pdf your_slides.md
 | `r` | Reload the deck (and `theme.yml`) from disk, keeping the current slide index |
 | `q` `Ctrl-C` | Quit |
 
-### Selecting and copying text
-
-`przn` doesn't capture mouse events, so drag-to-select and the terminal's own copy shortcut (Kitty: `Cmd+C` on macOS, `Ctrl+Shift+C` on Linux) work normally on a slide. Mouse-tracking modes that may have leaked from a previously crashed program are explicitly disabled on entry, so drag selection is reliable.
-
 ## Markdown format
 
-przn's Markdown format is compatible with [Rabbit](https://rabbit-shocker.org/)'s Markdown mode.
+przn's Markdown format is based on [Rabbit](https://rabbit-shocker.org/)'s Markdown mode with some extensions.
 
 > **HTML-ish tag attributes** — every `<tag attr=value>` block below (`<bg>`, `<at>`, `<img>`, `<font>`) accepts three value forms: double-quoted `attr="value"`, single-quoted `attr='value'`, and unquoted `attr=value` (HTML5-ish — anything that isn't whitespace, `=`, `<`, `>`, a quote, or backtick). Self-closing tags need a space before `/>` when the last attribute is unquoted (`<img src=foo.png />`).
 
@@ -188,7 +186,7 @@ For combined styling, the `color` attribute on `<font>` works too (see [Font](#f
 
 ### Font
 
-HTML4-style `<font>` tag with `face`, `size`, and `color` attributes. Any subset, in any order.
+HTML4-style `<font>` tag with `face`, `size`, and `color` attributes. Any subset, in any order. The `face` attribute is _(Echoes only)_ — other terminals silently ignore it and fall back to the body font.
 
 ```markdown
 <font face="Helvetica Neue">Title</font>
@@ -219,7 +217,7 @@ XML form (single-line, paragraph-level):
 
 ### Slide background
 
-Set a per-slide background — solid color, linear gradient, or image — via a self-closing block-level directive.
+Set a per-slide background — solid color, linear gradient, or image — via a self-closing block-level directive. Solid color and gradient backgrounds are _(Echoes only)_; image backgrounds work on any Kitty-graphics terminal.
 
 ```markdown
 # Title
@@ -360,7 +358,7 @@ right column content
 - bullet D
 ```
 
-**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optional styling: `align` (`left` / `center` / `right`, default `left`), `size` (OSC 66 scale: `1`-`7` or named `xx-small` … `xxxx-large`), `family` (font family — Echoes), and `color` (named ANSI or 6-digit hex). Coordinates use the same convention as `<at>` and `<img x y>`: 1-based cells or `N%` of the terminal dimension. `%` values reflow on terminal resize.
+**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optional styling: `align` (`left` / `center` / `right`, default `left`), `size` (OSC 66 scale: `1`-`7` or named `xx-small` … `xxxx-large`), `family` _(Echoes only)_, and `color` (named ANSI or 6-digit hex). Coordinates use the same convention as `<at>` and `<img x y>`: 1-based cells or `N%` of the terminal dimension. `%` values reflow on terminal resize.
 
 ```yaml
 layouts:
@@ -524,12 +522,12 @@ All keys are optional — anything you don't set falls back to the bundled defau
 
 ```yaml
 font:                     # body text typography (paragraphs, lists, h2–h6, code, tables, …)
-  family:                 # font family; terminal: OSC 66 f= (requires Echoes)
+  family:                 # font family; Echoes only — OSC 66 f= extension
   size:                   # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default 2 (small)
   color:                  # named ANSI or 6-digit hex; falls back to terminal default fg when unset
 
 title:                    # h1 typography (slide titles)
-  family:                 # font family
+  family:                 # font family; Echoes only — OSC 66 f= extension
   size:                   # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default x-large
   color:                  # named ANSI or 6-digit hex
 
@@ -538,7 +536,7 @@ bullet:                   # unordered-list marker; also h2–h6 prefix
   size:                   # OSC 66 scale (1–7) for the bullet; default = body text's scale
   color:                  # named ANSI or 6-digit hex; falls back to body text color when unset
 
-background:               # default slide background (Echoes OSC 7772)
+background:               # default slide background; Echoes only — OSC 7772
   color:                  # solid, e.g. "#1a1a2e"
   from:                   # gradient endpoint
   to:                     # gradient endpoint
@@ -557,13 +555,13 @@ colors:
 Notes:
 
 - **`font`** — body text typography for everything that isn't an h1: paragraphs, lists, h2–h6, blockquotes, code blocks, tables, definition lists. Mirrors `title`'s three knobs:
-  - **`font.family`** — applied via OSC 66 `f=` (requires Echoes); PDF: registered via fontconfig. Inline `<font face="...">` runs override it per-segment.
+  - **`font.family`** _(Echoes only)_ — applied via OSC 66 `f=`; PDF: registered via fontconfig. Inline `<font face="...">` runs override it per-segment.
   - **`font.size`** — OSC 66 scale; controls the visual size of body text (numeric `1`–`7` or named `xx-small` … `xxxx-large`). Default `2` (small). Inline `<size=...>` runs override it per-segment.
   - **`font.color`** — deck-wide default text color. Inline `<color=...>` / `<font color="...">` runs still win per-segment.
 - **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color.
-- **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is proportional, every h1 OSC 66 sequence is emitted with `h=2` so a terminal that honors centered horizontal alignment ([Echoes](https://github.com/amatsuda/echoes)) keeps the title visually centered against its reserved cell block. h2–h6 stay body text.
-- **`background`** — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
-- **`counter`** — bottom-of-screen slide counter. Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. Inside [Echoes](https://github.com/amatsuda/echoes) the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
+- **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` _(Echoes only)_ does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is set, h1 lines emit as one slot-spanning multicell with halign=2 so Echoes' proportional-font measurement centers the text pixel-precisely instead of using the cell-grid estimate. h2–h6 stay body text.
+- **`background`** _(Echoes only)_ — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
+- **`counter`** — bottom-of-screen slide counter. Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. _(Echoes only)_ the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
 
 ## License
 
