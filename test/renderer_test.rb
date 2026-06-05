@@ -443,27 +443,32 @@ class RendererTest < Test::Unit::TestCase
       def cell_pixel_size; [10, 20]; end
     end
 
-    test '<font size="xx-large"> only scales its own span (`at once` stays s=2)' do
+    test '<font size="xx-large"> only scales its own span; rest bottom-aligns in the line block' do
       term = ParaFakeTerm.new(w: 80, h: 30)
       block = {type: :paragraph, content: '<font face="Georgia" size="xx-large" color="cyan">all three</font> at once'}
       Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
-      # The xx-large span must carry s=5 (the xx-large scale).
-      assert_match(/s=5[^;]*;all three/, writes,
-                   'expected the <font size="xx-large"> span to be emitted at s=5')
-      # The trailing " at once" must NOT carry s=5; it should ride body_scale s=2.
-      assert_match(/s=2[^;]*; at once/, writes,
-                   'expected " at once" to render at body_scale (s=2), not xx-large')
+      # The xx-large span is the tallest on a mixed line → s=5:v=3, so
+      # its baseline matches the shorter sibling's instead of floating
+      # at the top of the 5-row block.
+      assert_match(/s=5:[^;]*v=3[^;]*;all three/, writes,
+                   'expected the <font size="xx-large"> span at s=5:v=3 (shared baseline)')
+      # The trailing " at once" rides a 5-tall block but at body glyph
+      # ratio (n=2,d=5) and bottom-aligned (v=3) — small text resting
+      # on the same baseline as the big text, not floating above it.
+      assert_match(/s=5:n=2:d=5:v=3; at once/, writes,
+                   'expected " at once" to be bottom-aligned (n=2,d=5,v=3) inside the 5-tall line block')
     end
 
-    test '<size=5>BIG</size> only scales BIG; surrounding text stays at body_scale' do
+    test '<size=5>BIG</size> only scales BIG; surrounding text bottom-aligns at body glyph size' do
       term = ParaFakeTerm.new(w: 80, h: 30)
       block = {type: :paragraph, content: 'before <size=5>BIG</size> after'}
       Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
-      assert_match(/s=2[^;]*;before /, writes,  'plain "before " should be s=2')
-      assert_match(/s=5[^;]*;BIG/,      writes, '"BIG" should be s=5')
-      assert_match(/s=2[^;]*; after/,   writes, 'plain " after" should be s=2')
+      # "before " and " after" ride s=5:n=2:d=5:v=3 (body glyph at line bottom).
+      assert_match(/s=5:n=2:d=5:v=3;before /, writes, '"before " should be n=2,d=5,v=3')
+      assert_match(/s=5:v=3;BIG/,              writes, '"BIG" is the line max but on a mixed line, so v=3 (bottom) for shared baseline')
+      assert_match(/s=5:n=2:d=5:v=3; after/,   writes, '" after" should be n=2,d=5,v=3')
     end
 
     test 'row advance uses the line max scale so a tall span pushes the next block down' do
@@ -481,23 +486,72 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 7, new_row, "expected row 5 + body_scale(2) = 7, got #{new_row}"
     end
 
-    test 'unordered list: <size=5>BIG</size> only scales BIG; rest stays s=2' do
+    test 'unordered list: <size=5>BIG</size> only scales BIG; surrounding text bottom-aligns' do
       term = ParaFakeTerm.new(w: 80, h: 30)
       block = {type: :unordered_list, items: [{text: 'before <size=5>BIG</size> after', depth: 0}]}
       Przn::Renderer.new(term).send(:render_unordered_list, block, 80, 5)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
-      assert_match(/s=2[^;]*;before /, writes)
-      assert_match(/s=5[^;]*;BIG/,      writes)
-      assert_match(/s=2[^;]*; after/,   writes)
+      assert_match(/s=5:n=2:d=5:v=3;before /, writes)
+      assert_match(/s=5:v=3;BIG/,              writes, '"BIG" is the tallest but mixed-line forces v=3')
+      assert_match(/s=5:n=2:d=5:v=3; after/,   writes)
     end
 
-    test 'ordered list: <font size="xx-large"> only scales its own span' do
+    test 'ordered list: <font size="xx-large"> only scales its own span; rest bottom-aligns' do
       term = ParaFakeTerm.new(w: 80, h: 30)
       block = {type: :ordered_list, items: [{text: '<font size="xx-large">big</font> small', depth: 0}]}
       Przn::Renderer.new(term).send(:render_ordered_list, block, 80, 5)
       writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
-      assert_match(/s=5[^;]*;big/,    writes)
-      assert_match(/s=2[^;]*; small/, writes)
+      assert_match(/s=5:v=3;big/,             writes, 'tall <font> on a mixed line emits v=3 (shared baseline)')
+      assert_match(/s=5:n=2:d=5:v=3; small/,  writes)
+    end
+
+    test 'sized_in_line collapses to plain s= when seg_scale matches line_height' do
+      r = Przn::Renderer.new(ParaFakeTerm.new(w: 80, h: 30))
+      out = r.send(:sized_in_line, 'hi', seg_scale: 5, line_height: 5)
+      assert_equal "\e]66;s=5;hi\a", out
+    end
+
+    test 'sized_in_line emits n/d/v=3 only when seg_scale is shorter than line_height' do
+      r = Przn::Renderer.new(ParaFakeTerm.new(w: 80, h: 30))
+      out = r.send(:sized_in_line, 'hi', seg_scale: 2, line_height: 5)
+      assert_equal "\e]66;s=5:n=2:d=5:v=3;hi\a", out,
+                   'expected the OSC 66 to read s=5:n=2:d=5:v=3 so a body glyph rides the bottom of a 5-tall block'
+    end
+
+    test 'sized_in_line collapses when line_height is nil (backward compat path)' do
+      r = Przn::Renderer.new(ParaFakeTerm.new(w: 80, h: 30))
+      out = r.send(:sized_in_line, 'hi', seg_scale: 2, line_height: nil)
+      assert_equal "\e]66;s=2;hi\a", out
+    end
+
+    test 'sized_in_line with mixed_line:true adds v=3 even when seg matches line_height' do
+      # This is what gives the tall segment on a mixed line a shared
+      # baseline with its shorter siblings — without v=3 it would
+      # fall through to plain `s=N` (Echoes default = top).
+      r = Przn::Renderer.new(ParaFakeTerm.new(w: 80, h: 30))
+      out = r.send(:sized_in_line, 'BIG', seg_scale: 5, line_height: 5, mixed_line: true)
+      assert_equal "\e]66;s=5:v=3;BIG\a", out
+    end
+
+    test 'sized_in_line keeps plain s= when mixed_line:false and seg matches line_height' do
+      # Single-scale lines (no shorter siblings) stay byte-identical.
+      r = Przn::Renderer.new(ParaFakeTerm.new(w: 80, h: 30))
+      out = r.send(:sized_in_line, 'hi', seg_scale: 5, line_height: 5, mixed_line: false)
+      assert_equal "\e]66;s=5;hi\a", out
+    end
+
+    test '<font size=...> bottom-aligns when it is shorter than the line max' do
+      # `<size=7>HUGE</size>` makes the line 7 tall. The intermediate
+      # `<font size="xx-large">` (scale 5) sits between body and that —
+      # so the <font> segment itself gets the n/d/v=3 treatment, not
+      # just the plain text around it.
+      term = ParaFakeTerm.new(w: 80, h: 30)
+      block = {type: :paragraph, content: '<size=7>HUGE</size> <font size="xx-large">mid</font> plain'}
+      Przn::Renderer.new(term).send(:render_paragraph, block, 80, 5)
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+      assert_match(/s=7:v=3;HUGE/,             writes, 'HUGE is the line max but on a mixed line → v=3 for shared baseline')
+      assert_match(/s=7:n=5:d=7:v=3;mid/,      writes, '<font size=xx-large> is shorter than line_height=7 → must bottom-align')
+      assert_match(/s=7:n=2:d=7:v=3; plain/,   writes, 'plain text → bottom-aligned at body ratio')
     end
   end
 

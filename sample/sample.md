@@ -60,13 +60,13 @@ another term
 
 <size=xx-small>xx-small</size> <size=x-small>x-small</size> <size=small>small</size> <size=large>large</size>
 
-<size=x-large>x-large</size>
+<size=x-large>x-large</size> text
 
-<size=xx-large>xx-large</size>
+<size=xx-large>xx-large</size> text
 
-<size=xxx-large>xxx-large</size>
+<size=xxx-large>xxx-large</size> text
 
-<size=xxxx-large>biggest</size>
+<size=xxxx-large>biggest</size> text
 
 # Color — `<color=NAME>`
 

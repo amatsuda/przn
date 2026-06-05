@@ -436,9 +436,10 @@ module Przn
       # carries no explicit size, matching the pre-fix behavior.
       y_cursor = y
       lines.each do |line_segs|
+        line_h = max_segment_scale(line_segs, body_scale)
         @terminal.move_to(y_cursor, x)
-        @terminal.write render_segments_scaled(line_segs, body_scale)
-        y_cursor += max_segment_scale(line_segs, body_scale)
+        @terminal.write render_segments_scaled(line_segs, body_scale, line_height: line_h)
+        y_cursor += line_h
       end
     end
 
@@ -1209,9 +1210,10 @@ module Przn
       wrapped = wrap_segments(segments, max_w, base_scale)
 
       wrapped.each do |line_segs|
+        line_h = max_segment_scale(line_segs, base_scale)
         term_move(row, left + 1)
-        @terminal.write render_segments_scaled(line_segs, base_scale)
-        row += max_segment_scale(line_segs, base_scale)
+        @terminal.write render_segments_scaled(line_segs, base_scale, line_height: line_h)
+        row += line_h
       end
       row
     end
@@ -1326,13 +1328,14 @@ module Przn
         wrapped = wrap_segments(segments, max_w, base_scale)
 
         wrapped.each_with_index do |line_segs, li|
+          line_h = max_segment_scale(line_segs, base_scale)
           term_move(row, left)
           if li == 0
-            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale)}"
+            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
           end
-          row += max_segment_scale(line_segs, base_scale)
+          row += line_h
         end
         row += 1
       end
@@ -1353,13 +1356,14 @@ module Przn
         wrapped = wrap_segments(segments, max_w, base_scale)
 
         wrapped.each_with_index do |line_segs, li|
+          line_h = max_segment_scale(line_segs, base_scale)
           term_move(row, left)
           if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale)}"
+            @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
           else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale)}"
+            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
           end
-          row += max_segment_scale(line_segs, base_scale)
+          row += line_h
         end
         row += 1
       end
@@ -1713,13 +1717,53 @@ module Przn
     # Render a <font face="..." size="..." color="..."> run. The face goes out
     # via OSC 66 f= (Echoes extension); the size resolves through the same
     # SIZE_SCALES table that <size=N> uses; the color wraps in the same ANSI
-    # escape that <color=NAME> uses.
-    def render_font_segment(content, attrs, para_scale, default_face: nil, default_h: nil)
+    # escape that <color=NAME> uses. `line_height:` lets a small font ride
+    # at the bottom of a taller line (see `sized_in_line`).
+    def render_font_segment(content, attrs, para_scale, line_height: nil, mixed_line: false, default_face: nil, default_h: nil)
       scale = (attrs[:size] && Parser::SIZE_SCALES[attrs[:size]]) || para_scale
-      base = KittyText.sized(content, s: scale, f: attrs[:face] || default_face, h: default_h)
+      base = sized_in_line(content, seg_scale: scale, line_height: line_height, mixed_line: mixed_line, f: attrs[:face] || default_face, h: default_h)
       color = attrs[:color]
       return base unless color
       "#{color_code(color)}#{base}#{ANSI[:reset]}"
+    end
+
+    # Wrap `content` in OSC 66 so segments on a mixed-size line share a
+    # typographic baseline (not just a block-bottom edge). All segments
+    # emit `s=line_height` so their multicell blocks have the same top
+    # and bottom; then `v=3` (Echoes-private baseline-align mode) tells
+    # the renderer to position each one so its baseline lands at the
+    # same y within the block, regardless of font/scale.
+    #
+    #   - Shorter than line_height → s=line_height,n=seg,d=line_height,v=3.
+    #     Block matches the tallest sibling; glyph drawn at seg/line_height
+    #     ratio; baseline shared with the tall siblings.
+    #
+    #   - Equal to line_height but on a mixed line → s=seg_scale,v=3.
+    #     Same block size as the shorter siblings (since they all emit
+    #     s=line_height too). v=3 keeps everyone on the same baseline.
+    #
+    #   - Anything when line_height is nil OR no mixed-size line at all →
+    #     plain `s=seg_scale`. Byte-identical to the pre-line-height path
+    #     so single-scale paragraphs / lists / etc. don't drift.
+    #
+    # `mixed_line:` tells the helper whether *some other* segment on this
+    # line is shorter than line_height — the caller computes it once per
+    # line because the helper itself only sees one segment at a time.
+    #
+    # Echoes' v= mapping (echoes/lib/echoes/gui.rb:1269):
+    #   v=0 (default) → top
+    #   v=1           → text-bottom at block-bottom
+    #   v=2           → text-centered in block
+    #   v=3           → baseline at `block_bottom - cell_h + default_ascender`
+    #                   (Echoes-private; falls back to top on strict kitty)
+    def sized_in_line(content, seg_scale:, line_height:, mixed_line: false, f: nil, h: nil)
+      if line_height && line_height > seg_scale
+        KittyText.sized(content, s: line_height, n: seg_scale, d: line_height, v: 3, f: f, h: h)
+      elsif mixed_line
+        KittyText.sized(content, s: seg_scale, v: 3, f: f, h: h)
+      else
+        KittyText.sized(content, s: seg_scale, f: f, h: h)
+      end
     end
 
     # `default_face:` / `default_color:` let a caller (currently h1 rendering)
@@ -1735,11 +1779,20 @@ module Przn
     # centered within the reserved cell block — without it the glyphs left-
     # align inside the block and the visible text drifts left of the center
     # column we computed.
-    def render_segments_scaled(segments, para_scale, default_face: :body, default_h: nil, default_color: :body)
+    def render_segments_scaled(segments, para_scale, line_height: nil, default_face: :body, default_h: nil, default_color: :body)
       f = default_face == :body ? (slot_family || @theme.font[:family]) : default_face
       h = default_h
       c = default_color == :body ? (slot_color || @theme.font[:color]) : default_color
       body_open = c ? color_code(c) : ''
+      # "Mixed line" = line_height is set AND at least one segment is
+      # shorter than line_height. When true, the tall segment(s) also
+      # get v=1 so they share the baseline with the shorter siblings
+      # (otherwise tall floats to the top and short to the bottom).
+      mixed = line_height &&
+        segments.any? { |s| s[0] != :break && effective_seg_scale(s, para_scale) < line_height }
+      # When `line_height` isn't passed, callers want the pre-mixed-size
+      # behavior — sized_in_line collapses to plain `s=seg_scale`, so
+      # existing wire-shape tests keep their byte-for-byte output.
       inner = segments.map { |segment|
         type = segment[0]
         content = segment[1]
@@ -1747,23 +1800,23 @@ module Przn
         when :tag
           tag_name = segment[2]
           if (scale = Parser::SIZE_SCALES[tag_name])
-            KittyText.sized(content, s: scale, f: f, h: h)
+            sized_in_line(content, seg_scale: scale, line_height: line_height, mixed_line: mixed, f: f, h: h)
           elsif !(code = color_code(tag_name)).empty?
             # `<color=NAME>`, `<color=ff5555>`, `<color=#ff5555>`, the
             # kramdown `{::tag name="red"}` form — anything color_code
             # can resolve gets wrapped in that SGR. Same engine
             # `<font color="...">` uses, so the two stay in sync.
-            "#{code}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+            "#{code}#{sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
           else
-            KittyText.sized(content, s: para_scale, f: f, h: h)
+            sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)
           end
-        when :font          then "#{render_font_segment(content, segment[2] || {}, para_scale, default_face: f, default_h: h)}#{(segment[2] || {})[:color] ? body_open : ''}"
-        when :note          then @mode == :audience ? "" : "#{ANSI[:dim]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
-        when :bold          then "#{ANSI[:bold]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
-        when :italic        then "#{ANSI[:italic]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
-        when :strikethrough then "#{ANSI[:strikethrough]}#{KittyText.sized(content, s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
-        when :code          then "#{ANSI[:gray_bg]}#{KittyText.sized(" #{content} ", s: para_scale, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
-        when :text          then KittyText.sized(content, s: para_scale, f: f, h: h)
+        when :font          then "#{render_font_segment(content, segment[2] || {}, para_scale, line_height: line_height, mixed_line: mixed, default_face: f, default_h: h)}#{(segment[2] || {})[:color] ? body_open : ''}"
+        when :note          then @mode == :audience ? "" : "#{ANSI[:dim]}#{sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :bold          then "#{ANSI[:bold]}#{sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :italic        then "#{ANSI[:italic]}#{sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :strikethrough then "#{ANSI[:strikethrough]}#{sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :code          then "#{ANSI[:gray_bg]}#{sized_in_line(" #{content} ", seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)}#{ANSI[:reset]}#{body_open}"
+        when :text          then sized_in_line(content, seg_scale: para_scale, line_height: line_height, mixed_line: mixed, f: f, h: h)
         end
       }.join
       body_open.empty? ? inner : "#{body_open}#{inner}#{ANSI[:reset]}"
