@@ -17,6 +17,10 @@ OptionParser.new do |opts|
     end
   }
   opts.on('-o', '--output FILE', 'Output file path for export') { |v| options[:output] = v }
+  opts.on('--pdf-quality LEVEL',
+          'PDF size/quality preset for --export pdf: lossless|low|medium|high|max (default: medium)') { |v|
+    options[:pdf_quality] = v
+  }
   opts.on('--theme FILE', 'Theme file (YAML)') { |v| options[:theme] = v }
   opts.on('--generate-theme', 'Generate theme.yml in current directory') { options[:generate_theme] = true }
   opts.on('--present', 'Open the deck in presenter mode (auto-spawns an audience window on the secondary display)') { options[:present] = true }
@@ -56,7 +60,7 @@ when 'pdf'
   require_relative '../lib/przn/screenshot_pdf_exporter'
 
   output = options[:output] || File.basename(file, File.extname(file)) + '.pdf'
-  Przn.export_pdf(file, output, theme: theme)
+  Przn.export_pdf(file, output, theme: theme, quality: options[:pdf_quality])
 when 'prawn'
   require_relative '../lib/przn/prawn_pdf_exporter'
 

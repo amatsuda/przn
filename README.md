@@ -55,7 +55,19 @@ przn --export prawn your_slides.md                 # Prawn (headless fallback)
 przn --export prawn -o output.pdf your_slides.md
 ```
 
-**`--export pdf`** (default) _(Echoes only)_ drives the live renderer for each slide and asks the terminal to save the rendered pane as a one-page **vector PDF**, then concatenates the per-slide PDFs into a single multi-page PDF. Output is an exact match of what's on screen — gradients, proportional fonts, OSC 66 sized text, custom bullets, all show up exactly as you'd see them — but vector, so the file stays small, scales infinitely, and text remains selectable. Requires running inside a terminal that implements the OSC 7772 `capture` command to a `.pdf` path (currently [Echoes](https://github.com/amatsuda/echoes)). The slides flicker through the visible pane during export.
+**`--export pdf`** (default) _(Echoes only)_ drives the live renderer for each slide and asks the terminal to save the rendered pane as a one-page **vector PDF**, then concatenates the per-slide PDFs into a single multi-page PDF. Output is an exact match of what's on screen — gradients, proportional fonts, OSC 66 sized text, custom bullets, all show up exactly as you'd see them — but vector, so text remains selectable and scales infinitely. Requires running inside a terminal that implements the OSC 7772 `capture` command to a `.pdf` path (currently [Echoes](https://github.com/amatsuda/echoes)). The slides flicker through the visible pane during export.
+
+Echoes embeds `<img>` content at its source resolution (a 24-megapixel phone photo lands in the PDF as 24 megapixels), so image-heavy decks balloon. If [Ghostscript](https://ghostscript.com/) is on `$PATH` przn pipes the merged file through `gs -dPDFSETTINGS=…` to downsample-and-recompress those rasters as JPEG — typically 5-20× smaller on photo-bearing decks. Tune with `--pdf-quality`:
+
+| Value | gs preset | Use for |
+|-------|-----------|---------|
+| `lossless` | (skip gs) | Image fidelity matters more than file size; keeps Echoes' originals byte-for-byte |
+| `low` | `/screen` (~72 DPI) | Email-friendly, presentations viewed on phones |
+| `medium` (default) | `/ebook` (~150 DPI) | General-purpose; visually indistinguishable at projection distances |
+| `high` | `/printer` (~300 DPI) | Print handouts |
+| `max` | `/prepress` | Maximum fidelity, color preservation |
+
+Without `gs` on `$PATH` the file is left at its lossless-only size and a one-line install hint is printed on stderr (`brew install ghostscript` on macOS). Set `PRZN_GS=/custom/path/gs` to point at a non-default install, or `PRZN_GS=` (empty) / `--pdf-quality lossless` to opt out explicitly.
 
 **`--export prawn`** is the headless fallback: it renders the deck directly into a vector PDF via Prawn, without touching the terminal. Useful for CI or environments where Echoes isn't available, but diverges from the on-screen rendering for any feature the live renderer adds (OSC 66 sized text, OSC 7772 backgrounds, proportional fonts). Requires a TrueType font (with `glyf` outlines) for proper rendering — Prawn does not support CFF-based fonts (most `.otf` files). Fonts are auto-detected in this order: NotoSansJP TTF, HackGen, Arial Unicode.
 

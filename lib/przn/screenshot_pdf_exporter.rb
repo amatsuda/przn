@@ -2,6 +2,8 @@
 
 require 'tmpdir'
 require 'fileutils'
+require 'digest'
+require 'zlib'
 
 module Przn
   # Default PDF export: drives the live renderer, asks the terminal to save
@@ -10,11 +12,11 @@ module Przn
   # Requires Echoes (or any terminal that implements the same capture
   # command); use `export_pdf_prawn` instead for environments where that's
   # not possible (CI, headless).
-  def self.export_pdf(file, output, theme: nil)
+  def self.export_pdf(file, output, theme: nil, quality: nil)
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     base_dir = File.dirname(File.expand_path(file))
-    ScreenshotPdfExporter.new(presentation, base_dir: base_dir, theme: theme).export(output)
+    ScreenshotPdfExporter.new(presentation, base_dir: base_dir, theme: theme, quality: quality).export(output)
     puts "Generated: #{output}"
   end
 
@@ -43,12 +45,27 @@ module Przn
     POLL_INTERVAL = 0.05  # seconds between file-existence checks
     CAPTURE_TIMEOUT = 10  # seconds per slide before giving up
 
-    def initialize(presentation, base_dir: '.', theme: nil, terminal: nil)
+    # Maps the user-facing `--pdf-quality` flag onto Ghostscript's
+    # `-dPDFSETTINGS` preset names. `:lossless` skips the gs pass
+    # entirely (lossless HexaPDF layers only — useful when image
+    # fidelity matters more than file size). `nil` means "use the
+    # default", which is `:medium`.
+    QUALITY_PRESETS = {
+      'lossless' => :lossless,
+      'low'      => '/screen',
+      'medium'   => '/ebook',
+      'high'     => '/printer',
+      'max'      => '/prepress',
+    }.freeze
+    DEFAULT_QUALITY = 'medium'
+
+    def initialize(presentation, base_dir: '.', theme: nil, terminal: nil, quality: nil)
       @presentation = presentation
       @base_dir = base_dir
       @theme = theme || Theme.default
       @terminal = terminal || Terminal.new
       @renderer = Renderer.new(@terminal, base_dir: base_dir, theme: theme, export_mode: true)
+      @quality = resolve_quality(quality)
     end
 
     def export(output_path)
@@ -110,7 +127,154 @@ module Przn
           output.pages << output.import(page)
         end
       end
+
+      # Three lossless passes before write. Page surfaces stay
+      # byte-identical; only the encoding of the underlying objects
+      # shrinks.
+      #   1. Dedup image XObjects — repeated logos / shared backgrounds
+      #      become a single shared object.
+      #   2. Re-Flate uncompressed image streams.
+      #   3. HexaPDF's task(:optimize) collapses metadata into object
+      #      streams and rewrites xref as binary streams.
+      dedup_image_xobjects(output)
+      reflate_uncompressed_images(output)
+      output.task(:optimize,
+                  compact: true,
+                  object_streams: :generate,
+                  xref_streams: :generate)
+
       output.write(output_path)
+
+      # Optional lossy post-process. Echoes' OSC 7772 capture embeds
+      # `<img>` and shape rasters at their NATIVE source resolution
+      # (a 24-megapixel phone photo embedded as a slide thumbnail
+      # stays at 24MP in the captured PDF). Re-Flating that pixel
+      # data, as the three lossless passes above do, doesn't help —
+      # photographic content compresses 10-50× better as JPEG.
+      #
+      # Ghostscript's `-dPDFSETTINGS=/ebook` downsamples raster
+      # images to 150 DPI and re-encodes them as JPEG. We shell out
+      # if `gs` is on PATH; if not, the file is left as-is with a
+      # friendly hint on stderr. Lossy in the strict sense, but the
+      # `/ebook` preset is widely considered visually indistinguishable
+      # at presentation viewing distances.
+      shrink_with_ghostscript(output_path)
+    end
+
+    # Resolve the Ghostscript binary path the recompression pass will
+    # use. Three layers, in order:
+    #   1. `PRZN_GS=` (explicitly empty) — opt out, no warning. Used
+    #      by tests and by anyone who wants the lossless-only pipeline.
+    #   2. `PRZN_GS=<path>` — explicit override (custom build, brew
+    #      keg-only path, etc).
+    #   3. Default: probe PATH for `gs`. Missing binary → returns
+    #      :missing so the caller can print the install hint once.
+    def gs_path
+      env = ENV['PRZN_GS']
+      return :disabled if env == ''
+      bin = env && !env.empty? ? env : 'gs'
+      found = `which #{bin} 2>/dev/null`.chomp
+      found.empty? ? :missing : found
+    end
+
+    def shrink_with_ghostscript(path)
+      return if @quality == :lossless
+      gs = gs_path
+      case gs
+      when :disabled then return
+      when :missing
+        warn 'Hint: install Ghostscript (`brew install ghostscript`) for a 5-20× ' \
+             'size reduction on image-heavy decks. Skipping recompression. ' \
+             'Pass --pdf-quality lossless to silence this hint.'
+        return
+      end
+
+      tmp = "#{path}.gs.tmp"
+      ok = system(gs,
+                  '-q',
+                  '-dQUIET', '-dNOPAUSE', '-dBATCH', '-dSAFER',
+                  '-sDEVICE=pdfwrite',
+                  "-dPDFSETTINGS=#{@quality}",
+                  '-dCompatibilityLevel=1.5',
+                  "-sOutputFile=#{tmp}",
+                  path,
+                  out: File::NULL, err: File::NULL)
+      if ok && File.exist?(tmp) && File.size(tmp).positive? && File.size(tmp) < File.size(path)
+        FileUtils.mv(tmp, path)
+      else
+        FileUtils.rm_f(tmp)
+      end
+    end
+
+    def resolve_quality(raw)
+      key = (raw || DEFAULT_QUALITY).to_s.downcase
+      preset = QUALITY_PRESETS[key]
+      unless preset
+        raise ArgumentError,
+              "unknown --pdf-quality #{raw.inspect}; expected one of " \
+              "#{QUALITY_PRESETS.keys.join(', ')}"
+      end
+      preset
+    end
+
+    # Find image XObjects whose stream bytes are byte-for-byte identical
+    # and collapse them into a single shared object — the case being:
+    # a slide background or repeated logo gets captured into N
+    # per-slide PDFs independently, then HexaPDF imports each one as
+    # its own object. Hashing the stream bytes is enough to recognise
+    # them; the later pages' XObject resource entries are pointed at
+    # the first occurrence's indirect reference and the duplicate
+    # objects are swept by the subsequent compact-optimize pass.
+    def dedup_image_xobjects(doc)
+      by_hash = {}
+      doc.pages.each do |page|
+        resources = page[:Resources]
+        next unless resources && resources[:XObject]
+        xobjects = resources[:XObject]
+        xobjects.each do |name, xobj|
+          next unless image_xobject?(xobj)
+          h = Digest::SHA256.hexdigest(xobj.stream.to_s)
+          if (canonical = by_hash[h])
+            xobjects[name] = canonical unless canonical.equal?(xobj)
+          else
+            by_hash[h] = xobj
+          end
+        end
+      end
+      # Sweep the now-orphaned duplicates.
+      doc.task(:optimize, compact: true)
+    end
+
+    # Apply best-strength Flate to image streams that arrived
+    # uncompressed (or compressed by a filter Flate can outperform).
+    # JPEG (`DCTDecode`) and JPEG-2000 (`JPXDecode`) streams are
+    # already entropy-coded — re-encoding them losslessly cannot
+    # help and lossy re-encoding would need an external image
+    # library. Streams that grow under Flate (rare; happens when
+    # the input is already near maximum entropy) are left alone.
+    def reflate_uncompressed_images(doc)
+      doc.each do |obj|
+        next unless image_xobject?(obj)
+        filter = Array(obj[:Filter])
+        next if filter.include?(:FlateDecode) ||
+                filter.include?(:DCTDecode) ||
+                filter.include?(:JPXDecode)
+        raw = obj.stream.to_s
+        next if raw.empty?
+        deflated = Zlib::Deflate.deflate(raw, Zlib::BEST_COMPRESSION)
+        next if deflated.bytesize >= raw.bytesize
+        obj.stream = deflated
+        obj[:Filter] = :FlateDecode
+      end
+    end
+
+    def image_xobject?(obj)
+      # `doc.each` walks every indirect object, including HexaPDF::PDFArray
+      # whose `[]` raises on a Symbol key. Gate on the underlying value
+      # being a dict (Hash) before any keyed lookup so arrays and plain
+      # scalars are silently skipped.
+      return false unless obj.respond_to?(:value) && obj.value.is_a?(Hash)
+      obj[:Type] == :XObject && obj[:Subtype] == :Image
     end
   end
 end
