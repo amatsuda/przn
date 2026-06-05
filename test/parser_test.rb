@@ -469,6 +469,40 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Step boundary: <wait/> as a block' do
+    def content_types(slide)
+      slide.blocks.map { |b| b[:type] }.reject { |t| t == :blank }
+    end
+
+    test 'a `<wait/>` on its own line is captured as a `:wait` block' do
+      slide = Przn::Parser.parse("# t\n\nFirst.\n\n<wait/>\n\nSecond.\n").slides[0]
+      assert_equal [:heading, :paragraph, :wait, :paragraph], content_types(slide)
+    end
+
+    test 'self-closing `<wait />` and paired `<wait></wait>` are also block-level' do
+      ['<wait/>', '<wait />', '<wait></wait>'].each do |form|
+        slide = Przn::Parser.parse("# t\n\nA.\n\n#{form}\n\nB.\n").slides[0]
+        assert_equal [:heading, :paragraph, :wait, :paragraph], content_types(slide),
+                     "expected `#{form}` to parse as a :wait block"
+      end
+    end
+
+    test 'kramdown `{::wait/}` on its own line is also block-level' do
+      slide = Przn::Parser.parse("# t\n\nA.\n\n{::wait/}\n\nB.\n").slides[0]
+      assert_equal [:heading, :paragraph, :wait, :paragraph], content_types(slide)
+    end
+
+    test 'inline `<wait/>` inside prose still drops silently (back-compat)' do
+      # The README's "Wait marker" slide describes the marker mid-paragraph;
+      # it must continue to be inline-eaten with no `:wait` block emitted.
+      slide = Przn::Parser.parse(
+        "# t\n\nThe <wait/> marker is reserved for future use.\n"
+      ).slides[0]
+      refute(slide.blocks.any? { |b| b[:type] == :wait },
+             "inline <wait/> must not produce a block-level :wait")
+    end
+  end
+
   sub_test_case 'Slide background: <bg .../>' do
     test 'self-closing block with from/to/angle is captured as :bg' do
       slide = Przn::Parser.parse(%(# t\n\n<bg from="#1a1a2e" to="#16213e" angle="90"/>\n)).slides[0]

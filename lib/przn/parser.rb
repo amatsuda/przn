@@ -162,6 +162,17 @@ module Przn
           attrs = parse_xml_attrs(Regexp.last_match(1))
           blocks << {type: :slot, name: attrs[:name]}
 
+        # Step boundary for incremental reveals (Keynote-style "builds").
+        # A `<wait/>` on its own line divides the slide's block sequence
+        # into a group; the renderer renders all blocks up to the current
+        # step and *reserves* layout space for the rest. Pressing Space
+        # advances by one step before flipping to the next slide. The
+        # inline form (`<wait/>` mid-paragraph) is still consumed as a
+        # silent no-op in `parse_inline`, so existing prose that mentions
+        # the marker survives intact.
+        when %r{\A\s*<wait\s*/>\s*\z}, %r{\A\s*<wait>\s*</wait>\s*\z}, %r{\A\s*\{::wait/\}\s*\z}
+          blocks << {type: :wait}
+
         # h2-h6 (sub-headings within slide)
         when /\A(\#{2,6})\s+(.*)/
           level = Regexp.last_match(1).size

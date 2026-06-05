@@ -61,8 +61,15 @@ module Przn
       @bg_image_id = nil
     end
 
-    def render(slide, current:, total:, started_at: nil)
+    def render(slide, current:, total:, started_at: nil, step: 0)
       @mutex.synchronize do
+        # Per-block visibility for incremental reveals. Each `<wait/>`
+        # block bumps the step counter, so block_step[b] = "step at
+        # which block b becomes visible." A block is rendered iff
+        # block_step[b] <= step; otherwise its flow space is *reserved*
+        # but no bytes reach the terminal. See `suppressed_render`.
+        @block_step = compute_block_step(slide.blocks)
+        @current_step = step
         @terminal.clear
         # Wipe the previous slide's `<img>` / shape placements (cached
         # image data stays alive). The current slide re-emits its own
@@ -88,7 +95,13 @@ module Przn
         # cleanly. Without this pass, text rendered BEFORE a positioned
         # image was clobbered by the placement's cell-buffer wipe and
         # disappeared even where the image had no opaque pixels.
+        #
+        # Hidden positioned content (block_step > current_step) is
+        # skipped outright — absolute placements don't take flow space
+        # so there's nothing to reserve, and we don't want a hidden
+        # image's bytes on the terminal before its reveal step.
         slide.blocks.each do |block|
+          next if hidden?(block)
           case block[:type]
           when :shape
             render_shape(block)
@@ -123,10 +136,11 @@ module Przn
           row = 2
           pending_align = nil
           slide.blocks.each do |block|
-            if block[:type] == :align
-              pending_align = block[:align]
+            case block[:type]
+            when :align then pending_align = block[:align]
+            when :wait  then next
             else
-              row = render_block(block, w, row, align: pending_align)
+              row = render_block_or_reserve(block, w, row, align: pending_align)
               pending_align = nil
             end
           end
@@ -190,7 +204,87 @@ module Przn
       end
     end
 
+    # How many discrete steps a slide has — one per `<wait/>` block,
+    # plus one for the initial state with nothing revealed. The
+    # controller uses this to decide whether Space advances within
+    # the slide or flips to the next one.
+    def step_count(slide)
+      slide.blocks.count { |b| b[:type] == :wait } + 1
+    end
+
     private
+
+    # Tiny stand-in for @terminal that swallows writes. Used by
+    # `suppressed_render` so a hidden block's render path still runs
+    # end-to-end (returning the same row advancement it would have
+    # produced visibly), but no bytes reach the real terminal.
+    # Mirrors the @terminal interface the renderer touches (see
+    # `grep -o '@terminal\.\w*' lib/przn/renderer.rb`).
+    class NullTerm
+      def initialize(real)
+        @width = real.width
+        @height = real.height
+        @cell_px = real.respond_to?(:cell_pixel_size) ? real.cell_pixel_size : [10, 20]
+      end
+      def width;  @width;  end
+      def height; @height; end
+      def cell_pixel_size; @cell_px; end
+      def write(_); end
+      def move_to(_, _); end
+      def clear; end
+      def flush; end
+    end
+
+    # Walk slide.blocks once and assign each block the step at which
+    # it becomes visible (= the count of `:wait` blocks preceding it).
+    # Returns a Hash keyed by the block dict itself (object identity)
+    # because the same dicts flow through route_blocks_to_slots into
+    # the layout pass and through the no-layout pass — both pick them
+    # back up by reference.
+    def compute_block_step(blocks)
+      step = 0
+      map = {}
+      blocks.each do |block|
+        map[block] = step
+        step += 1 if block[:type] == :wait
+      end
+      map
+    end
+
+    # True when this block hasn't been revealed yet at the current
+    # step. Pre-pass uses this to skip hidden positioned content
+    # outright; the flow pass uses it to switch to `suppressed_render`.
+    def hidden?(block)
+      ((@block_step && @block_step[block]) || 0) > (@current_step || 0)
+    end
+
+    # Visibility-aware wrapper around `render_block`. Visible blocks
+    # render normally; hidden ones go through `suppressed_render`,
+    # which advances the row the same amount but writes nothing —
+    # so layout stays stable as the user advances steps, instead of
+    # everything reflowing up each time a new block reveals.
+    def render_block_or_reserve(block, width, row, align: nil)
+      if hidden?(block)
+        suppressed_render(block, width, row, align: align)
+      else
+        render_block(block, width, row, align: align)
+      end
+    end
+
+    # Run the full render_block path with @terminal swapped to a
+    # NullTerm. The block's natural row advancement is preserved
+    # (every height-aware render function computes its own row math
+    # and returns the new row), so reserving layout space happens
+    # automatically without duplicating per-block-type measurements.
+    def suppressed_render(block, width, row, align: nil)
+      real = @terminal
+      @terminal = NullTerm.new(real)
+      begin
+        render_block(block, width, row, align: align)
+      ensure
+        @terminal = real
+      end
+    end
 
     # Move the terminal cursor in flow-mode block coordinates: `col` is
     # measured from the left of the current slot (or from the screen edge
@@ -275,10 +369,11 @@ module Przn
           row = y
           pending_align = nil
           blocks.each do |block|
-            if block[:type] == :align
-              pending_align = block[:align]
+            case block[:type]
+            when :align then pending_align = block[:align]
+            when :wait  then next
             else
-              row = render_block(block, w, row, align: pending_align || slot.align)
+              row = render_block_or_reserve(block, w, row, align: pending_align || slot.align)
               pending_align = nil
             end
           end
@@ -334,6 +429,7 @@ module Przn
       when :blank           then row + body_scale
       when :bg              then row
       when :slot            then row
+      when :wait            then row   # step boundary marker, not a renderable
       when :at              then render_at(block); row
       else row + 1
       end

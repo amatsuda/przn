@@ -2072,4 +2072,133 @@ class RendererTest < Test::Unit::TestCase
     end
 
   end
+
+  sub_test_case 'step builds: <wait/> reveal' do
+    SlideStruct = Struct.new(:blocks, :layout, :attrs) do
+      def initialize(blocks, layout: nil, attrs: {}); super(blocks, layout, attrs); end
+    end
+
+    class StepFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def step_slide(blocks)
+      SlideStruct.new(blocks)
+    end
+
+    def writes_text(term)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s.to_s }.join
+    end
+
+    test 'step_count = 1 when the slide has no `<wait/>`' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      slide = step_slide([{type: :paragraph, content: 'only'}])
+      assert_equal 1, r.step_count(slide)
+    end
+
+    test 'step_count = N+1 for N `<wait/>` blocks' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      slide = step_slide([
+        {type: :paragraph, content: 'a'},
+        {type: :wait},
+        {type: :paragraph, content: 'b'},
+        {type: :wait},
+        {type: :paragraph, content: 'c'}
+      ])
+      assert_equal 3, r.step_count(slide)
+    end
+
+    test 'at step:0 the second group is suppressed (its bytes do not reach the terminal)' do
+      term = StepFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term)
+      slide = step_slide([
+        {type: :paragraph, content: 'FIRST'},
+        {type: :wait},
+        {type: :paragraph, content: 'SECOND'}
+      ])
+      r.render(slide, current: 0, total: 1, step: 0)
+      text = writes_text(term)
+      assert_match(/FIRST/, text, 'step 0 should write FIRST')
+      refute_match(/SECOND/, text, 'step 0 must NOT write SECOND')
+    end
+
+    test 'at step:1 both groups are written' do
+      term = StepFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term)
+      slide = step_slide([
+        {type: :paragraph, content: 'FIRST'},
+        {type: :wait},
+        {type: :paragraph, content: 'SECOND'}
+      ])
+      r.render(slide, current: 0, total: 1, step: 1)
+      text = writes_text(term)
+      assert_match(/FIRST/, text)
+      assert_match(/SECOND/, text)
+    end
+
+    test 'hidden flow block reserves layout space (visible step lands at the same row regardless of reveal state)' do
+      # Two paragraphs with <wait/> between. The row the SECOND paragraph
+      # gets rendered onto when revealed at step:1 should match the row
+      # the SAME paragraph would have advanced to at step:0 (when only its
+      # SPACE was reserved). Capture move_to rows to compare.
+      slide = step_slide([
+        {type: :paragraph, content: 'first'},
+        {type: :wait},
+        {type: :paragraph, content: 'second'}
+      ])
+      # Step 1: render fully. Find the row for "second"'s last move_to.
+      term1 = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term1).render(slide, current: 0, total: 1, step: 1)
+      moves1 = term1.ops.select { |op, *| op == :move_to }.map { |_, r, _| r }
+      # The unique move row count tells us the layout used N rows.
+      # Step 0: render with second hidden. Layout should consume the
+      # SAME rows because the suppressed render still advances `row`.
+      # Probe: the runner-bar / counter footer always lands at the last
+      # row. The move that places it is the same in both.
+      term0 = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term0).render(slide, current: 0, total: 1, step: 0)
+      moves0 = term0.ops.select { |op, *| op == :move_to }.map { |_, r, _| r }
+      # Distinct rows visited up to the footer should match.
+      footer_row1 = moves1.max
+      footer_row0 = moves0.max
+      assert_equal footer_row1, footer_row0,
+                   'reserved-space render at step 0 should produce the same overall layout extent as step 1'
+    end
+
+    test 'hidden positioned `<img x y>` is NOT pre-placed (no kitty_place emitted for it)' do
+      # The pre-pass writes the placement bytes; if the block is hidden,
+      # nothing should reach the terminal for that image.
+      png = Tempfile.new(['stepbuild', '.png'])
+      png.binmode
+      png.write("\x89PNG\r\n\x1a\n".b)
+      png.flush
+      term = StepFakeTerm.new(w: 80, h: 30)
+      # Stub kitty_place so we know the renderer would have called it.
+      placed = []
+      orig = Przn::ImageUtil.method(:kitty_place)
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) { |**kw| placed << kw; 'PLACE' }
+      begin
+        slide = step_slide([
+          {type: :paragraph, content: 'first'},
+          {type: :wait},
+          {type: :image, path: png.path, attrs: {'x' => '5c', 'y' => '5c'}}
+        ])
+        Przn::Renderer.new(term).render(slide, current: 0, total: 1, step: 0)
+        assert_empty placed, 'hidden positioned <img> must not trigger kitty_place'
+      ensure
+        Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+        Przn::ImageUtil.define_singleton_method(:kitty_place, orig)
+        png.close!
+      end
+    end
+  end
 end

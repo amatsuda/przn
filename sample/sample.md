@@ -175,9 +175,17 @@ The next sentence has a hidden side-strip note. <note>this never appears on the 
 
 The note is visible in `--present` mode on the presenter pane.
 
-# Wait marker
+# Step builds — `<wait/>`
 
-The `<wait/>` marker is a parser-level no-op today, reserved for future incremental-reveal use. <wait/> Both `<wait/>` and the kramdown spelling are accepted.
+A `<wait/>` on its own line splits the slide into steps.
+
+<wait/>
+
+Press Space again — the next group reveals.
+
+<wait/>
+
+And again — the layout doesn't reflow, the hidden text was already reserved.
 
 # Thank you
 

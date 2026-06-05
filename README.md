@@ -449,15 +449,30 @@ A &amp; B               renders as: A & B
 
 A bare `<` not followed by a recognized tag name renders literally as well, so most accidental `<` characters are fine. The entities are only needed when you'd otherwise hit one of the tag patterns (`<size=...>`, `<color=...>`, `<font ...>`, `<note>`, `<wait/>`, `<br>`, `<center>`, `<right>`, `<at ...>`, `<bg .../>`, `<img .../>`, shape tags like `<rect/>` / `<circle/>`, or `<!-- ... -->`).
 
-### Wait marker
+### Step builds — `<wait/>`
 
-Self-closing presentation flow marker, consumed at parse time:
+A `<wait/>` on its own line is a **step boundary**: blocks before it are visible immediately, blocks after it stay hidden until you press Space (or Right / Down / `j` / `l`). The layout reserves space for the unrevealed blocks so the slide doesn't reflow upward as builds appear — Keynote-style staged reveal.
 
 ```markdown
+# Builds
+
+First idea — visible right away.
+
 <wait/>
+
+Second idea — revealed on the first Space press.
+
+<wait/>
+
+Conclusion — revealed on the second Space press.
 ```
 
-Rabbit-compatible kramdown form is also accepted: `{::wait/}`.
+- Each `<wait/>` adds one step. A slide with N waits has N+1 steps; the last Space press flips to the next slide. Left / Up walk backward, with the previous slide re-entered at its **last** step so backtracking shows full content first.
+- Block-level only — a `<wait/>` on its own line. Inline `<wait/>` mid-paragraph is still consumed as a silent no-op (so prose that mentions the marker doesn't accidentally split into steps).
+- Reload (`r`) rewinds the current slide to step 0 so a re-parsed deck always starts collapsed.
+- Both forms are accepted: `<wait/>` (XML self-closing), `<wait></wait>` (paired), and the kramdown spelling `{::wait/}`.
+
+An `id="..."` attribute on any block (`<img>`, shapes, `<at>`, `<bg>`, …) is parsed and stored today as silent groundwork for future Action targeting (move / fade / scale on a named element). The renderer ignores it for now.
 
 ### Line break
 

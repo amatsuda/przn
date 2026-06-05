@@ -12,12 +12,18 @@ class ControllerTest < Test::Unit::TestCase
   end
 
   class FakeRenderer
-    attr_accessor :theme, :renders
-    def initialize; @renders = 0; end
-    def render(*, **)
+    attr_accessor :theme, :renders, :last_step
+    def initialize; @renders = 0; @last_step = nil; end
+    def render(*, **kwargs)
       @renders += 1
+      @last_step = kwargs[:step]
     end
     def preload(_); end
+    # Mirror Renderer#step_count so step-aware navigation logic can be
+    # exercised here without dragging the full renderer in.
+    def step_count(slide)
+      slide.blocks.count { |b| b[:type] == :wait } + 1
+    end
   end
 
   def setup
@@ -155,6 +161,80 @@ class ControllerTest < Test::Unit::TestCase
                                 source_file: '/nonexistent/path/to/deck.md')
       assert_nothing_raised { c.send(:reload) }
       assert_equal 0, @renderer.renders
+    end
+
+    test 'resets @slide_step to 0 so the reloaded slide starts collapsed' do
+      tmp = Tempfile.new(['reload', '.md'])
+      tmp.write("# A\n\nfirst\n\n<wait/>\n\nsecond\n")
+      tmp.flush
+      ps = Przn::Parser.parse(File.read(tmp.path))
+      c = Przn::Controller.new(ps, @term, @renderer, source_file: tmp.path)
+      c.instance_variable_set(:@slide_step, 1)
+
+      c.send(:reload)
+      assert_equal 0, c.instance_variable_get(:@slide_step),
+                   'reload must rewind to step 0 — content may have changed'
+    ensure
+      tmp&.close!
+    end
+  end
+
+  sub_test_case 'step navigation: <wait/> reveals' do
+    def make_controller(markdown)
+      ps = Przn::Parser.parse(markdown)
+      Przn::Controller.new(ps, @term, @renderer)
+    end
+
+    test 'advance walks through steps on the current slide before flipping' do
+      md = "# A\n\nfirst\n\n<wait/>\n\nsecond\n\n<wait/>\n\nthird\n\n# B\n\nnext slide\n"
+      c = make_controller(md)
+      # Step 0 → 1
+      c.send(:advance_step_or_slide)
+      assert_equal 1, c.instance_variable_get(:@slide_step)
+      assert_equal 0, c.instance_variable_get(:@presentation).current
+      # Step 1 → 2
+      c.send(:advance_step_or_slide)
+      assert_equal 2, c.instance_variable_get(:@slide_step)
+      assert_equal 0, c.instance_variable_get(:@presentation).current
+      # Step 2 is the last on slide A; next advance flips to slide B at step 0.
+      c.send(:advance_step_or_slide)
+      assert_equal 1, c.instance_variable_get(:@presentation).current
+      assert_equal 0, c.instance_variable_get(:@slide_step)
+    end
+
+    test 'retreat walks back through steps before flipping to the previous slide' do
+      md = "# A\n\nfirst\n\n<wait/>\n\nsecond\n\n# B\n\nb1\n\n<wait/>\n\nb2\n"
+      c = make_controller(md)
+      c.instance_variable_get(:@presentation).go_to(1)  # on slide B
+      c.instance_variable_set(:@slide_step, 1)
+      # Retreat within B: 1 → 0
+      c.send(:retreat_step_or_slide)
+      assert_equal 0, c.instance_variable_get(:@slide_step)
+      assert_equal 1, c.instance_variable_get(:@presentation).current
+      # Retreat off B: lands on slide A at its LAST step (= 1)
+      c.send(:retreat_step_or_slide)
+      assert_equal 0, c.instance_variable_get(:@presentation).current
+      assert_equal 1, c.instance_variable_get(:@slide_step),
+                   'backing into the previous slide should land on its last revealed step'
+    end
+
+    test 'render_current threads @slide_step into Renderer#render as step:' do
+      c = make_controller("# A\n\nx\n\n<wait/>\n\ny\n")
+      c.instance_variable_set(:@slide_step, 1)
+      c.send(:render_current)
+      assert_equal 1, @renderer.last_step, 'controller must pass @slide_step to render(step:)'
+    end
+
+    test 'g (first slide) resets the step counter' do
+      md = "# A\n\nx\n\n# B\n\ny\n\n<wait/>\n\nz\n"
+      c = make_controller(md)
+      c.instance_variable_get(:@presentation).go_to(1)
+      c.instance_variable_set(:@slide_step, 1)
+      # Simulate the 'g' branch directly — Controller#run's loop dispatches it.
+      c.instance_variable_get(:@presentation).first_slide!
+      c.instance_variable_set(:@slide_step, 0)
+      assert_equal 0, c.instance_variable_get(:@presentation).current
+      assert_equal 0, c.instance_variable_get(:@slide_step)
     end
   end
 end

@@ -17,6 +17,12 @@ module Przn
       @source_file = source_file
       @theme_path = theme_path
       @preload_gen = 0
+      # Within-slide step counter for incremental reveals (one
+      # bump per `<wait/>`). Space walks these before flipping to
+      # the next slide; arrow-left walks back into the previous
+      # slide's last step. Always resets to 0 on slide jumps and
+      # reloads.
+      @slide_step = 0
     end
 
     # Seconds between runner-bar refresh ticks. The 🐢 only crawls
@@ -36,16 +42,16 @@ module Przn
         loop do
           case read_key
           when :right, :down, 'l', 'j', ' '
-            @presentation.next_slide
-            render_current
+            advance_step_or_slide
           when :left, :up, 'h', 'k'
-            @presentation.prev_slide
-            render_current
+            retreat_step_or_slide
           when 'g'
             @presentation.first_slide!
+            @slide_step = 0
             render_current
           when 'G'
             @presentation.last_slide!
+            @slide_step = 0
             render_current
           when 'r'
             reload
@@ -98,6 +104,7 @@ module Przn
       new_presentation.go_to([@presentation.current, new_presentation.total - 1].min)
       @presentation = new_presentation
       @renderer.theme = new_theme
+      @slide_step = 0
       render_current
     rescue StandardError
       # Don't crash the session on a bad edit; keep showing the old deck.
@@ -108,7 +115,8 @@ module Przn
         @presentation.current_slide,
         current: @presentation.current,
         total: @presentation.total,
-        started_at: @started_at
+        started_at: @started_at,
+        step: @slide_step
       )
       if @audience_link
         AudienceLink.send(@audience_link,
@@ -117,6 +125,41 @@ module Przn
                           started_at: @started_at.to_f)
       end
       schedule_preload
+    end
+
+    # Space / right / down: reveal the next step on the current slide
+    # if there's one left; otherwise jump to the next slide (and reset
+    # the step counter to 0 so the new slide starts collapsed).
+    def advance_step_or_slide
+      total = @renderer.step_count(@presentation.current_slide)
+      if @slide_step < total - 1
+        @slide_step += 1
+      else
+        @presentation.next_slide
+        @slide_step = 0
+      end
+      render_current
+    end
+
+    # Left / up: step backward within the current slide if there's
+    # an earlier step to fall back to; otherwise jump to the previous
+    # slide and LAND on its last step so backtracking shows the full
+    # slide instead of its initial-collapsed view. Mirrors how Keynote
+    # walks builds in reverse.
+    def retreat_step_or_slide
+      if @slide_step > 0
+        @slide_step -= 1
+      else
+        prev_idx = @presentation.current - 1
+        @presentation.prev_slide
+        if @presentation.current != prev_idx
+          # prev_slide was a no-op (already on slide 0); stay put.
+          @slide_step = 0
+        else
+          @slide_step = [@renderer.step_count(@presentation.current_slide) - 1, 0].max
+        end
+      end
+      render_current
     end
 
     # Number of slides on each side of the current slide to pre-upload
