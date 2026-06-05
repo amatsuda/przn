@@ -116,8 +116,18 @@ module Przn
       schedule_preload
     end
 
+    # Number of slides on each side of the current slide to pre-upload
+    # in the background. Higher = snappier multi-step navigation but
+    # more startup work per slide change (and more memory tied up in
+    # Echoes' image cache). 3 covers the "I'm about to skip a couple
+    # of slides ahead" case without crowding out the LRU when shape-
+    # heavy decks have lots of image_ids per slide.
+    PRELOAD_RADIUS = 3
+
     # Kick off a background thread that pre-uploads images for the slides the
-    # user is most likely to visit next (the immediate neighbors). Uses a
+    # user is most likely to visit next. Walks PRELOAD_RADIUS slides in each
+    # direction, interleaved (next, prev, next+1, prev+1, …) so the most-
+    # likely visit gets warmed first if the user keys quickly. Uses a
     # generation counter so a navigation that lands while a preload is still
     # running causes that preload to exit early instead of stacking work.
     def schedule_preload
@@ -125,7 +135,8 @@ module Przn
       gen = @preload_gen
       cur = @presentation.current
       total = @presentation.total
-      indices = [cur + 1, cur - 1].select { |i| i.between?(0, total - 1) }
+      indices = (1..PRELOAD_RADIUS).flat_map { |d| [cur + d, cur - d] }
+                                    .select { |i| i.between?(0, total - 1) }
       return if indices.empty?
 
       @preload_thread = Thread.new do
