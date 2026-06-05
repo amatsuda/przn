@@ -3,32 +3,34 @@
 A terminal-based presentation tool written in Ruby.
 Renders Markdown slides with [Kitty text sizing protocol](https://sw.kovidgoyal.net/kitty/text-sizing-protocol/) support for beautifully scaled headings.
 
-> For the full feature set, it is **strongly recommended** to run przn inside [Echoes](https://github.com/amatsuda/echoes). Features that depend on Echoes' OSC 7772 extensions, proportional-font measurement, or vector-capture pipeline are marked _(Echoes only)_ below; everything else works on any Kitty-graphics-compatible terminal (silently degrading where the protocol isn't available).
+For the full feature set, it is **strongly recommended** to run przn inside [Echoes](https://github.com/amatsuda/echoes). Features that depend on Echoes' OSC 7772 extensions, proportional-font measurement, or vector-capture pipeline are marked _(Echoes only)_ below; everything else works on any Kitty-graphics-compatible terminal (silently degrading where the protocol isn't available).
 
 ## Installation
 
 ```
-gem install przn
+% gem install przn
 ```
 
 ## Usage
 
 ```
-przn your_slides.md
+% przn your_slides.md
 ```
 
 To open the presentation directly at a specific slide, append `@N` (1-based):
 
 ```
-przn your_slides.md @42
+% przn your_slides.md @42
 ```
 
 Out-of-range numbers are clamped to the last slide, so `@9999` jumps to the end.
 
+The repository ships with `sample/sample.md` — a 28-slide demo deck that exercises every feature documented below (slide splitting, lists, code blocks, tables, sized text, colours, fonts, alignment, backgrounds, absolute-position text, images, shapes, layouts, step builds, actions, animation, comments, notes). Clone the repo and run `przn sample/sample.md` to page through it; each section below has a slide you can jump to with `@N` for hands-on reference.
+
 ### Extended-display presenter mode _(Echoes only)_
 
 ```
-przn --present your_slides.md
+% przn --present your_slides.md
 ```
 
 On a setup with a secondary display (projector / external monitor) and running inside [Echoes](https://github.com/amatsuda/echoes), `--present` auto-spawns an **audience window** on the second display showing the clean current slide, while the laptop pane becomes the **presenter view**:
@@ -44,15 +46,9 @@ Implementation: the two `przn` processes coordinate over a Unix socket. The pres
 
 ### PDF export
 
-Two flavors:
-
 ```
-przn --export your_slides.md                       # vector capture (default)
-przn --export pdf your_slides.md
-przn --export pdf -o output.pdf your_slides.md
-
-przn --export prawn your_slides.md                 # Prawn (headless fallback)
-przn --export prawn -o output.pdf your_slides.md
+% przn --export your_slides.md
+% przn --export -o output.pdf your_slides.md
 ```
 
 **`--export pdf`** (default) _(Echoes only)_ drives the live renderer for each slide and asks the terminal to save the rendered pane as a one-page **vector PDF**, then concatenates the per-slide PDFs into a single multi-page PDF. Output is an exact match of what's on screen — gradients, proportional fonts, OSC 66 sized text, custom bullets, all show up exactly as you'd see them — but vector, so text remains selectable and scales infinitely. Requires running inside a terminal that implements the OSC 7772 `capture` command to a `.pdf` path (currently [Echoes](https://github.com/amatsuda/echoes)). The slides flicker through the visible pane during export.
@@ -84,9 +80,9 @@ Without `gs` on `$PATH` the file is left at its lossless-only size and a one-lin
 
 ## Markdown format
 
-przn's Markdown format is based on [Rabbit](https://rabbit-shocker.org/)'s Markdown mode with some extensions.
+przn's Markdown format is based on [Rabbit](https://rabbit-shocker.org/)'s Markdown mode with some extensions with HTML-ish tags.
 
-> **HTML-ish tag attributes** — every `<tag attr=value>` block below (`<bg>`, `<at>`, `<img>`, `<font>`) accepts three value forms: double-quoted `attr="value"`, single-quoted `attr='value'`, and unquoted `attr=value` (HTML5-ish — anything that isn't whitespace, `=`, `<`, `>`, a quote, or backtick). Self-closing tags need a space before `/>` when the last attribute is unquoted (`<img src=foo.png />`).
+**HTML-ish tag attributes** — every `<tag attr=value>` block below (`<bg>`, `<at>`, `<img>`, `<font>`) accepts three value forms: double-quoted `attr="value"`, single-quoted `attr='value'`, and unquoted `attr=value` (HTML5-ish — anything that isn't whitespace, `=`, `<`, `>`, a quote, or backtick). Self-closing tags need a space before `/>` when the last attribute is unquoted (`<img src=foo.png />`).
 
 ### Slide splitting
 
