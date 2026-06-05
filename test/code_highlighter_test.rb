@@ -51,6 +51,29 @@ class CodeHighlighterTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'caching' do
+    test 'second call with the same code+language returns the cached array (identity-equal)' do
+      # Same exact string → same cached tokens object.
+      result1 = Przn::CodeHighlighter.highlight("def hi\n  1\nend\n", 'ruby')
+      result2 = Przn::CodeHighlighter.highlight("def hi\n  1\nend\n", 'ruby')
+      assert_same result1, result2,
+                  'second highlight of the same (code, language) should return the cached object'
+    end
+
+    test 'different code re-tokenizes (different cache key)' do
+      a = Przn::CodeHighlighter.highlight("def a; end\n", 'ruby')
+      b = Przn::CodeHighlighter.highlight("def b; end\n", 'ruby')
+      refute_same a, b, 'different code must produce a distinct cache entry'
+    end
+
+    test 'different language re-tokenizes (cache key includes language)' do
+      code = "x = 1"
+      a = Przn::CodeHighlighter.highlight(code, 'ruby')
+      b = Przn::CodeHighlighter.highlight(code, 'python')
+      refute_same a, b
+    end
+  end
+
   sub_test_case 'color_for' do
     test 'walks up the dotted token hierarchy' do
       # Literal.Number.Integer → falls back to Literal.Number → magenta.

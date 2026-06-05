@@ -14,6 +14,15 @@ module Przn
     # use fenced code blocks at all.
     @loaded = false
 
+    # Memoized tokenization keyed by `[code, language]`. Warmed in the
+    # background by `Renderer#preload` so that by the time the user
+    # navigates to a slide, its fenced blocks are already tokenized —
+    # the first visit is now as fast as the second. Cache entries are
+    # small (a few KB per block) and never invalidated; the keys
+    # change automatically when slide content changes.
+    @cache = {}
+    @cache_mutex = Mutex.new
+
     # Mapping from Rouge token qualnames to ANSI color names (resolved
     # through Parser::NAMED_COLORS by the renderer's `color_code`).
     # Lookups walk up the dotted hierarchy — `Literal.String.Single`
@@ -61,13 +70,19 @@ module Przn
     # back to its plain-text path.
     def highlight(code, language)
       return nil if code.nil? || language.nil? || language.empty?
+      lang = language.to_s.downcase
+      key = [code, lang]
+      cached = @cache_mutex.synchronize { @cache[key] }
+      return cached if cached
+
       load_rouge
       return nil unless @loaded
-      lexer = Rouge::Lexer.find(language.to_s.downcase)
+      lexer = Rouge::Lexer.find(lang)
       return nil unless lexer
 
       tokens = []
       lexer.lex(code) { |tok, val| tokens << [color_for(tok), val] }
+      @cache_mutex.synchronize { @cache[key] = tokens }
       tokens
     rescue StandardError
       # A lexer crash shouldn't kill the slide — fall back to plain.

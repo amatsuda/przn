@@ -28,6 +28,7 @@ module Przn
       @started_at = Time.now
       @terminal.enter_alt_screen
       @terminal.hide_cursor
+      warm_code_highlight_cache
       render_current
       start_runner_bar_thread
 
@@ -57,6 +58,8 @@ module Przn
       stop_runner_bar_thread
       @preload_gen += 1
       @preload_thread&.join
+      @warmup_thread&.kill
+      @warmup_thread&.join
       if @audience_link
         AudienceLink.send(@audience_link, type: "quit")
         @audience_link.close
@@ -146,6 +149,29 @@ module Przn
         end
       rescue StandardError
         # Background work must not crash the presentation.
+      end
+    end
+
+    # Fire off a background thread at session start that runs every
+    # fenced code block in the deck through CodeHighlighter so the
+    # `require 'rouge'` + per-lexer autoload + per-block tokenize
+    # costs land *here* instead of on the main render path. By the
+    # time the user navigates anywhere, the cache is already warm.
+    # Slide 0 races the first render — whichever side tokenizes
+    # first writes the cache and the other side finds the hit; no
+    # correctness issue, just an "if it wins, the first visit is
+    # fast too" optimization. Background work, never blocks startup,
+    # silent on failure.
+    def warm_code_highlight_cache
+      @warmup_thread = Thread.new do
+        @presentation.slides.each do |slide|
+          slide.blocks.each do |block|
+            next unless block[:type] == :code_block && block[:language]
+            CodeHighlighter.highlight(block[:content], block[:language])
+          end
+        end
+      rescue StandardError
+        # Background warmup must never crash the session.
       end
     end
 

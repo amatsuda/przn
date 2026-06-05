@@ -150,6 +150,18 @@ module Przn
     # against `render` via the renderer's mutex so terminal writes don't
     # interleave.
     def preload(slide)
+      # Code-block tokenizer warmup. Pays the `require 'rouge'` and
+      # per-lexer autoload costs *here*, on the background preload
+      # thread, so the first user-visible render of a slide with
+      # fenced code doesn't sit waiting for Rouge to load. Pure CPU
+      # work into a thread-safe in-process cache — no terminal I/O —
+      # so it deliberately runs outside the renderer mutex (no point
+      # blocking a foreground render on tokenization).
+      slide.blocks.each do |block|
+        next unless block[:type] == :code_block && block[:language]
+        CodeHighlighter.highlight(block[:content], block[:language])
+      end
+
       return unless ImageUtil.kitty_terminal?
 
       @mutex.synchronize do

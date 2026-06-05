@@ -1906,6 +1906,35 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 0, @term.flushes
     end
 
+    test 'warms the CodeHighlighter cache so a subsequent highlight is a cache hit' do
+      code = "def warmed?\n  true\nend\n"
+      slide = slide_with([{type: :code_block, language: 'ruby', content: code}])
+      @renderer.preload(slide)
+
+      # Direct call right after preload returns the *same* tokens object
+      # — proves the cache hit, not a re-tokenize.
+      tokens = Przn::CodeHighlighter.highlight(code, 'ruby')
+      again  = Przn::CodeHighlighter.highlight(code, 'ruby')
+      assert_same tokens, again
+    end
+
+    test 'still warms code blocks even outside Kitty terminals (code highlight is terminal-agnostic)' do
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { false }
+      code = "x = 1\n"
+      slide = slide_with([{type: :code_block, language: 'ruby', content: code}])
+      @renderer.preload(slide)
+      a = Przn::CodeHighlighter.highlight(code, 'ruby')
+      b = Przn::CodeHighlighter.highlight(code, 'ruby')
+      assert_same a, b, 'preload should warm the code cache regardless of terminal'
+    end
+
+    test 'skips code blocks with no language (CodeHighlighter would return nil anyway)' do
+      slide = slide_with([{type: :code_block, language: nil, content: 'plain text'}])
+      # Just shouldn't raise.
+      @renderer.preload(slide)
+    end
+
     test 'preload populates the cache so a subsequent ensure_kitty_uploaded is a hit' do
       slide = slide_with([{type: :image, path: @png.path, attrs: {}}])
       @renderer.preload(slide)
