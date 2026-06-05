@@ -416,10 +416,41 @@ module Przn
       segments.each do |seg|
         seg[0] == :break ? (lines << []) : (lines.last << seg)
       end
-      lines.each_with_index do |line_segs, idx|
-        @terminal.move_to(y + idx * body_scale, x)
+      # Advance y by each line's *own* height (the max inline scale
+      # of its segments). When the whole `<at>` is wrapped in
+      # `<font size=1>` or `<size=1>`, the lines pack tight at
+      # 1 cell apart; a `<size=5>` line takes 5 cells before the
+      # next line starts. Falls back to body_scale when a line
+      # carries no explicit size, matching the pre-fix behavior.
+      y_cursor = y
+      lines.each do |line_segs|
+        @terminal.move_to(y_cursor, x)
         @terminal.write render_segments_scaled(line_segs, body_scale)
+        y_cursor += max_segment_scale(line_segs, body_scale)
       end
+    end
+
+    # Compute a single line's vertical extent in terminal cells. Each
+    # segment contributes either its explicit `<size=...>` / `<font
+    # size="...">` scale, or `default_scale` when it has no size of
+    # its own; the line's height is the max across all of them.
+    #
+    # Crucially this can return *less* than `default_scale` — a line
+    # entirely wrapped in `<font size=1>` returns 1, so `<br>`-stacked
+    # small text packs tight at 1 cell per line instead of body_scale
+    # cells. Plain text mixed with a small-sized tag still uses
+    # body_scale (the plain part needs the room).
+    def max_segment_scale(segments, default_scale)
+      return default_scale if segments.empty?
+      segments.map { |seg|
+        type = seg[0]
+        size_key =
+          case type
+          when :tag  then seg[2]
+          when :font then (seg[2] || {})[:size]
+          end
+        Parser::SIZE_SCALES[size_key] || default_scale
+      }.max
     end
 
     # Draw a Keynote-style shape primitive (rect, circle, ellipse, line,

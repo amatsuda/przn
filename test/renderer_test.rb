@@ -770,6 +770,35 @@ class RendererTest < Test::Unit::TestCase
       refute_match(/<br>/, writes, 'no literal <br> should reach the terminal')
     end
 
+    test '<br> inside <font size=1> advances y by 1 (line height follows inline size, not body_scale)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      # body_scale is 2 by default; the second line of a size=1 wrap
+      # should land 1 row below the first, not 2.
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: '<font size=1>Hello,<br>World!</font>'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 10], 'first line at the requested y'
+      assert_includes moves, [:move_to, 6, 10], 'second line should be 1 row down (size=1), not 2'
+    end
+
+    test '<br> inside <size=5> advances y by 5 (line height follows inline size)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: '<size=5>BIG<br>BIG</size>'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 10],  'first line at the requested y'
+      assert_includes moves, [:move_to, 10, 10], 'second BIG line should be 5 rows down'
+    end
+
+    test '<br> with no inline size falls back to body_scale advancement' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :at, attrs: {x: '10', y: '5'}, content: 'Hello,<br>World!'}
+      Przn::Renderer.new(term).send(:render_at, block)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 10], 'first line at the requested y'
+      assert_includes moves, [:move_to, 7, 10], 'no explicit size → body_scale (2)'
+    end
+
     test 'silently skips when x or y is missing or unparseable' do
       term = RunnerFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {y: '5'}, content: 'x'})
