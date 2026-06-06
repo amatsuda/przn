@@ -652,9 +652,6 @@ module Przn
     def render_at(block)
       attrs = effective_attrs(block)
       cell_w, cell_h = @terminal.cell_pixel_size
-      x = resolve_at_coord(attrs[:x], @terminal.width, cell_px: cell_w)
-      y = resolve_at_coord(attrs[:y], @terminal.height, cell_px: cell_h)
-      return if x.nil? || y.nil?
 
       segments = Parser.parse_inline(block[:content].to_s)
       # Split on `:break` (from <br>) and emit each chunk on its own
@@ -665,6 +662,18 @@ module Przn
       segments.each do |seg|
         seg[0] == :break ? (lines << []) : (lines.last << seg)
       end
+      line_heights = lines.map { |l| max_segment_scale(l, body_scale) }
+      # Content extent: widest line wins horizontally, total of per-line
+      # heights vertically. Needed up front so `x="center"` / `"right"`
+      # and `y="center"` / `"bottom"` can resolve against the actual
+      # rendered footprint, not just the terminal dimensions.
+      content_w = lines.map { |l| segments_visible_cells(l, body_scale) }.max || 0
+      content_h = line_heights.sum
+
+      x = resolve_at_axis(attrs[:x], @terminal.width,  cell_w, :x, content_w)
+      y = resolve_at_axis(attrs[:y], @terminal.height, cell_h, :y, content_h)
+      return if x.nil? || y.nil?
+
       # Advance y by each line's *own* height (the max inline scale
       # of its segments). When the whole `<at>` is wrapped in
       # `<font size=1>` or `<size=1>`, the lines pack tight at
@@ -672,12 +681,59 @@ module Przn
       # next line starts. Falls back to body_scale when a line
       # carries no explicit size, matching the pre-fix behavior.
       y_cursor = y
-      lines.each do |line_segs|
-        line_h = max_segment_scale(line_segs, body_scale)
+      lines.zip(line_heights).each do |line_segs, line_h|
         @terminal.move_to(y_cursor, x)
         @terminal.write render_segments_scaled(line_segs, body_scale, line_height: line_h)
         y_cursor += line_h
       end
+    end
+
+    # `<at x|y="…">` extension over `resolve_at_coord` that adds the
+    # keyword forms `left|center|right` (x-axis) and `top|center|bottom`
+    # (y-axis). `middle` is accepted as a synonym of `center` for
+    # readers who think of vertical centering that way. Keywords need
+    # the content's rendered footprint (`content_extent`) so the
+    # caller measures the parsed-inline lines first, then asks here.
+    # Anything that isn't a recognised keyword falls through to
+    # `resolve_at_coord`'s numeric / `%` / `px` / `c` parsing.
+    def resolve_at_axis(raw, max, cell_px, axis, content_extent)
+      cell = alignment_keyword_cell(raw, max, content_extent, axis)
+      return cell if cell
+      resolve_at_coord(raw, max, cell_px: cell_px)
+    end
+
+    # Shared keyword → 1-based cell math used by both `<at>` and
+    # `<img>`'s `x` / `y` resolvers. The right / bottom branches
+    # anchor the content's far edge at `max`, so a 4-cell-wide
+    # block at `x="right"` on an 80-wide pane occupies cols 77-80
+    # — flush to the edge, no margin. Use percent (`x="95%"`) when
+    # you want a margin.
+    def alignment_keyword_cell(raw, max, content_extent, axis)
+      s = raw.to_s.strip.downcase
+      case axis
+      when :x
+        case s
+        when 'left'             then 1
+        when 'center', 'middle' then [(max - content_extent) / 2 + 1, 1].max
+        when 'right'            then [max - content_extent + 1, 1].max
+        end
+      when :y
+        case s
+        when 'top'              then 1
+        when 'center', 'middle' then [(max - content_extent) / 2 + 1, 1].max
+        when 'bottom'           then [max - content_extent + 1, 1].max
+        end
+      end
+    end
+
+    # Lower-case keyword string when `raw` is one of the alignment
+    # keywords recognised on `axis`; nil otherwise. Used by
+    # `render_image` to detect keywords up front and defer the cell
+    # resolution until target_cols / target_rows are known.
+    def alignment_keyword(raw, axis)
+      s = raw.to_s.strip.downcase
+      keywords = axis == :x ? %w[left center middle right] : %w[top center middle bottom]
+      keywords.include?(s) ? s : nil
     end
 
     # Compute a single line's vertical extent in terminal cells. Each
@@ -1732,14 +1788,23 @@ module Przn
       cell_w, cell_h = @terminal.cell_pixel_size
 
       attrs = effective_attrs(block)
+      # Detect `x="center"` / `"right"` (and y twins) up front. The
+      # cell value can't be computed yet — it depends on the image's
+      # rendered cell footprint, which isn't known until target_cols
+      # / target_rows are resolved below. We just remember the
+      # keyword and circle back. Anything that isn't a keyword falls
+      # through to resolve_at_coord's numeric / `%` / `px` / `c` path
+      # — sub-cell px offsets included.
+      x_keyword = alignment_keyword(attrs['x'], :x)
+      y_keyword = alignment_keyword(attrs['y'], :y)
       # `<img>` x/y resolve with sub-cell pixel precision: each axis
       # comes back as `[anchor_cell, px_offset_within_anchor]`. The
       # anchor cell handles where to move the cursor for layering /
       # fallback paths; the px offset feeds Kitty Graphics' `X=`/`Y=`
       # so a "100px from the left" request lands at 100 px, not at
       # the nearest cell edge.
-      abs_x_pair = resolve_at_coord(attrs['x'], @terminal.width, cell_px: cell_w, default_unit: :px, with_offset: true)
-      abs_y_pair = resolve_at_coord(attrs['y'], @terminal.height, cell_px: cell_h, default_unit: :px, with_offset: true)
+      abs_x_pair = resolve_at_coord(attrs['x'], @terminal.width, cell_px: cell_w, default_unit: :px, with_offset: true) unless x_keyword
+      abs_y_pair = resolve_at_coord(attrs['y'], @terminal.height, cell_px: cell_h, default_unit: :px, with_offset: true) unless y_keyword
       abs_x, abs_x_off = abs_x_pair if abs_x_pair
       abs_y, abs_y_off = abs_y_pair if abs_y_pair
       # `x` or `y` (either / both) pins the image at that absolute cell;
@@ -1748,7 +1813,7 @@ module Przn
       # positioning makes the image contribute 0 to the layout flow
       # — same as `<at>` — so a single-axis pin doesn't push the next
       # block past where the image landed.
-      positioned = !abs_x.nil? || !abs_y.nil?
+      positioned = !abs_x.nil? || !abs_y.nil? || !x_keyword.nil? || !y_keyword.nil?
 
       # Compute the image's intrinsic size in cells. Default is to draw
       # at intrinsic size — no auto-fit shrinking. If the image is
@@ -1794,6 +1859,20 @@ module Przn
       end
       target_cols = [(img_cell_w * scale).to_i, 1].max
       target_rows = [(img_cell_h * scale).to_i, 1].max
+
+      # Now that the rendered cell footprint is known, resolve any
+      # alignment keywords. `right` / `bottom` anchor flush to the
+      # pane edge; `center` / `middle` centre against target_cols /
+      # target_rows; `left` / `top` snap to col 1 / row 1. Sub-cell
+      # px offsets are zeroed because keywords are cell-grid choices.
+      if x_keyword
+        abs_x = alignment_keyword_cell(x_keyword, @terminal.width, target_cols, :x)
+        abs_x_off = 0
+      end
+      if y_keyword
+        abs_y = alignment_keyword_cell(y_keyword, @terminal.height, target_rows, :y)
+        abs_y_off = 0
+      end
 
       # Per-axis position: explicit `x` / `y` win; absent axes pick
       # up the flow default. `x_cell` folds the active slot offset

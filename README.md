@@ -25,7 +25,7 @@ To open the presentation directly at a specific slide, append `@N` (1-based):
 
 Out-of-range numbers are clamped to the last slide, so `@9999` jumps to the end.
 
-The repository ships with `sample/sample.md` — a 28-slide demo deck that exercises every feature documented below (slide splitting, lists, code blocks, tables, sized text, colours, fonts, alignment, backgrounds, absolute-position text, images, shapes, layouts, step builds, actions, animation, comments, notes). Clone the repo and run `przn sample/sample.md` to page through it; each section below has a slide you can jump to with `@N` for hands-on reference.
+The repository ships with `sample/sample.md` — a 30-slide demo deck that exercises every feature documented below (slide splitting, lists, code blocks, tables, sized text, colours, fonts, alignment, backgrounds, absolute-position text, images, shapes, layouts, step builds, actions, animation, comments, notes). Clone the repo and run `przn sample/sample.md` to page through it; each section below has a slide you can jump to with `@N` for hands-on reference.
 
 ### Extended-display presenter mode _(Echoes only)_
 
@@ -268,11 +268,12 @@ Place text at an arbitrary `(column, row)` on the slide, escaping the normal top
 
 Rabbit-compatible kramdown form is also accepted: `{::at x="10" y="20"}content{:/at}`.
 
-- `x` / `y` accept four forms — the suffix picks the unit:
+- `x` / `y` accept five forms:
   - **Plain integer** — 1-based terminal cells (cells are the default for `<at>` since it places text). `x="1" y="1"` is the very top-left of the slide pane.
   - **`Nc`** — same as plain integer; the `c` is explicit cells, useful when sitting next to an `<img>` that defaults the other way.
   - **`Npx`** — pixels. Converted to the cell containing that pixel (text can only land on cell boundaries, so a px value is rounded to its enclosing cell).
   - **`N%`** — percent of the terminal's current width / height. Auto-adjusts when the pane is resized.
+  - **Alignment keywords** — `x="left"` / `"center"` / `"right"`, `y="top"` / `"center"` / `"bottom"` (`middle` is accepted as a synonym of `center` on both axes). The position resolves against the content's own rendered footprint — `x="center"` measures the widest `<br>`-split line at its actual rendered cell width and centres the whole block; `y="bottom"` sums each line's height (respecting inline `<size>` / `<font size>`) and pins the last line to the bottom edge. Mix and match: `<at x="center" y="bottom">caption</at>` drops the caption centered on the bottom row.
 - Content is parsed inline, so all the usual styling works inside an `<at>` — `<size>`, `<color>`, `<font>`, `**bold**`, `*italic*`, etc.
 - The block doesn't take up vertical space in the slide's layout — paragraphs around it render in their normal positions and the absolute placement layers on top. Useful for overlaying labels on a `<bg .../>` gradient or pinning annotations to specific cells.
 - Out-of-range coordinates clamp into the visible area; missing / unparseable coordinates skip silently.
@@ -301,6 +302,7 @@ Embed an image with the standard markdown form, or the `<img>` XML form when you
   - **`Npx`** — same as plain integer; the `px` is explicit.
   - **`Nc`** — 1-based terminal cell, when you want grid alignment instead of pixel alignment.
   - **`N%`** — percent of the terminal's current width / height.
+  - **Alignment keywords** — `x="left"` / `"center"` / `"right"` and `y="top"` / `"center"` / `"bottom"` (with `middle` as a synonym of `center` on either axis) resolve against the image's *rendered* cell footprint (after `relative_*` / `width` / `height` sizing). `<img src="logo.png" x="center" y="bottom"/>` drops the rendered logo centered on the bottom row of the pane; `x="right"` anchors flush to the rightmost column. Sub-cell pixel offsets reset to 0 for keyword axes (they're cell-grid choices by nature).
   - **Either / both axes pin** — setting `x` only pins the horizontal column (vertical falls back to the flow row); setting `y` only pins the row (horizontal falls back to the centered flow position); setting both pins both. As soon as either is set, the image contributes 0 to the layout flow — paragraphs around it render in their normal positions, exactly like `<at>`. With neither `x` nor `y`, the image stays horizontally centered and takes up its natural height in the flow.
 - **Z-order**: `z="N"` lets you put the image above or below cell text. A pinned `<img x y/>` defaults to `z="-1"` (behind text) so paragraphs and headings layered on the same cells stay readable; flow `<img>` (no `x` / `y`) stays at the Kitty default of `z=0` (on top of cells) because that's almost always what a standalone image wants. Pass `z="0"` / `z="1"` etc. to put a pinned image on top.
 - Rendering backend: Kitty Graphics Protocol on terminals that support it (PNG uploaded once and reused; JPG goes through `kitten icat`), Sixel as a fallback. Other terminals show nothing in place of the image.

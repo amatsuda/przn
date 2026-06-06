@@ -1136,6 +1136,94 @@ class RendererTest < Test::Unit::TestCase
       assert_includes moves, [:move_to, 30, 80]    # huge values clamp to the right edge
     end
 
+    test 'x="center" horizontally centers the content against its rendered width' do
+      # Content "hi" at body_scale=2 is 2 chars × 2 = 4 cells wide.
+      # On an 80-wide pane the centered cursor lands at col (80-4)/2+1 = 39.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: 'center', y: '5'}, content: 'hi'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 39],
+                      'expected centered cursor at col 39'
+    end
+
+    test 'x="right" anchors the content flush to the right edge' do
+      # "hi" → 4 cells; right-edge math: x = 80 - 4 + 1 = 77.
+      # Content then occupies cols 77, 78, 79, 80 — right edge at the
+      # last column of the pane.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: 'right', y: '5'}, content: 'hi'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 77]
+    end
+
+    test 'x="left" pins the content to column 1' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: 'left', y: '5'}, content: 'hi'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 1]
+    end
+
+    test 'y="center" centers the content block vertically against its line count' do
+      # Single line "hi" body_scale=2 → content_h=2. y = (30-2)/2+1 = 15.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '10', y: 'center'}, content: 'hi'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 15, 10]
+    end
+
+    test 'y="bottom" aligns the content block against the bottom edge' do
+      # Single body-scale line → content_h=2; bottom: y = 30 - 2 + 1 = 29.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '10', y: 'bottom'}, content: 'hi'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 29, 10]
+    end
+
+    test 'y="top" pins the content to row 1' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '10', y: 'top'}, content: 'hi'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 1, 10]
+    end
+
+    test 'center / middle are synonyms on both axes' do
+      term_a = RunnerFakeTerm.new(w: 80, h: 30)
+      term_b = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term_a).send(:render_at, {type: :at, attrs: {x: 'center', y: 'center'}, content: 'hi'})
+      Przn::Renderer.new(term_b).send(:render_at, {type: :at, attrs: {x: 'middle', y: 'middle'}, content: 'hi'})
+      assert_equal term_a.ops.select { |op, *| op == :move_to },
+                   term_b.ops.select { |op, *| op == :move_to }
+    end
+
+    test 'multi-line `<br>` content uses the widest line for x="center"' do
+      # "biggie" at body_scale=2 → 6×2=12 cells.
+      # "x" at body_scale=2 → 2 cells.
+      # max content width = 12, so x = (80-12)/2+1 = 35 for both lines.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at,
+        {type: :at, attrs: {x: 'center', y: '10'}, content: 'biggie<br>x'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 10, 35], 'first line lands at column 35'
+      assert_includes moves, [:move_to, 12, 35], 'second line lands at the same column'
+    end
+
+    test 'multi-line content extends content_h for y="bottom"' do
+      # Two body-scale lines → content_h = 4; bottom = 30 - 4 + 1 = 27.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at,
+        {type: :at, attrs: {x: '10', y: 'bottom'}, content: 'one<br>two'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 27, 10], 'first line of bottom-aligned content'
+      assert_includes moves, [:move_to, 29, 10], 'second line one body_scale below'
+    end
+
+    test 'numeric / percent / px / c forms still resolve as before (keywords are additive)' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render_at, {type: :at, attrs: {x: '10c', y: '5'}, content: 'x'})
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 5, 10]
+    end
+
   end
 
   sub_test_case 'Slide layouts' do
@@ -1410,6 +1498,77 @@ class RendererTest < Test::Unit::TestCase
         Przn::ImageUtil.define_singleton_method(name, orig)
       end
       @png.close!
+    end
+
+    # Stub setup uses a 200×200 image with cell_pixel_size 10×20 →
+    # 20 cols × 10 rows in cell terms. Keyword math below is built
+    # against those dimensions.
+
+    test 'x="center" centers the image horizontally against its rendered width' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => 'center', 'y' => '5c'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # target_cols = 20; (80-20)/2 + 1 = 31.
+      assert_includes moves, [:move_to, 5, 31]
+    end
+
+    test 'x="right" anchors the image flush to the right edge of the pane' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => 'right', 'y' => '5c'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # 80 - 20 + 1 = 61; image occupies cols 61-80.
+      assert_includes moves, [:move_to, 5, 61]
+    end
+
+    test 'y="bottom" anchors the image flush to the bottom of the pane' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '5c', 'y' => 'bottom'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      # target_rows = 10; 30 - 10 + 1 = 21.
+      assert_includes moves, [:move_to, 21, 5]
+    end
+
+    test 'x="center" y="center" lands the image at the slide centre' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => 'center', 'y' => 'center'}}
+      new_row = Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 11, 31]   # (30-10)/2+1=11, (80-20)/2+1=31
+      assert_equal 1, new_row, 'keyword-positioned images contribute 0 to flow'
+    end
+
+    test 'keyword positioning still pre-places (both axes set ⇒ positioned image)' do
+      # The slide-level pre-pass requires BOTH `attrs[x]` and `attrs[y]`
+      # to be present; alignment keywords are strings, so they qualify.
+      # That makes a keyword-positioned image take the pinned-image
+      # rendering path, including the default z=-1 layering.
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      captured_z = :unset
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_place)
+      Przn::ImageUtil.define_singleton_method(:kitty_place) { |z: nil, **_| captured_z = z; 'IMG' }
+      block = {type: :image, path: @png.path, attrs: {'x' => 'center', 'y' => 'bottom'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      assert_equal(-1, captured_z,
+                   'a keyword-pinned image should default to z=-1 (same as numeric-pinned)')
+    end
+
+    test 'x="left" / y="top" pin to col 1 / row 1' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => 'left', 'y' => 'top'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 1, 1]
+    end
+
+    test 'numeric / cell / px / % paths still work alongside keyword paths' do
+      term = RunnerFakeTerm.new(w: 80, h: 30)
+      block = {type: :image, path: @png.path, attrs: {'x' => '5c', 'y' => 'bottom'}}
+      Przn::Renderer.new(term).send(:render_image, block, 80, 1)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert_includes moves, [:move_to, 21, 5]
     end
 
     test 'x and y in cells (Nc suffix) position the image at those 1-based cells and skip flow advance' do

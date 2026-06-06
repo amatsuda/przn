@@ -125,12 +125,33 @@ A `<bg>` directive applies for this slide only. The next slide reverts.
 <img src="ruby.png" x="5c"  y="3c"  relative_height="40"/>
 <img src="ruby.png" x="50%" y="50%" relative_height="40"/>
 
+# Image — alignment keywords
+
+<img src="ruby.png" x="left"   y="top"    relative_height="20"/>
+<img src="ruby.png" x="center" y="top"    relative_height="20"/>
+<img src="ruby.png" x="right"  y="top"    relative_height="20"/>
+<img src="ruby.png" x="left"   y="bottom" relative_height="20"/>
+<img src="ruby.png" x="center" y="bottom" relative_height="20"/>
+<img src="ruby.png" x="right"  y="bottom" relative_height="20"/>
+
 # Absolute-position text — `<at>`
 
 <at x="5"  y="5">top-left ish</at>
 <at x="40" y="15"><size=x-large>BIG</size></at>
 <at x="60" y="20"><color=red>warn</color></at>
 <at x="50%" y="50%"><font face="Georgia" size="xx-large" color="cyan">dead center</font></at>
+
+# `<at>` — alignment keywords
+
+<at x="left"   y="top">top-left</at>
+<at x="center" y="top">top-center</at>
+<at x="right"  y="top">top-right</at>
+<at x="left"   y="center">middle-left</at>
+<at x="center" y="center"><font face="Georgia" size="xx-large">middle</font></at>
+<at x="right"  y="center">middle-right</at>
+<at x="left"   y="bottom">bottom-left</at>
+<at x="center" y="bottom">bottom-center</at>
+<at x="right"  y="bottom">bottom-right</at>
 
 # Shapes and Lines
 
