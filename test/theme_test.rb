@@ -62,6 +62,7 @@ class ThemeTest < Test::Unit::TestCase
       slot = slots[0]
       assert_equal 'title',      slot.name
       assert_equal 'center',     slot.x, 'takahashi title slot should be x: center'
+      assert_equal 'center',     slot.y, 'takahashi title slot should be y: center (content-measured centering)'
       assert_equal 'xxxx-large', slot.size
     end
 

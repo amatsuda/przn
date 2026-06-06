@@ -1396,6 +1396,129 @@ class RendererTest < Test::Unit::TestCase
       theme.layouts['default'] = original
     end
 
+    test 'slot y: center vertically centers the CONTENT on the slide (not the slot)' do
+      # Content "# Hi" → h1 at default scale 4 → 4 content rows.
+      # Effective y = (30 - 4) / 2 + 1 = 14. Slot.height is irrelevant
+      # to the centering math; the slot can be 100% tall and the text
+      # still lands at row 14 because that's where the content's
+      # vertical centre falls on the slide centre.
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('title', 'center', 'center', '100%', '100%', nil, nil, nil)
+      ]
+      ps = Przn::Parser.parse("# Hi\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      title_move = moves.find { |op, r, _| op == :move_to && r == 14 }
+      assert_not_nil title_move,
+                     "expected content-centered move at row 14: #{moves.inspect}"
+    end
+
+    test 'slot y: bottom anchors the CONTENT bottom row to the slide bottom' do
+      # h1 at default scale 4 → 4 content rows. Bottom: y = 30 - 4 + 1 = 27.
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('title', 'center', 'bottom', '100%', '100%', nil, nil, nil)
+      ]
+      ps = Przn::Parser.parse("# Hi\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      title_move = moves.find { |op, r, _| op == :move_to && r == 27 }
+      assert_not_nil title_move,
+                     "expected content-bottom move at row 27: #{moves.inspect}"
+    end
+
+    test 'slot y: top pins the slot to row 1' do
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('title', 'center', 'top', '100%', '100%', nil, nil, nil)
+      ]
+      ps = Przn::Parser.parse("# Hi\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      title_move = moves.find { |op, r, _| op == :move_to && r == 1 }
+      assert_not_nil title_move,
+                     "expected move at row 1 (slot pinned to top): #{moves.inspect}"
+    end
+
+    test 'middle is accepted as a synonym of center on y too' do
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('title', 'center', 'middle', '100%', '100%', nil, nil, nil)
+      ]
+      ps = Przn::Parser.parse("# Hi\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      assert(moves.any? { |op, r, _| op == :move_to && r == 14 },
+             "expected `middle` to behave like `center` on y: #{moves.inspect}")
+    end
+
+    test 'takahashi y: center centres a wrapped multi-line h1 (xxxx-large)' do
+      # Force a 3-line wrap by giving takahashi a heading that won't fit
+      # on one line at scale 7. max_text_width(80, 0, 7) ≈ 11 chars per
+      # line, so a ~25-char title wraps to ~3 lines × 7 rows = 21 rows.
+      # Centered: y = (30 - 21) / 2 + 1 = 5. Last line top = 5 + 14 = 19;
+      # last line bottom = 25. Visual centre = (5 + 25) / 2 = 15. ✓
+      ps = Przn::Parser.parse("# Long Heading That Wraps {layout=takahashi}\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: Przn::Theme.default).render(ps.slides[0], current: 1, total: 2)
+      text_rows = term.ops
+        .select { |op, _r, _c| op == :move_to }
+        .reject  { |_op, r, c| r == 30 && c > 60 }   # drop footer
+        .map { |_op, r, _c| r }
+        .sort
+      # First wrapped line lands at row 5 (the content's top edge).
+      assert_equal 5,  text_rows.first,
+                   "expected first wrapped line at row 5: #{text_rows.inspect}"
+      # Last wrapped line lands at row 19 (its top), occupies rows 19-25.
+      # That puts the content's bottom edge at row 25, the visual centre
+      # at row 15, exactly on the slide's centre line.
+      assert_operator text_rows.last, :>=, 18,
+                      "expected the last wrapped line to start at or after row 18: #{text_rows.inspect}"
+    end
+
+    test 'y: center clamps to row 1 when content is taller than the pane' do
+      # 9 lines × 7 rows = 63 rows, far taller than a 30-row pane.
+      # No valid y exists where everything fits; the math hits the
+      # clamp and starts the content at row 1.
+      ps = Przn::Parser.parse(
+        "# Long Heading That Should Wrap Across Several Lines Of The Takahashi Slide {layout=takahashi}\n"
+      )
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: Przn::Theme.default).render(ps.slides[0], current: 1, total: 2)
+      first_text_row = term.ops
+        .select { |op, r, c| op == :move_to && !(r == 30 && c > 60) }
+        .map { |_op, r, _c| r }.min
+      assert_equal 1, first_text_row,
+                   "expected overflow content to start at row 1 (clamped): #{term.ops.inspect[0,300]}"
+    end
+
+    test 'y: center on a multi-block slot puts the whole block group at slide centre' do
+      # Parser produces three blocks for "first\n\nsecond\n": :paragraph,
+      # :blank, :paragraph. Each contributes body_scale (=2) rows, so
+      # content_h = 6. Centered: y = (30 - 6) / 2 + 1 = 13.
+      theme = Przn::Theme.default
+      original = theme.layouts['default']
+      theme.layouts['default'] = [
+        Przn::Theme::Slot.new('body', 'center', 'center', '100%', '100%', nil, nil, nil)
+      ]
+      ps = Przn::Parser.parse("first line\n\nsecond line\n")
+      term = LayoutFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
+      moves = term.ops.select { |op, *| op == :move_to }
+      first_text_move = moves.min_by { |op, r, _| op == :move_to ? r : Float::INFINITY }
+      assert_not_nil first_text_move, "expected some content move: #{moves.inspect}"
+      assert_equal 13, first_text_move[1], "expected content top at row 13 for content-centered slot"
+    end
+
     test '`default` body content (after the title band) lands flush-left at content_left + 1' do
       md = "# Plain title\n\nbody\n"
       ps = Przn::Parser.parse(md)

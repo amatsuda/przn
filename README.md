@@ -368,7 +368,7 @@ right column content
 - bullet D
 ```
 
-**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optional styling: `size` (OSC 66 scale: `1`-`7` or named `xx-small` … `xxxx-large`), `family` _(Echoes only)_, and `color` (named ANSI or 6-digit hex). Coordinates use the same vocabulary as `<at>` and `<img x y>` — numeric cells, `N%`, `Nc`, `Npx`, or the alignment keywords `left` / `center` / `right` on `x` (and `top` / `center` / `bottom` on `y`). When `x` is a keyword the slot is positioned so its content lands at the requested alignment AND blocks routed into the slot inherit the same alignment, replacing the old separate `align:` key.
+**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optional styling: `size` (OSC 66 scale: `1`-`7` or named `xx-small` … `xxxx-large`), `family` _(Echoes only)_, and `color` (named ANSI or 6-digit hex). Coordinates use the same vocabulary as `<at>` and `<img x y>` — numeric cells, `N%`, `Nc`, `Npx`, or the alignment keywords `left` / `center` / `right` on `x` and `top` / `center` / `bottom` on `y` (with `middle` accepted as a synonym of `center` on either axis). When `x:` is a keyword the slot is positioned so its content lands at the requested alignment AND blocks routed into the slot inherit the same alignment, replacing the old separate `align:` key. When `y:` is a keyword the renderer **measures the slot's actual content height** (via a dry-render pass) and positions the content so its top / centre / bottom edge falls at the slide's top / centre / bottom — regardless of `slot.height`. That means `y: center` centres the **text content** vertically no matter how many lines it has; a single h1 and a six-line paragraph both land on the slide's centre line.
 
 ```yaml
 layouts:
@@ -391,7 +391,7 @@ layouts:
 - `default` — theme-wide fallback for slides without an `{layout=...}` IAL. Shipped identical to `title-content`: centered title band across the top, content below. Override in your own `theme.yml` to give every plain slide a different layout.
 - `cover` — auto-applied to slide 0 when it has no `{layout=...}` IAL. Roughly emulates Keynote's "Title" slide: heading centered near the middle (slot `title`, y=35%), a smaller subtitle near the bottom (slot `subtitle`, y=80%). Put the deck title in the h1 and any author/date line in a paragraph after it.
 - `title-only` — one slot, vertically centered. For section dividers.
-- `takahashi` — [Takahashi-method](https://en.wikipedia.org/wiki/Takahashi_method) (高橋メソッド) slides: a single very-large phrase per slide, no decoration. Just the words.
+- `takahashi` — [Takahashi-method](https://en.wikipedia.org/wiki/Takahashi_method) (高橋メソッド) slides: a single very-large phrase per slide, no decoration. Just the words, dropped at the slide's exact centre regardless of phrase length via `x: center, y: center`.
 - `title-content` — title across the top, content below.
 - `two-column` — title across the top, two side-by-side columns.
 - `photo-caption` — title across the top, image on the left, caption on the right.

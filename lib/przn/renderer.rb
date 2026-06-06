@@ -425,6 +425,41 @@ module Przn
       end
     end
 
+    # Dry-render the slot's block list and return how many rows it
+    # would occupy — the content height that `y: center` / `bottom`
+    # need before they can position the slot. Blocks that don't
+    # render (`:wait`, `:action`) are dropped; the `@measuring_last`
+    # flag is set for the FINAL renderable block so its trailing
+    # padding is excluded from the measurement (without that h1's
+    # built-in "+4 rows after the heading" makes a single-h1 slot
+    # measure 4 rows taller than it actually occupies, biasing the
+    # centred position upward by 2 rows).
+    def measure_blocks_content_height(blocks, width, slot_align)
+      visible = blocks.reject { |b| %i[wait action align].include?(b[:type]) }
+      return 0 if visible.empty?
+
+      real = @terminal
+      @terminal = NullTerm.new(real)
+      row = 0
+      pending_align = nil
+      begin
+        blocks.each do |block|
+          case block[:type]
+          when :align then pending_align = block[:align]
+          when :wait, :action then next
+          else
+            @measuring_last = block.equal?(visible.last)
+            row = render_block_or_reserve(block, width, row, align: pending_align || slot_align)
+            pending_align = nil
+          end
+        end
+      ensure
+        @measuring_last = false
+        @terminal = real
+      end
+      row
+    end
+
     # Move the terminal cursor in flow-mode block coordinates: `col` is
     # measured from the left of the current slot (or from the screen edge
     # when no slot is active, @x_offset = 0). Screen-absolute emits
@@ -494,9 +529,10 @@ module Przn
       slots.each do |slot|
         blocks = buckets[slot.name] || []
         next if blocks.empty?
-        # Resolve slot width first — `x: center` / `right` need it to
-        # know where the slot's edges should land.
+        # Resolve slot width + height first — keyword `x:` / `y:`
+        # need them to know where the slot's edges should land.
         w = resolve_at_coord(slot.width, width, cell_px: cell_w)
+        h = resolve_at_coord(slot.height, height, cell_px: cell_h)
         next unless w
         # `x:` may be numeric / `%` / `c` / `px` (slot starts at that
         # column, alignment defaults to :left) OR a keyword (`left` /
@@ -514,15 +550,43 @@ module Przn
           x = resolve_at_coord(slot.x, width, cell_px: cell_w)
           slot_align = nil
         end
-        y = resolve_at_coord(slot.y, height, cell_px: cell_h)
-        next unless x && y
+        next unless x
 
+        # Install the slot's text-style overrides BEFORE measuring,
+        # so the dry-render that y-keyword centering relies on picks
+        # up the slot's `size:` (which an h1 at `xxxx-large` needs to
+        # know about to wrap at scale 7 instead of the default 4 and
+        # to claim 7 rows per line). Restored in `ensure` below.
         prev_offset = @x_offset
         prev_style = @slot_style
         @x_offset = x - 1
         @slot_style = {size: slot.size, family: slot.family, color: slot.color}.compact
         @slot_style = nil if @slot_style.empty?
         begin
+          # `y:` mirrors `x:` — same five forms — but doesn't carry an
+          # "alignment of blocks WITHIN the slot" side-effect (the slot
+          # just starts rendering downward from row `y`). Keyword
+          # behavior centers the *content*, not the slot's region:
+          # `y: center` puts the rendered content's vertical centre at
+          # the slide's vertical centre regardless of `slot.height`,
+          # `y: bottom` anchors the content's last row to the slide's
+          # last row. `slot.height` only matters for numeric `y:` and
+          # for the (already-respected) slot-content extent.
+          y_kw = alignment_keyword(slot.y, :y)
+          y =
+            case y_kw
+            when 'top'
+              1
+            when 'center', 'middle'
+              content_h = measure_blocks_content_height(blocks, w, slot_align)
+              [(height - content_h) / 2 + 1, 1].max
+            when 'bottom'
+              content_h = measure_blocks_content_height(blocks, w, slot_align)
+              [height - content_h + 1, 1].max
+            else
+              resolve_at_coord(slot.y, height, cell_px: cell_h)
+            end
+          next unless y
           row = y
           pending_align = nil
           blocks.each do |block|
@@ -1483,7 +1547,12 @@ module Przn
           end
           row += scale
         end
-        row + 4
+        # `+ 4` is the standard "leave a bit of breathing room
+        # below the heading before the next block." For the
+        # measure_blocks_content_height dry-run, skip it on the
+        # FINAL block so `y: center` on a single-h1 slot centres
+        # the actual text, not the text plus trailing padding.
+        @measuring_last ? row : row + 4
       else
         left = content_left(width)
         prefix = @theme.bullet[:text]
