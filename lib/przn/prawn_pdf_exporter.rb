@@ -63,19 +63,51 @@ module Przn
       'bright_white' => 'FFFFFF'
     }.freeze
 
+    # Fallback palette used when the theme leaves a colour unset and
+    # no legacy `colors.*` key fills in either. These are hex (no `#`)
+    # so they can flow straight into `pdf.fill_color`.
+    DEFAULT_CODE_BG = '313244'
+    DEFAULT_DIM     = '6c7086'
+
     def initialize(presentation, base_dir: '.', theme: nil)
       @presentation = presentation
       @base_dir = base_dir
       @theme = theme || Theme.default
       @bg_color = @theme.background && @theme.background[:color]
       @fg_color = @theme.font[:color] || '000000'
-      @code_bg = @theme.colors[:code_bg]
-      @dim_color = @theme.colors[:dim]
-      @inline_code_color = @theme.colors[:inline_code]
+      # Resolve in priority order:
+      #   1. new `theme.code` keys (terminal & PDF share them)
+      #   2. legacy `theme.colors.*` (back-compat for decks that haven't
+      #      migrated yet — accepted on read but no longer documented)
+      #   3. hardcoded default
+      #
+      # The page-number footer reads `counter.color` first so the same
+      # theme key styles the counter in both the terminal and PDF paths.
+      colors = @theme.colors || {}
+      @code_bg = sanitize_hex(@theme.code[:bg]) || colors[:code_bg] || DEFAULT_CODE_BG
+      # `code.color` styles ALL code text — fenced blocks and inline
+      # `<code>` segments alike. Used to be split into two knobs
+      # (`colors.inline_code` for inline only, body fg for fenced)
+      # for no real reason beyond historical defaults.
+      @code_color = sanitize_hex(@theme.code[:color]) || colors[:inline_code] || @fg_color
+      @counter_color = sanitize_hex(@theme.counter[:color]) || colors[:dim] || DEFAULT_DIM
+      @dim_color = colors[:dim] || DEFAULT_DIM
       # `theme.font.size` is now an OSC 66 scale (1–7), matching
       # title.size — meaningful to the terminal renderer, not to
       # this PDF path. Prawn keeps its own fixed point-size table.
       @scale_to_pt = DEFAULT_SCALE_TO_PT
+    end
+
+    # Reduce a theme colour value to a 6-digit hex string (no `#`) so
+    # Prawn's `fill_color` / `stroke_color` can consume it directly.
+    # The terminal-side resolver accepts CSS / ANSI named colours via
+    # CSS_NAMED_COLORS, but Prawn doesn't have that table — named
+    # values fall through to the legacy `colors.*` back-compat key
+    # and then to the hardcoded default in the PDF path.
+    def sanitize_hex(value)
+      return nil if value.nil?
+      s = value.to_s.strip.sub(/\A#/, '')
+      s.match?(/\A[0-9a-fA-F]{6}\z/) ? s : nil
     end
 
     # Fallback font paths when fc-match is not available.
@@ -291,10 +323,11 @@ module Przn
         end
       end
 
-      # Page number
+      # Page number — reads `theme.counter.color` like the terminal's
+      # bottom-right counter does, so a single theme key styles both.
       total = @presentation.total
       status = "#{slide_index + 1} / #{total}"
-      pdf.fill_color @dim_color
+      pdf.fill_color @counter_color
       pdf.text_box status, at: [0, 16], width: PAGE_WIDTH - 10, height: 14, size: 8, align: :right
       pdf.fill_color @fg_color
     end
@@ -371,7 +404,7 @@ module Przn
       code_lines.each do |line|
         # Replace leading spaces with non-breaking spaces to preserve indentation
         preserved = line.sub(/\A +/) { |m| "\u00A0" * m.length }
-        pdf.text_box preserved, at: [margin_x + padding, code_y], width: content_width - padding * 2, height: line_height, size: pt, color: @fg_color, overflow: :shrink_to_fit
+        pdf.text_box preserved, at: [margin_x + padding, code_y], width: content_width - padding * 2, height: line_height, size: pt, color: @code_color, overflow: :shrink_to_fit
         code_y -= line_height
       end
 
@@ -546,7 +579,7 @@ module Przn
         when :strikethrough
           {text: content, size: default_pt, color: @fg_color, styles: [:strikethrough]}
         when :code
-          {text: " #{content} ", size: default_pt * 0.85, color: @inline_code_color}
+          {text: " #{content} ", size: default_pt * 0.85, color: @code_color}
         when :note
           {text: content, size: default_pt * 0.7, color: @dim_color}
         when :text

@@ -22,7 +22,7 @@ module Przn
     # tags (`<size>`, `<font>`, `<color>`) still win per-segment.
     Slot = Struct.new(:name, :x, :y, :width, :height, :align, :size, :family, :color)
 
-    attr_reader :colors, :font, :bullet, :background, :title, :counter, :layouts
+    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -35,6 +35,11 @@ module Przn
         bullet: defaults[:bullet].merge(overrides[:bullet] || {}),
         background: defaults[:background].merge(overrides[:background] || {}),
         title: defaults[:title].merge(overrides[:title] || {}),
+        # `code` styles fenced code blocks (family / size / color / bg).
+        # Unset keys fall through to: family → font.family, size →
+        # body_scale, color → terminal default fg, bg → the legacy dim
+        # gray ANSI 236.
+        code: defaults[:code].merge(overrides[:code] || {}),
         # `counter` is always a hash; empty by default. `counter.duration`
         # opts into the 🐇 runner bar; without it the renderer shows the
         # plain " N / M " footer. `counter.color` styles both modes.
@@ -92,6 +97,7 @@ module Przn
         bullet: (data[:bullet] || {}).compact,
         background: (data[:background] || {}).compact,
         title: (data[:title] || {}).compact,
+        code: (data[:code] || {}).compact,
         counter: (data[:counter] || {}).compact,
         layouts: parse_layouts(data[:layouts])
       }
@@ -128,6 +134,7 @@ module Przn
       @bullet = config[:bullet]
       @background = config[:background]
       @title = config[:title]
+      @code = config[:code] || {}
       @counter = config[:counter] || {}
       @layouts = config[:layouts] || {}
     end

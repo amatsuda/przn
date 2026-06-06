@@ -546,6 +546,12 @@ bullet:                   # unordered-list marker; also h2–h6 prefix
   size:                   # OSC 66 scale (1–7) for the bullet; default = body text's scale
   color:                  # named ANSI or 6-digit hex; falls back to body text color when unset
 
+code:                     # fenced code block (and inline `<code>`) typography
+  family:                 # font family (Echoes only); falls back to font.family
+  size:                   # OSC 66 scale (1–7); default = body text's scale
+  color:                  # fg for ALL code text — fenced blocks and inline; named ANSI or 6-digit hex; falls back to body fg
+  bg:                     # block background (fenced only); named / hex / ANSI; default = dim gray (ANSI 256-color 236)
+
 background:               # default slide background; Echoes only — OSC 7772
   color:                  # solid, e.g. "#1a1a2e"
   from:                   # gradient endpoint
@@ -555,11 +561,6 @@ background:               # default slide background; Echoes only — OSC 7772
 counter:                  # bottom-of-screen slide counter; runner-bar opt-in via duration
   color:                  # named ANSI or 6-digit hex; default = dim
   duration:               # "30m", "1h30m", "1800s", or plain integer seconds; opt in to the 🐇/🐢 runner bar
-
-colors:
-  code_bg: "313244"
-  dim: "6c7086"
-  inline_code: "a6e3a1"
 ```
 
 Notes:
@@ -570,6 +571,7 @@ Notes:
   - **`font.color`** — deck-wide default text color. Inline `<color=...>` / `<font color="...">` runs still win per-segment.
 - **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color.
 - **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` _(Echoes only)_ does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is set, h1 lines emit as one slot-spanning multicell with halign=2 so Echoes' proportional-font measurement centers the text pixel-precisely instead of using the cell-grid estimate. h2–h6 stay body text.
+- **`code`** — fenced code block (and inline `<code>`) typography. `code.family` _(Echoes only)_ sets the OSC 66 `f=` face for code (falls back to `font.family` when unset, so a single body-font override usually styles code too); `code.size` is the OSC 66 scale (default = `font.size`); `code.color` is the foreground colour for **all** code text — fenced blocks and inline `<code>` alike — falling back to the body fg when unset; `code.bg` is the **fenced-block** background — accepts the same forms as `font.color` (CSS / ANSI named or 6-digit hex; default is dim gray, ANSI 256-color 236). Inline `<code>` segments in the **terminal** keep the historical gray-background styling for the bg; only fenced blocks read `code.bg`.
 - **`background`** _(Echoes only)_ — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
 - **`counter`** — bottom-of-screen slide counter. Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. _(Echoes only)_ the emojis are emitted via OSC 7772 `;multicell` with `flip=h` so they face rightward; outside Echoes they fall back to standard OSC 66 and render unflipped (left-facing).
 

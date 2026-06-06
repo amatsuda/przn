@@ -210,13 +210,19 @@ class PrawnPdfExporterTest < Test::Unit::TestCase
       result = build('`code`')
       assert_equal 1, result.size
       assert_equal ' code ', result[0][:text]
-      assert_equal default_theme.colors[:inline_code], result[0][:color]
+      # `code.color` is the single knob for all code text (fenced and
+      # inline). Unset in the default theme, so the exporter falls
+      # through to the body fg color — same as a plain paragraph.
+      assert_equal '000000', result[0][:color]
     end
 
     test 'note' do
       result = build('{::note}note{:/note}')
       assert_equal 1, result.size
-      assert_equal default_theme.colors[:dim], result[0][:color]
+      # `colors.dim` is no longer in the default theme — the exporter's
+      # internal DEFAULT_DIM provides the "muted" tone for blockquote
+      # / table / note rendering when no theme override is present.
+      assert_equal Przn::PrawnPdfExporter::DEFAULT_DIM, result[0][:color]
       assert_operator result[0][:size], :<, 18
     end
   end

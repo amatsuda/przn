@@ -1539,39 +1539,79 @@ module Przn
       code_lines = block[:content].lines.map(&:chomp)
       return row + body_scale if code_lines.empty?
 
+      # `theme.code` knobs (all optional):
+      #   family — OSC 66 f= face (Echoes only); falls back to font.family.
+      #   size   — OSC 66 scale; falls back to body_scale.
+      #   color  — default fg for tokens that the highlighter didn't
+      #            paint; falls back to terminal default.
+      #   bg     — block background; falls back to the historical
+      #            dim gray (ANSI 256-color 236).
+      cfg = @theme.code || {}
+      scale = (cfg[:size] && Parser::SIZE_SCALES[cfg[:size].to_s]) || body_scale
+      face = cfg[:family] || @theme.font[:family]
+      bg_sgr = code_bg_sgr(cfg[:bg])
+      default_fg = cfg[:color]
+      default_fg_sgr = (default_fg && color_code(default_fg)) || ''
+
       left = content_left(width)
-      max_content_w = max_text_width(width, left, body_scale) - 4
+      max_content_w = max_text_width(width, left, scale) - 4
       max_len = code_lines.map { |l| display_width(l) }.max
       box_content_w = [max_len, max_content_w].min
 
       highlighted = highlighted_code_lines(block, code_lines)
 
-      highlighted.each_with_index do |line_tokens, li|
+      highlighted.each do |line_tokens|
         fitted, used_w = fit_tokens_to_width(line_tokens, box_content_w)
         pad_len = [box_content_w - used_w, 0].max
         term_move(row, left + 1)
-        @terminal.write ANSI[:gray_bg]
-        @terminal.write KittyText.sized('  ', s: body_scale)
+        @terminal.write bg_sgr
+        @terminal.write default_fg_sgr unless default_fg_sgr.empty?
+        @terminal.write KittyText.sized('  ', s: scale, f: face)
         fitted.each do |color, value|
           if color && !value.empty?
             code = color_code(color)
             @terminal.write code unless code.empty?
-            @terminal.write KittyText.sized(value, s: body_scale)
-            # Reset only the fg so the gray bg stays in effect.
-            @terminal.write "\e[39m" unless code.empty?
+            @terminal.write KittyText.sized(value, s: scale, f: face)
+            # Reset just the fg so the bg stays in effect, then reopen
+            # the theme-default fg (if any) so the next uncolored token
+            # picks it up instead of the terminal default.
+            unless code.empty?
+              @terminal.write "\e[39m"
+              @terminal.write default_fg_sgr unless default_fg_sgr.empty?
+            end
           else
-            @terminal.write KittyText.sized(value, s: body_scale) unless value.empty?
+            @terminal.write KittyText.sized(value, s: scale, f: face) unless value.empty?
           end
         end
-        @terminal.write KittyText.sized("#{' ' * pad_len}  ", s: body_scale)
+        @terminal.write KittyText.sized("#{' ' * pad_len}  ", s: scale, f: face)
         @terminal.write ANSI[:reset]
-        row += body_scale
-        # Defensive: ensure we don't leave the gray bg open between
-        # adjacent code lines (the next line re-opens it).
-        _ = li
+        row += scale
       end
 
       row
+    end
+
+    # Resolve `theme.code.bg` to a background-color SGR. Accepts the
+    # same forms as `color_code`: CSS named colors, the ANSI palette
+    # names (red / cyan / …), and 6-digit hex (with or without `#`).
+    # An unset / unrecognised value falls back to ANSI 256-color 236
+    # — the dim gray code blocks have rendered with since v1.
+    def code_bg_sgr(value)
+      return ANSI[:gray_bg] if value.nil? || value.to_s.empty?
+      c = value.to_s.sub(/\A#/, '')
+      if (hex = CSS_NAMED_COLORS[c.downcase])
+        r, g, b = hex.scan(/../).map { |h| h.to_i(16) }
+        "\e[48;2;#{r};#{g};#{b}m"
+      elsif (ansi_fg = Parser::NAMED_COLORS[c])
+        # Translate the 30-37 / 90-97 fg codes to their 40-47 / 100-107
+        # bg counterparts (the +10 offset is the standard ANSI rule).
+        "\e[#{ansi_fg.to_i + 10}m"
+      elsif c.match?(/\A[0-9a-fA-F]{6}\z/)
+        r, g, b = c.scan(/../).map { |h| h.to_i(16) }
+        "\e[48;2;#{r};#{g};#{b}m"
+      else
+        ANSI[:gray_bg]
+      end
     end
 
     # Tokenize fenced code through CodeHighlighter when a language is

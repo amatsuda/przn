@@ -14,14 +14,15 @@ class ThemeTest < Test::Unit::TestCase
   end
 
   sub_test_case '.default' do
-    test 'returns theme with colors from default_theme.yml' do
+    test 'colors: section is empty by default (legacy palette retired)' do
+      # `colors:` used to hold a Prawn-only palette (code_bg / dim /
+      # inline_code). Those have moved into per-feature theme keys
+      # (`code.bg`, `code.inline_color`, `counter.color`) and the
+      # default_theme.yml no longer pre-populates `colors:`. The
+      # exporter's hardcoded DEFAULT_* constants take over when no
+      # override is set.
       theme = Przn::Theme.default
-      assert_equal '313244', theme.colors[:code_bg]
-      assert_equal '6c7086', theme.colors[:dim]
-      assert_equal 'a6e3a1', theme.colors[:inline_code]
-      assert_nil theme.colors[:background]
-      assert_nil theme.colors[:foreground]
-      assert_nil theme.colors[:heading]
+      assert_empty theme.colors, 'default colors: should be empty after the legacy-palette retirement'
     end
 
     test 'returns theme with default font' do

@@ -2716,4 +2716,103 @@ class RendererTest < Test::Unit::TestCase
       end
     end
   end
+
+  sub_test_case 'render_code_block: theme.code knobs' do
+    class CodeFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def code_theme(overrides = {})
+      Przn::Theme.new(
+        colors: {},
+        font: {family: nil, size: nil, color: nil},
+        bullet: {text: '・'},
+        background: {},
+        title: {},
+        counter: {},
+        code: overrides
+      )
+    end
+
+    def render_with(theme, code = "x = 1\n")
+      term = CodeFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: theme)
+      r.send(:render_code_block, {type: :code_block, content: code, language: nil}, 80, 2)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+    end
+
+    test 'default (empty code config) keeps the historical dim gray bg + body_scale + no f=' do
+      out = render_with(code_theme)
+      assert(out.include?("\e[48;5;236m"), 'expected the legacy ANSI 256-color 236 bg SGR')
+      assert(out.include?('s=2;'),         'default s=body_scale=2 (no :size set)')
+      refute(out.include?(':f='),          'no f= when neither code.family nor font.family is set')
+    end
+
+    test 'code.bg accepts CSS hex and emits a truecolor bg SGR' do
+      out = render_with(code_theme(bg: '#1e1e2e'))
+      # `#1e1e2e` → \e[48;2;30;30;46m
+      assert(out.include?("\e[48;2;30;30;46m"), "expected truecolor bg from `bg: \"#1e1e2e\"`: #{out.inspect[0,200]}")
+    end
+
+    test 'code.bg accepts CSS named colors (tomato → ff6347)' do
+      out = render_with(code_theme(bg: 'tomato'))
+      assert(out.include?("\e[48;2;255;99;71m"), "expected truecolor bg from `bg: tomato`: #{out.inspect[0,200]}")
+    end
+
+    test 'code.bg accepts ANSI palette names (red → bg code 41)' do
+      out = render_with(code_theme(bg: 'bright_red'))
+      # `bright_red` isn't in CSS_NAMED_COLORS, so falls through to the
+      # ANSI palette branch: bright_red fg = 91 → bg = 91 + 10 = 101.
+      assert(out.include?("\e[101m"), "expected ANSI bg 101: #{out.inspect[0,200]}")
+    end
+
+    test 'code.size scales the OSC 66 multicell s=' do
+      out = render_with(code_theme(size: 'large'))   # large = 3
+      assert(out.include?('s=3;'), "expected s=3 from `size: large`: #{out.inspect[0,200]}")
+    end
+
+    test 'code.family is threaded into OSC 66 f= (Echoes path)' do
+      prev = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      begin
+        out = render_with(code_theme(family: 'JetBrains Mono'))
+        assert(out.include?('f=JetBrains Mono'),
+               "expected f=JetBrains Mono in OSC 7772 emit: #{out.inspect[0,200]}")
+      ensure
+        ENV['TERM_PROGRAM'] = prev
+      end
+    end
+
+    test 'code.family falls back to font.family when unset' do
+      prev = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      begin
+        theme = Przn::Theme.new(
+          colors: {}, font: {family: 'Menlo'}, bullet: {text: '・'},
+          background: {}, title: {}, counter: {}, code: {}
+        )
+        out = render_with(theme)
+        assert(out.include?('f=Menlo'),
+               'unset code.family should fall through to font.family')
+      ensure
+        ENV['TERM_PROGRAM'] = prev
+      end
+    end
+
+    test 'code.color is emitted as the default fg before tokens' do
+      # `cyan` from CSS_NAMED_COLORS → \e[38;2;0;255;255m. The body
+      # color SGR should appear after the bg open and before the
+      # first sized chunk for each line.
+      out = render_with(code_theme(color: 'cyan'))
+      assert(out.include?("\e[38;2;0;255;255m"), 'expected cyan truecolor fg open in the code block')
+    end
+  end
 end
