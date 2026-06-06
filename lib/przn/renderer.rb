@@ -326,6 +326,14 @@ module Przn
           next if key == 'target' || key == 'duration'
           if animating
             prev = bucket[key] || target_attrs[key] || target_attrs[key.to_sym]
+            # `opacity` has a semantic default of 1.0 — a block with no
+            # explicit opacity is fully opaque. Other attrs (x / y / w /
+            # h) have no universal default, so lerp_attr's nil→snap
+            # behavior stays correct for them. Without this, a plain
+            # fade-out (`<action opacity="0" .../>` targeting a block
+            # that never declared its initial opacity) would snap to 0
+            # instead of interpolating from 1.
+            prev = '1.0' if prev.nil? && key == 'opacity'
             bucket[key] = lerp_attr(prev, v, progress)
           else
             bucket[key] = v

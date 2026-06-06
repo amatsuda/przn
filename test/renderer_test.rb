@@ -2909,6 +2909,24 @@ class RendererTest < Test::Unit::TestCase
       assert(seqs.include?("\e]7772;cell-alpha;0.0\a"),
              "expected alpha=0 wrap for an initially-invisible block: #{seqs.inspect}")
     end
+
+    test 'fade-out without an explicit initial opacity still interpolates from 1.0' do
+      # A block with no `opacity=` declares its default visibility (fully
+      # opaque). A naive lerp_attr(nil, "0", progress) would snap to 0 —
+      # opacity needs a 1.0 default for its `prev` so a bare fade-out
+      # fades. Regression for: "fade-out finishes immediately regardless
+      # of duration."
+      target = {type: :paragraph, content: 'fade me out', attrs: {'id' => 'p'}}
+      blocks = [target, {type: :wait},
+                {type: :action, attrs: {target: 'p', opacity: '0'}, duration_ms: 500.0}]
+
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render, slide_with(blocks),
+                                    current: 0, total: 1, step: 1, progress: 0.5)
+      seqs = writes(term)
+      assert(seqs.any? { |s| s.match?(/\e\]7772;cell-alpha;0?\.5\a/) },
+             "expected mid-fade alpha around 0.5 (fade from default 1 → 0): #{seqs.inspect}")
+    end
   end
 
   sub_test_case 'render_code_block: theme.code knobs' do
