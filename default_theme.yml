@@ -44,9 +44,20 @@ background:
 # into the 🐇 / 🐢 runner bar (a nod to the Rabbit presentation tool):
 # slide-progress (🐇) and elapsed-vs-goal (🐢) anchored between the
 # left (current) and right (total) numbers.
+#
+# `rabbit:` / `turtle:` are the raw escape sequences emitted at the
+# runner positions. The defaults are Echoes-private OSC 7772 multicell
+# frames with `flip=h` so the emojis face right (towards the goal at the
+# right edge); on terminals that don't speak OSC 7772 (plain kitty,
+# wezterm, …) the runner emojis don't render. To stay portable, override
+# with a plain glyph or a standard OSC 66 multicell — at the cost of the
+# flip. The renderer writes the value verbatim; whatever lands here goes
+# straight to the terminal.
 counter:
   color:                # named ANSI or 6-digit hex; default = dim
   duration:             # "30m", "1h30m", "1800s", or plain integer seconds; opt in to the runner bar
+  rabbit: "\e]7772;multicell;s=2:flip=h;🐇\a"
+  turtle: "\e]7772;multicell;s=2:flip=h;🐢\a"
 
 # Slide layouts. Each layout names an ordered list of slots; a slot is a
 # rectangular region with x / y / width / height (1-based cells, or N%

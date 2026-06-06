@@ -839,8 +839,13 @@ class RendererTest < Test::Unit::TestCase
 
     FakeTheme = Struct.new(:counter, :font, :background, :title, :bullet, :colors, :layouts)
 
+    RUNNER_DEFAULTS = {
+      rabbit: "\e]7772;multicell;s=2:flip=h;🐇\a",
+      turtle: "\e]7772;multicell;s=2:flip=h;🐢\a"
+    }.freeze
+
     def fake_theme(counter: {duration: '60s'})
-      FakeTheme.new(counter, {}, {}, {}, {text: '・'}, {}, {})
+      FakeTheme.new(RUNNER_DEFAULTS.merge(counter), {}, {}, {}, {text: '・'}, {}, {})
     end
 
     test 'anchors current slide number at column 1' do

@@ -1464,13 +1464,13 @@ module Przn
     #   └ current slide #   └ elapsed time    └ slide progress     └ goal (total slides)
     #
     # The anchor numbers (current at the left, total at the right) sit on the
-    # very bottom row; the emojis render at OSC 66 scale 2 and are anchored at
-    # row `h-1` so their bottom half lands on row `h` next to the numbers,
-    # making them visibly twice as large as the labels without needing more
-    # vertical screen real-estate. `flip=h` mirrors each glyph horizontally
-    # on terminals that honor it (Echoes); others ignore the parameter and
-    # the emojis face left.
-    EMOJI_RUNNER_CELLS = 4 # 🐇/🐢 are 2 source cells wide, rendered at s=2 → 4 cells
+    # very bottom row; the runner emojis live at theme.counter[:rabbit] /
+    # [:turtle] as raw escape sequences (the default is an OSC 7772 multicell
+    # at scale 2 with flip=h, so they face right; non-Echoes terminals drop
+    # the OSC and the runner glyphs don't appear). The strings are emitted
+    # at row `h-1` so their bottom half lands on row `h` next to the anchor
+    # numbers — twice as tall as the labels without needing more rows.
+    EMOJI_RUNNER_CELLS = 4 # default 🐇/🐢 at OSC 66 s=2 occupy 4 cells; override theme keys at your peril
 
     def draw_runner_bar(h, w, current, total, started_at)
       left  = (current + 1).to_s
@@ -1495,9 +1495,10 @@ module Przn
       @terminal.move_to(h, w - right.size + 1)
       @terminal.write "#{open_seq}#{right}#{ANSI[:reset]}"
 
+      counter = @theme&.counter || {}
       rabbit_col = runner_col(current, [total - 1, 1].max, track_left, track_right)
       @terminal.move_to(rabbit_row, rabbit_col)
-      @terminal.write KittyText.sized('🐇', s: 2, flip: 'h')
+      @terminal.write counter[:rabbit].to_s
 
       duration_s = counter_duration
       return unless started_at && duration_s && duration_s.positive?
@@ -1507,7 +1508,7 @@ module Przn
       span = (track_right - (EMOJI_RUNNER_CELLS - 1)) - track_left
       turtle_col = track_left + (frac * [span, 0].max).round
       @terminal.move_to(rabbit_row, turtle_col)
-      @terminal.write KittyText.sized('🐢', s: 2, flip: 'h')
+      @terminal.write counter[:turtle].to_s
     end
 
     # Linear-interpolate a runner's column inside the track. `step` is 0..max

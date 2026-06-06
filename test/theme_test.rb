@@ -44,8 +44,14 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal({}, Przn::Theme.default.title)
     end
 
-    test 'counter is an empty hash by default (renderer falls back to simple N / M footer)' do
-      assert_equal({}, Przn::Theme.default.counter)
+    test 'counter ships rabbit / turtle runner glyphs; color and duration unset by default' do
+      counter = Przn::Theme.default.counter
+      assert_nil counter[:color]
+      assert_nil counter[:duration]
+      # The runner emojis live in the theme as raw escape sequences so
+      # users can swap them out without touching the renderer.
+      assert_match(/🐇/, counter[:rabbit])
+      assert_match(/🐢/, counter[:turtle])
     end
 
     test 'ships built-in layouts (default, cover, title-only, takahashi, title-content, two-column, photo-caption)' do
