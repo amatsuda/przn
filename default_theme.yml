@@ -25,6 +25,8 @@ code:                   # fenced code block (and inline `<code>`) typography
   size:                 # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default = body text's scale
   color:                # fg for all code text — fenced blocks and inline `<code>`; named ANSI or 6-digit hex; falls back to body fg
   bg:                   # block background (fenced only); named ANSI or 6-digit hex; default = dim gray (ANSI 256-color 236)
+  highlight:            # Rouge theme name for syntax highlighting (e.g. monokai, gruvbox, github.dark, base16.solarized.dark);
+                        # unset = the built-in ANSI palette (picks up the terminal's colour theme — works on light or dark)
 
 # Default slide background, applied when a slide has no <bg .../> directive.
 # `color` / `from` / `to` / `angle` use Echoes' OSC 7772 (no-op on other

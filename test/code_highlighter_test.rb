@@ -88,4 +88,41 @@ class CodeHighlighterTest < Test::Unit::TestCase
       assert_nil Przn::CodeHighlighter.color_for(stub_token)
     end
   end
+
+  sub_test_case 'theme: <rouge-theme-name>' do
+    test 'returns hex strings from the named Rouge theme instead of ANSI names' do
+      result = Przn::CodeHighlighter.highlight("def f\n  1\nend\n", 'ruby', theme: 'monokai')
+      colors = result.map(&:first).compact.uniq
+      refute_empty colors, 'expected at least one coloured token'
+      colors.each do |c|
+        assert_match(/\A#[0-9a-fA-F]{6}\z/, c.to_s,
+                     "expected #RRGGBB hex from monokai, got #{c.inspect}")
+      end
+    end
+
+    test 'cache key isolates themes — two themes coexist on the same (code, lang)' do
+      code = "def f; 1; end"
+      ansi   = Przn::CodeHighlighter.highlight(code, 'ruby')                   # built-in palette
+      monokai = Przn::CodeHighlighter.highlight(code, 'ruby', theme: 'monokai') # Rouge palette
+      refute_same ansi, monokai,
+                  'distinct themes must produce distinct cache entries'
+      assert_includes ansi.map(&:first).compact.uniq, 'cyan',
+                      'unthemed call should still get ANSI names'
+      assert(monokai.map(&:first).compact.all? { |c| c.to_s.start_with?('#') },
+             'themed call should yield only hex colours')
+    end
+
+    test 'unknown theme name silently falls through to the ANSI palette' do
+      result = Przn::CodeHighlighter.highlight("def f; end", 'ruby', theme: 'totally-not-a-theme')
+      colors = result.map(&:first).compact.uniq
+      assert_includes colors, 'cyan',
+                      "expected the ANSI fallback when the theme name is unknown: #{colors.inspect}"
+    end
+
+    test 'theme: nil matches the default no-argument call byte-for-byte' do
+      code = "def f; 1; end"
+      assert_equal Przn::CodeHighlighter.highlight(code, 'ruby'),
+                   Przn::CodeHighlighter.highlight(code, 'ruby', theme: nil)
+    end
+  end
 end

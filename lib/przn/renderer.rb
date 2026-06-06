@@ -181,7 +181,8 @@ module Przn
       # blocking a foreground render on tokenization).
       slide.blocks.each do |block|
         next unless block[:type] == :code_block && block[:language]
-        CodeHighlighter.highlight(block[:content], block[:language])
+        CodeHighlighter.highlight(block[:content], block[:language],
+                                  theme: highlight_theme_name)
       end
 
       return unless ImageUtil.kitty_terminal?
@@ -1740,10 +1741,19 @@ module Przn
     # outer array per code line, one inner pair per token, color is
     # nil for "default fg" runs.
     def highlighted_code_lines(block, code_lines)
-      tokens = block[:language] && CodeHighlighter.highlight(block[:content], block[:language])
+      tokens = block[:language] && CodeHighlighter.highlight(
+        block[:content], block[:language], theme: highlight_theme_name
+      )
       return code_lines.map { |line| [[nil, line]] } unless tokens
 
       group_tokens_by_line(tokens, code_lines.size)
+    end
+
+    # Read the configured Rouge theme name from `theme.code.highlight`,
+    # or nil when no theme is loaded or the key is unset (current ANSI
+    # palette).
+    def highlight_theme_name
+      @theme && @theme.code && @theme.code[:highlight]
     end
 
     # Walk a flat token stream and split values containing "\n" so each
