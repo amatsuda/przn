@@ -34,6 +34,7 @@ module Przn
       @started_at = Time.now
       @terminal.enter_alt_screen
       @terminal.hide_cursor
+      EchoesClient.hide_pointer(io_out: @terminal)
       warm_code_highlight_cache
       render_current
       start_runner_bar_thread
@@ -73,6 +74,7 @@ module Przn
       @terminal.write "\e]7772;bg-clear\a"
       @terminal.write ImageUtil.kitty_clear_all if ImageUtil.kitty_terminal?
       @terminal.show_cursor
+      EchoesClient.show_pointer(io_out: @terminal)
       @terminal.leave_alt_screen
     end
 

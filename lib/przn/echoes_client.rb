@@ -29,6 +29,26 @@ module Przn
       nil
     end
 
+    # Tell Echoes to hide the OS mouse pointer over its window — same
+    # effect as the user's cmd-shift-p shortcut, but emitted at the
+    # start of a presentation so the pointer doesn't reappear every
+    # time the presenter brushes the trackpad. Non-Echoes terminals
+    # ignore the OSC.
+    def hide_pointer(io_out: $stdout)
+      io_out.write("#{OSC};hide-pointer#{BEL}")
+      io_out.flush if io_out.respond_to?(:flush)
+      true
+    end
+
+    # Restore the OS mouse pointer hidden by `hide_pointer`. Emitted on
+    # presentation teardown so the user gets their cursor back when they
+    # quit, instead of having to reach for cmd-shift-p.
+    def show_pointer(io_out: $stdout)
+      io_out.write("#{OSC};show-pointer#{BEL}")
+      io_out.flush if io_out.respond_to?(:flush)
+      true
+    end
+
     # Open a new Echoes window on the given display, running `argv` (an
     # Array of strings — argv[0] is the executable). `fullscreen:` is a hint.
     # Returns true if the request was emitted; nothing in the protocol confirms
