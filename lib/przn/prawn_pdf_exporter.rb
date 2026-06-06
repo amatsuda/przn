@@ -353,9 +353,44 @@ module Przn
       when :blockquote      then render_blockquote(pdf, block, margin_x, content_width, y)
       when :table           then render_table(pdf, block, margin_x, content_width, y)
       when :image           then render_image(pdf, block, margin_x, content_width, y)
+      when :ref             then render_ref(pdf, block, margin_x, content_width, y, align: align)
       when :blank           then y - @scale_to_pt[DEFAULT_SCALE]
       else y - @scale_to_pt[DEFAULT_SCALE]
       end
+    end
+
+    # Look up the source block by id and re-dispatch through render_block.
+    # Mirrors the terminal renderer's render_ref. PDF parity is partial in
+    # v1: refs to flow blocks (paragraph / list / code / blockquote /
+    # heading / table / image) render; refs to `<at>` or shapes match
+    # the source's existing Prawn limitation (those types aren't drawn
+    # in PDF today regardless).
+    def render_ref(pdf, block, margin_x, content_width, y, align: nil)
+      id = block[:attrs] && (block[:attrs][:id] || block[:attrs]['id'])
+      return y unless id
+      source = @presentation.find_by_id(id)
+      return y unless source
+
+      synthetic = source.dup
+      src_attrs = source[:attrs] || {}
+      merged = src_attrs.dup
+      (block[:attrs] || {}).each do |k, v|
+        next if k.to_s == 'id'
+        if src_attrs.key?(k.to_sym)
+          merged[k.to_sym] = v
+        elsif src_attrs.key?(k.to_s)
+          merged[k.to_s] = v
+        elsif k.is_a?(Symbol)
+          merged[k] = v
+        else
+          merged[k.to_s] = v
+        end
+      end
+      merged.delete(:id)
+      merged.delete('id')
+      synthetic[:attrs] = merged
+
+      render_block(pdf, synthetic, margin_x, content_width, y, align: align)
     end
 
     def render_heading(pdf, block, margin_x, content_width, y)

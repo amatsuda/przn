@@ -194,6 +194,16 @@ module Przn
             blocks << block
           end
 
+        # Cross-slide content reference. `<ref id="x"/>` re-renders the
+        # block whose original declaration carries `id="x"` (anywhere
+        # in the deck) at the ref's position. Same-tag attrs on the
+        # `<ref>` (typically x / y) override the source's, so the same
+        # callout can appear in a new spot without copy-pasting its
+        # content. Missing id is silently dropped, matching `<action>`.
+        when %r{\A\s*<ref((?:\s+#{ATTR_RE_SRC})*)\s*/>\s*\z}o
+          attrs = parse_xml_attrs(Regexp.last_match(1))
+          blocks << {type: :ref, attrs: attrs} if attrs[:id]
+
         # h2-h6 (sub-headings within slide)
         when /\A(\#{2,6})\s+(.*)/
           level = Regexp.last_match(1).size

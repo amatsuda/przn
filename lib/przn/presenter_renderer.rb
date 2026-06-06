@@ -8,8 +8,7 @@ module Przn
   # footer with the slide counter + elapsed time.
   class PresenterRenderer < Renderer
     def initialize(terminal, presentation:, base_dir: '.', theme: nil)
-      super(terminal, base_dir: base_dir, theme: theme, mode: :presenter)
-      @presentation = presentation
+      super(terminal, base_dir: base_dir, theme: theme, mode: :presenter, presentation: presentation)
       @started_at = Time.now
     end
 

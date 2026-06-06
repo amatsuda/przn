@@ -560,6 +560,29 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Cross-slide reference: <ref id= .../>' do
+    test '<ref id="x"/> is captured as a :ref block carrying the foreign id' do
+      slide = Przn::Parser.parse(%(# t\n\n<ref id="quote"/>\n)).slides[0]
+      ref = slide.blocks.find { |b| b[:type] == :ref }
+      assert_not_nil ref, 'a <ref id=…/> should produce a :ref block'
+      assert_equal 'quote', ref[:attrs][:id]
+    end
+
+    test '<ref> with extra attrs (override surface) keeps them on the block' do
+      slide = Przn::Parser.parse(%(# t\n\n<ref id="quote" x="20%" y="80%"/>\n)).slides[0]
+      ref = slide.blocks.find { |b| b[:type] == :ref }
+      assert_equal 'quote', ref[:attrs][:id]
+      assert_equal '20%',   ref[:attrs][:x]
+      assert_equal '80%',   ref[:attrs][:y]
+    end
+
+    test '<ref> without an id= is silently dropped (matches <action> w/o target=)' do
+      slide = Przn::Parser.parse(%(# t\n\n<ref x="10c"/>\n)).slides[0]
+      assert(slide.blocks.none? { |b| b[:type] == :ref },
+             'a <ref> with no id= must not produce a block')
+    end
+  end
+
   sub_test_case 'Slide background: <bg .../>' do
     test 'self-closing block with from/to/angle is captured as :bg' do
       slide = Przn::Parser.parse(%(# t\n\n<bg from="#1a1a2e" to="#16213e" angle="90"/>\n)).slides[0]

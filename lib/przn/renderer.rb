@@ -29,15 +29,19 @@ module Przn
     # Swap in a fresh theme without rebuilding the renderer (so the
     # image / kitty-upload caches survive). Used by the `r` reload
     # path so a theme.yml edit takes effect mid-session.
-    attr_accessor :theme
+    attr_accessor :theme, :presentation
     attr_reader :export_mode
 
-    def initialize(terminal, base_dir: '.', theme: nil, mode: :solo, export_mode: false)
+    def initialize(terminal, base_dir: '.', theme: nil, mode: :solo, export_mode: false, presentation: nil)
       @terminal = terminal
       @base_dir = base_dir
       @theme = theme || Theme.default
       @mode = mode
       @export_mode = export_mode
+      # Deck-wide context for `<ref id="..."/>` resolution. nil is
+      # fine for unit tests that exercise a single slide; the
+      # render_ref path no-ops without a presentation wired.
+      @presentation = presentation
       @image_cache = {}
       @kitty_uploads = {}
       @mutex = Mutex.new
@@ -664,9 +668,49 @@ module Przn
         when :wait            then row   # step boundary marker, not a renderable
         when :action          then row   # state mutation, applied via effective_attrs
         when :at              then render_at(block); row
+        when :ref             then render_ref(block, width, row, align: align)
         else row + 1
         end
       end
+    end
+
+    # Resolve a `<ref id="x"/>` block to its source declaration anywhere
+    # in the deck and re-dispatch through render_block. Same-tag attrs
+    # on the `<ref>` (typically x / y) override the source's. The
+    # synthetic clone is stripped of `id` so an `<action target="x"/>`
+    # on the *ref* slide can't accidentally bind to it — actions stay
+    # per-slide; the clone has no separate identity in v1.
+    def render_ref(block, width, row, align: nil)
+      return row unless @presentation
+      id = block[:attrs] && (block[:attrs][:id] || block[:attrs]['id'])
+      return row unless id
+      source = @presentation.find_by_id(id)
+      return row unless source
+
+      synthetic = source.dup
+      src_attrs = source[:attrs] || {}
+      # Preserve the source's per-key style (string vs symbol) when
+      # merging the ref's overrides — same trick effective_attrs uses
+      # at the action-override site so downstream renderers keep
+      # reading attrs the way they always have.
+      merged = src_attrs.dup
+      (block[:attrs] || {}).each do |k, v|
+        next if k.to_s == 'id'                    # never carry id forward
+        if src_attrs.key?(k.to_sym)
+          merged[k.to_sym] = v
+        elsif src_attrs.key?(k.to_s)
+          merged[k.to_s] = v
+        elsif k.is_a?(Symbol)
+          merged[k] = v
+        else
+          merged[k.to_s] = v
+        end
+      end
+      merged.delete(:id)
+      merged.delete('id')
+      synthetic[:attrs] = merged
+
+      render_block(synthetic, width, row, align: align)
     end
 
     # Wrap a block's render with the Echoes-private OSC 7772 cell-alpha

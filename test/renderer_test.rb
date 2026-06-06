@@ -2929,6 +2929,116 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'cross-slide reference: <ref id="x"/> via render_block' do
+    class RefFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    test 'a :ref block re-renders the source block found by Presentation#find_by_id' do
+      source = {type: :paragraph, content: 'shared text', attrs: {'id' => 'q'}}
+      ref    = {type: :ref, attrs: {id: 'q'}}
+      pres = Struct.new(:f).new(source)
+      pres.define_singleton_method(:find_by_id) { |id| id == 'q' ? source : nil }
+
+      term = RefFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, presentation: pres)
+      # render_block calls effective_attrs which needs @effective_state — set
+      # an empty hash to satisfy it without forcing a full render() call.
+      r.instance_variable_set(:@effective_state, {})
+      r.send(:render_block, ref, 80, 5)
+
+      writes = term.ops.select { |op, *| op == :write }.map { |_, s| s.to_s }.join
+      assert_includes writes, 'shared text',
+                      "expected the source paragraph's content rendered via the ref"
+    end
+
+    test 'ref attrs override source attrs on the synthetic clone' do
+      # The source has y="20%" but the ref overrides it to y="80%". We can't
+      # easily inspect the final terminal output, but we can intercept what
+      # render_block receives by stubbing it.
+      source = {type: :at, attrs: {id: 'q', x: 'center', y: '20%'}, content: 'hi'}
+      ref    = {type: :ref, attrs: {id: 'q', y: '80%'}}
+      pres = Struct.new(:f).new(source)
+      pres.define_singleton_method(:find_by_id) { |id| id == 'q' ? source : nil }
+
+      term = RefFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, presentation: pres)
+      r.instance_variable_set(:@effective_state, {})
+
+      captured = nil
+      r.define_singleton_method(:render_block) do |b, *args, **kw|
+        if b[:type] == :ref
+          # Reuse the real render_ref to exercise the merge logic.
+          super(b, *args, **kw)
+        else
+          captured = b
+          args.last  # synthetic blocks are dispatched at this `row`
+        end
+      end
+      r.send(:render_block, ref, 80, 5)
+
+      assert_not_nil captured, 'render_ref should have re-dispatched to the source type'
+      assert_equal :at,  captured[:type]
+      assert_equal '80%', captured[:attrs][:y], 'ref y= must override source y='
+      assert_equal 'center', captured[:attrs][:x], 'attrs not on the ref stay from the source'
+    end
+
+    test 'the synthetic clone has no id so per-slide actions cannot bind to it' do
+      source = {type: :paragraph, content: 'sticky', attrs: {'id' => 'q'}}
+      ref    = {type: :ref, attrs: {id: 'q'}}
+      pres = Struct.new(:f).new(source)
+      pres.define_singleton_method(:find_by_id) { |id| id == 'q' ? source : nil }
+
+      r = Przn::Renderer.new(RefFakeTerm.new(w: 80, h: 30), presentation: pres)
+      r.instance_variable_set(:@effective_state, {})
+
+      captured = nil
+      r.define_singleton_method(:render_block) do |b, *args, **kw|
+        if b[:type] == :ref
+          super(b, *args, **kw)
+        else
+          captured = b
+          args.last
+        end
+      end
+      r.send(:render_block, ref, 80, 5)
+
+      assert_nil captured[:attrs]['id'], "synthetic clone must not inherit the source's id"
+      assert_nil captured[:attrs][:id],  "synthetic clone must not inherit the source's id (symbol key form)"
+    end
+
+    test 'unknown ref id is a silent no-op (no crash, no writes)' do
+      ref = {type: :ref, attrs: {id: 'does-not-exist'}}
+      pres = Object.new
+      pres.define_singleton_method(:find_by_id) { |_| nil }
+
+      term = RefFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, presentation: pres)
+      r.instance_variable_set(:@effective_state, {})
+
+      assert_nothing_raised { r.send(:render_block, ref, 80, 5) }
+      assert(term.ops.none? { |op, *| op == :write },
+             'an unknown ref id should produce zero writes')
+    end
+
+    test 'a ref with no presentation wired is a silent no-op' do
+      ref = {type: :ref, attrs: {id: 'q'}}
+      term = RefFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term)   # no presentation:
+      r.instance_variable_set(:@effective_state, {})
+      assert_nothing_raised { r.send(:render_block, ref, 80, 5) }
+      assert(term.ops.none? { |op, *| op == :write })
+    end
+  end
+
   sub_test_case 'render_code_block: theme.code knobs' do
     class CodeFakeTerm
       attr_reader :ops

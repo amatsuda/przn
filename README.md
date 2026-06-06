@@ -480,9 +480,32 @@ Conclusion — revealed on the second Space press.
 - Reload (`r`) rewinds the current slide to step 0 so a re-parsed deck always starts collapsed.
 - Both forms are accepted: `<wait/>` (XML self-closing), `<wait></wait>` (paired), and the kramdown spelling `{::wait/}`.
 
+### Cross-slide reference — `<ref id="..."/>`
+
+Give any positioned block an `id="..."` and then re-render it on another slide (or twice on the same slide) by writing `<ref id="..."/>`. The reference looks up the block whose original declaration carries that id anywhere in the deck and dispatches to the same render path, so `<at>` text, `<img>` placements, and shapes all reappear at their original spot:
+
+```markdown
+# Slide 1
+
+<at id="lyric" x="center" y="50%">Stand by for Exciter</at>
+
+# Slide 5
+
+<ref id="lyric"/>                <!-- same text, same position -->
+<ref id="lyric" y="40%"/>        <!-- same text, moved to y=40% -->
+<ref id="lyric" y="80%"/>        <!-- same text, moved to y=80% -->
+```
+
+- Same-tag attrs on the `<ref>` (typically `x` / `y`, but anything the source's renderer reads) override the source's. Attrs you omit ride through from the source.
+- The synthetic clone the ref renders has no `id`, so an `<action target="..."/>` (see below) on the *ref* slide can't accidentally bind to it. Giving the ref instance its own animatable id is out of scope for v1.
+- Actions stay per-slide. An `<action target="lyric"/>` on the source slide does not animate the reference; the reference shows the source's declared (not animated) state.
+- First declaration wins on duplicate ids across the deck. Refs are skipped when building the lookup index, so a chain of refs (`<ref>` → `<ref>` → real source) doesn't resolve transitively in v1.
+- Unknown id → silent no-op (no crash, no writes), same fallback as an unknown `<action target="...">`.
+- PDF parity: refs to flow content (paragraph / list / code / blockquote / table / image) render in the Prawn PDF fallback; refs to `<at>` or shapes inherit the source's existing PDF limitation (those positioned types aren't drawn in PDF regardless).
+
 ### Actions — `<action target="..."/>`
 
-Give any positioned block an `id="..."`, then push attribute overrides onto it at a later step with `<action target="id" ...attrs.../>`. The most common use is moving an element across the slide as builds advance:
+The same `id="..."` attribute introduced for `<ref>` (above) also lets `<action>` push attribute overrides onto a target block at a later step within a slide. The most common use is moving an element across the slide as builds advance:
 
 ```markdown
 # Move demo

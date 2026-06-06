@@ -28,7 +28,7 @@ module Przn
     presentation.go_to(start_at - 1) if start_at
     terminal = Terminal.new
     base_dir = File.dirname(File.expand_path(file))
-    renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme)
+    renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme, presentation: presentation)
     Controller.new(presentation, terminal, renderer,
                    source_file: file, theme_path: theme_path)
   end
@@ -41,7 +41,7 @@ module Przn
     presentation = Parser.parse(markdown)
     terminal = Terminal.new
     base_dir = File.dirname(File.expand_path(file))
-    renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme, mode: :audience)
+    renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme, mode: :audience, presentation: presentation)
 
     terminal.enter_alt_screen
     terminal.hide_cursor

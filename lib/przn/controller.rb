@@ -106,6 +106,10 @@ module Przn
       new_presentation.go_to([@presentation.current, new_presentation.total - 1].min)
       @presentation = new_presentation
       @renderer.theme = new_theme
+      # Refresh the renderer's deck-wide ref index — without this an
+      # `r` reload would leave <ref id="..."/> resolving against the
+      # old presentation's blocks.
+      @renderer.presentation = new_presentation
       @slide_step = 0
       render_current
     rescue StandardError

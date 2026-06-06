@@ -208,6 +208,19 @@ Press Space again — the next group reveals.
 
 And again — the layout doesn't reflow, the hidden text was already reserved.
 
+# Cross-slide ref — `<ref id=…/>`
+
+<at id="quote" x="center" y="40%">🤘 Fall to your knees and repent if you please</at>
+
+Declared once above. The next slide ref's it in place — and again, moved.
+
+# …same quote, re-used
+
+<ref id="quote"/>
+<ref id="quote" y="80%"/>
+
+The text comes from the previous slide; the second `<ref>` overrides `y=`.
+
 # Actions — `<action>`
 
 <arrow id="arrow" x1="15" y1="27" x2="15" y2="20" stroke="cyan" stroke-width="0.5"/>

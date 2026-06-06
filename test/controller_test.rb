@@ -12,7 +12,7 @@ class ControllerTest < Test::Unit::TestCase
   end
 
   class FakeRenderer
-    attr_accessor :theme, :renders, :last_step
+    attr_accessor :theme, :renders, :last_step, :presentation
     def initialize; @renders = 0; @last_step = nil; end
     def render(*, **kwargs)
       @renders += 1
