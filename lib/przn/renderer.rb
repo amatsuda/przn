@@ -494,10 +494,28 @@ module Przn
       slots.each do |slot|
         blocks = buckets[slot.name] || []
         next if blocks.empty?
-        x = resolve_at_coord(slot.x, width, cell_px: cell_w)
-        y = resolve_at_coord(slot.y, height, cell_px: cell_h)
+        # Resolve slot width first — `x: center` / `right` need it to
+        # know where the slot's edges should land.
         w = resolve_at_coord(slot.width, width, cell_px: cell_w)
-        next unless x && y && w
+        next unless w
+        # `x:` may be numeric / `%` / `c` / `px` (slot starts at that
+        # column, alignment defaults to :left) OR a keyword (`left` /
+        # `center` / `right`). For keywords, the slot's effective
+        # starting column is computed from `width` and the slide
+        # width, AND the alignment passed into block rendering is
+        # taken from the keyword too — replacing the separate
+        # `align:` key that used to do this.
+        x_kw = alignment_keyword(slot.x, :x)
+        if x_kw
+          x = alignment_keyword_cell(x_kw, width, w, :x)
+          slot_align = x_kw.to_sym  # :left | :center | :middle | :right
+          slot_align = :center if slot_align == :middle
+        else
+          x = resolve_at_coord(slot.x, width, cell_px: cell_w)
+          slot_align = nil
+        end
+        y = resolve_at_coord(slot.y, height, cell_px: cell_h)
+        next unless x && y
 
         prev_offset = @x_offset
         prev_style = @slot_style
@@ -513,7 +531,7 @@ module Przn
             when :wait   then next
             when :action then next  # mutation already applied via @effective_state
             else
-              row = render_block_or_reserve(block, w, row, align: pending_align || slot.align)
+              row = render_block_or_reserve(block, w, row, align: pending_align || slot_align)
               pending_align = nil
             end
           end

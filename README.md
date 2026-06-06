@@ -368,23 +368,23 @@ right column content
 - bullet D
 ```
 
-**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optional styling: `align` (`left` / `center` / `right`, default `left`), `size` (OSC 66 scale: `1`-`7` or named `xx-small` … `xxxx-large`), `family` _(Echoes only)_, and `color` (named ANSI or 6-digit hex). Coordinates use the same convention as `<at>` and `<img x y>`: 1-based cells or `N%` of the terminal dimension. `%` values reflow on terminal resize.
+**Defining layouts.** Layouts live under the `layouts:` key in `theme.yml`. Each layout's value is an ordered list of slots; each slot has `name`, `x`, `y`, `width`, `height`, and optional styling: `size` (OSC 66 scale: `1`-`7` or named `xx-small` … `xxxx-large`), `family` _(Echoes only)_, and `color` (named ANSI or 6-digit hex). Coordinates use the same vocabulary as `<at>` and `<img x y>` — numeric cells, `N%`, `Nc`, `Npx`, or the alignment keywords `left` / `center` / `right` on `x` (and `top` / `center` / `bottom` on `y`). When `x` is a keyword the slot is positioned so its content lands at the requested alignment AND blocks routed into the slot inherit the same alignment, replacing the old separate `align:` key.
 
 ```yaml
 layouts:
   title-content:
-    - {name: title,   x: 5, y: 3,  width: 90%, height: 6, align: center}
-    - {name: content, x: 5, y: 10, width: 90%, height: 80%}
+    - {name: title,   x: center, y: 3,  width: 90%, height: 6}
+    - {name: content, x: 5,      y: 10, width: 90%, height: 80%}
   cover:
-    - {name: title,    x: 1, y: 35%, width: 100%, height: 25%, align: center, size: xxx-large}
-    - {name: subtitle, x: 1, y: 80%, width: 100%, height: 15%, align: center, color: dim}
+    - {name: title,    x: center, y: 35%, width: 100%, height: 25%, size: xxx-large}
+    - {name: subtitle, x: center, y: 80%, width: 100%, height: 15%}
   two-column:
-    - {name: title, x: 5,   y: 3,  width: 90%, height: 6, align: center}
-    - {name: left,  x: 5,   y: 10, width: 45%, height: 80%}
-    - {name: right, x: 50%, y: 10, width: 45%, height: 80%}
+    - {name: title, x: center, y: 3,  width: 90%, height: 6}
+    - {name: left,  x: 5,      y: 10, width: 45%, height: 80%}
+    - {name: right, x: 50%,    y: 10, width: 45%, height: 80%}
 ```
 
-`align: center` on a slot is what makes h1 titles (and any other content in that slot) horizontally centered — there's no implicit "h1 always centers" magic. Per-block `<center>` / `{:.center}` directives and inline tags (`<size>`, `<font>`, `<color>`) still override the slot's defaults per-segment.
+`x: center` on a slot is what makes h1 titles (and any other content routed into the slot) horizontally centered — there's no implicit "h1 always centers" magic. Per-block `<center>` / `{:.center}` directives and inline tags (`<size>`, `<font>`, `<color>`) still override the slot's defaults per-segment. The legacy `align: center` key on a slot is still accepted as a back-compat alias for `x: center`, so existing custom themes keep working until you migrate them.
 
 **Built-in layouts** (shipped in `default_theme.yml`):
 

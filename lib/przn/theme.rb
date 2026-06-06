@@ -6,21 +6,24 @@ module Przn
   class Theme
     DEFAULT_PATH = File.expand_path('../../../default_theme.yml', __FILE__)
 
-    # A rectangular region inside a slide. `x` / `y` are the 1-based
-    # cell coords of the slot's top-left; `width` / `height` are sizes
-    # in cells. All four are stored as the raw strings from the YAML
-    # ("5", "50%", "90%") and resolved at render time against the
-    # current terminal width / height by the same helper that handles
-    # `<at x y>` and `<img x y>` coords. `align` is the default
-    # horizontal alignment for blocks rendered into this slot (:left,
-    # :center, :right, or nil = :left); a per-block `<center>` /
-    # `{:.center}` still wins over the slot default. `size` /
-    # `family` / `color` are per-slot text-style overrides: `size`
-    # sets the base scale for h1 and paragraphs (accepts the same
-    # names as inline `<size>`); `family` and `color` cascade through
-    # render_segments_scaled to every text run in the slot. Inline
-    # tags (`<size>`, `<font>`, `<color>`) still win per-segment.
-    Slot = Struct.new(:name, :x, :y, :width, :height, :align, :size, :family, :color)
+    # A rectangular region inside a slide. `x` / `y` are stored as the
+    # raw strings from the YAML and resolved at render time against
+    # the current terminal width / height by the same helper that
+    # handles `<at x y>` and `<img x y>` coords — so `x` accepts the
+    # full vocabulary (cell, `%`, `c`, `px`, and the keyword forms
+    # `left` / `center` / `right`). When `x` is a keyword, the slot's
+    # effective starting column is computed against `width` AND the
+    # alignment used for blocks routed into the slot is derived from
+    # the same keyword (`x: center` → block align: center, slot
+    # positioned so its centre lands on the slide's centre).
+    #
+    # `size` / `family` / `color` are per-slot text-style overrides:
+    # `size` sets the base scale for h1 and paragraphs (accepts the
+    # same names as inline `<size>`); `family` and `color` cascade
+    # through render_segments_scaled to every text run in the slot.
+    # Inline tags (`<size>`, `<font>`, `<color>`) still win
+    # per-segment.
+    Slot = Struct.new(:name, :x, :y, :width, :height, :size, :family, :color)
 
     attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts
 
@@ -115,10 +118,17 @@ module Przn
         next unless slot_list.is_a?(Array)
         out[name.to_s] = slot_list.map { |s|
           h = s.transform_keys(&:to_sym)
+          # Back-compat: a legacy `align: center` (etc.) on a slot
+          # used to be a separate knob from `x:`. The two were always
+          # used together in practice — every built-in layout that
+          # set `align:` paired it with an `x:` whose only job was
+          # to leave room for the centred content. The new shape
+          # collapses them into `x: <keyword>`, so an old `align:`
+          # value overrides any numeric `x:` written alongside it.
+          x = h[:align] ? h[:align].to_s : h[:x].to_s
           Slot.new(
             h[:name].to_s,
-            h[:x].to_s, h[:y].to_s, h[:width].to_s, h[:height].to_s,
-            h[:align]&.to_sym,
+            x, h[:y].to_s, h[:width].to_s, h[:height].to_s,
             h[:size]&.to_s,
             h[:family]&.to_s,
             h[:color]&.to_s

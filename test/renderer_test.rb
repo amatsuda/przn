@@ -1338,7 +1338,7 @@ class RendererTest < Test::Unit::TestCase
       theme = Przn::Theme.default
       original = theme.layouts['default']
       theme.layouts['default'] = [
-        Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, nil, 'Menlo', nil)
+        Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, 'Menlo', nil)
       ]
       ps = Przn::Parser.parse("a paragraph\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
@@ -1357,7 +1357,7 @@ class RendererTest < Test::Unit::TestCase
       theme = Przn::Theme.default
       original = theme.layouts['default']
       theme.layouts['default'] = [
-        Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, nil, nil, 'red')
+        Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, nil, 'red')
       ]
       ps = Przn::Parser.parse("a paragraph\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
@@ -1371,28 +1371,27 @@ class RendererTest < Test::Unit::TestCase
       theme.layouts['default'] = original
     end
 
-    test 'slot align: center centers content WITHIN the slot, not the whole screen' do
-      # Define a custom layout: slot positioned at right half of the screen,
-      # 30% wide, with align: center. The title should land roughly in the
-      # middle of cols 40-63 — not centered on the screen.
+    test 'slot x: center positions a narrow slot on the slide centre line' do
+      # Slot is 30% wide (24 cells of an 80-cell pane), x: center.
+      # The slot's left edge should land at (80-24)/2 + 1 = 29, so
+      # the slot spans cols 29-52 and the title rendered inside it
+      # ends up centred against the slide centre (col 40).
       theme = Przn::Theme.default
       original = theme.layouts['default']
       theme.layouts['default'] = [
-        Przn::Theme::Slot.new('title', '50%', '5', '30%', '10', :center)
+        Przn::Theme::Slot.new('title', 'center', '5', '30%', '10', nil, nil, nil)
       ]
       ps = Przn::Parser.parse("# Hi\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
-      # current: 1 so the cover auto-pick doesn't override our default.
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
       moves = term.ops.select { |op, *| op == :move_to }
       title_move = moves.find { |_, r, _| r == 5 }
       assert_not_nil title_move, "expected move at row 5: #{moves.inspect}"
-      # Slot occupies cols 40-63 (24 wide). "Hi" at scale 4 ≈ 8 cells.
-      # Centered: pad = (24-8)/2 = 8, +1 = 9, + @x_offset (40-1=39) = 48.
-      assert_operator title_move[2], :>=, 40,
-                      "expected the title inside the right-half slot (>= col 40): #{title_move.inspect}"
-      assert_operator title_move[2], :<, 64,
-                      "expected the title NOT past the slot's right edge: #{title_move.inspect}"
+      # The title cursor lands within the slot's column band [29, 52].
+      assert_operator title_move[2], :>=, 29,
+                      "expected the slot's left edge at col 29: #{title_move.inspect}"
+      assert_operator title_move[2], :<=, 52,
+                      "expected the title to stay inside the centred slot: #{title_move.inspect}"
     ensure
       theme.layouts['default'] = original
     end

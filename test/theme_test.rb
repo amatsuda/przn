@@ -61,7 +61,7 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 1, slots.size
       slot = slots[0]
       assert_equal 'title',      slot.name
-      assert_equal :center,      slot.align
+      assert_equal 'center',     slot.x, 'takahashi title slot should be x: center'
       assert_equal 'xxxx-large', slot.size
     end
 
@@ -76,21 +76,21 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal %w[title subtitle], slots.map(&:name)
       assert_equal '35%', slots[0].y
       assert_equal '80%', slots[1].y
-      assert_equal :center, slots[0].align
-      assert_equal :center, slots[1].align
+      assert_equal 'center', slots[0].x
+      assert_equal 'center', slots[1].x
     end
 
-    test 'every built-in title slot opts into center alignment explicitly' do
+    test 'every built-in title slot opts into center alignment via x: center' do
       layouts = Przn::Theme.default.layouts
       %w[default cover title-only takahashi title-content two-column photo-caption].each do |name|
         title = layouts[name].find { |s| s.name == 'title' }
-        assert_equal :center, title.align, "expected #{name}.title to have align: center"
+        assert_equal 'center', title.x, "expected #{name}.title to have x: center"
       end
     end
 
-    test '`default` content slot has no alignment override (flush-left)' do
+    test '`default` content slot uses numeric x (flush-left, no keyword)' do
       content = Przn::Theme.default.layouts['default'].find { |s| s.name == 'content' }
-      assert_nil content.align
+      assert_equal '5', content.x, 'content slot should be at column 5, default left alignment'
     end
 
     test 'slot accepts size / family / color from YAML' do
