@@ -637,24 +637,48 @@ module Przn
     end
 
     def render_block(block, width, row, align: nil)
-      case block[:type]
-      when :heading         then render_heading(block, width, row, align: align)
-      when :paragraph       then render_paragraph(block, width, row, align: align)
-      when :code_block      then render_code_block(block, width, row)
-      when :unordered_list  then render_unordered_list(block, width, row)
-      when :ordered_list    then render_ordered_list(block, width, row)
-      when :definition_list then render_definition_list(block, width, row)
-      when :blockquote      then render_blockquote(block, width, row)
-      when :table           then render_table(block, width, row)
-      when :image           then render_image_or_skip(block, width, row)
-      when :shape           then row   # rendered in render()'s pre-pass
-      when :blank           then row + body_scale
-      when :bg              then row
-      when :slot            then row
-      when :wait            then row   # step boundary marker, not a renderable
-      when :action          then row   # state mutation, applied via effective_attrs
-      when :at              then render_at(block); row
-      else row + 1
+      with_block_opacity(block) do
+        case block[:type]
+        when :heading         then render_heading(block, width, row, align: align)
+        when :paragraph       then render_paragraph(block, width, row, align: align)
+        when :code_block      then render_code_block(block, width, row)
+        when :unordered_list  then render_unordered_list(block, width, row)
+        when :ordered_list    then render_ordered_list(block, width, row)
+        when :definition_list then render_definition_list(block, width, row)
+        when :blockquote      then render_blockquote(block, width, row)
+        when :table           then render_table(block, width, row)
+        when :image           then render_image_or_skip(block, width, row)
+        when :shape           then row   # rendered in render()'s pre-pass
+        when :blank           then row + body_scale
+        when :bg              then row
+        when :slot            then row
+        when :wait            then row   # step boundary marker, not a renderable
+        when :action          then row   # state mutation, applied via effective_attrs
+        when :at              then render_at(block); row
+        else row + 1
+        end
+      end
+    end
+
+    # Wrap a block's render with the Echoes-private OSC 7772 cell-alpha
+    # paint state when an action has driven its `opacity` (or the block
+    # itself ships an explicit `opacity=`). Non-Echoes terminals ignore
+    # the OSC. v1 only fades `put_char`-driven content (paragraphs,
+    # lists, code blocks, tables, blockquotes) — h1 multicells, runner
+    # emojis, and images stay opaque.
+    def with_block_opacity(block)
+      attrs = effective_attrs(block)
+      alpha_str = attrs['opacity'] || attrs[:opacity]
+      return yield unless alpha_str
+
+      alpha = alpha_str.to_f.clamp(0.0, 1.0)
+      return yield if alpha >= 1.0  # fully opaque — no fade to apply
+
+      @terminal.write "\e]7772;cell-alpha;#{alpha}\a"
+      begin
+        yield
+      ensure
+        @terminal.write "\e]7772;cell-alpha;1\a"
       end
     end
 

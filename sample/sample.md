@@ -222,6 +222,21 @@ A vertical arrow points up, well below the text. Press Space to step it across.
 
 <action target="arrow" x1="85" x2="85" duration="500ms"/>
 
+# Fade — `<action opacity=…>` _(Echoes only)_
+
+<at id="msg-out" x="center" y="40%">This message will fade out.</at>
+<at id="msg-in"  x="center" y="60%" opacity="0">…and this one fades in.</at>
+
+Press Space to step through the fade.
+
+<wait/>
+
+<action target="msg-out" opacity="0" duration="1s"/>
+
+<wait/>
+
+<action target="msg-in" opacity="1" duration="1s"/>
+
 # Thank you
 
 That's all — enjoy.

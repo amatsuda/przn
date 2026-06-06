@@ -2844,6 +2844,73 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'fade: action-driven opacity wraps render_block with OSC 7772 cell-alpha' do
+    class FadeFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def slide_with(blocks)
+      Struct.new(:blocks, :layout).new(blocks, nil)
+    end
+
+    def writes(term)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s.to_s }
+    end
+
+    test 'an action lerping opacity from 1→0 emits cell-alpha around the target block' do
+      # Initial opacity needs to be explicit on the block — lerp_attr falls
+      # back to the target value when `prev` is nil, which would snap to 0
+      # immediately instead of fading.
+      target = {type: :paragraph, content: 'fading text',
+                attrs: {'id' => 'p', 'opacity' => '1'}}
+      blocks = [target, {type: :wait},
+                {type: :action, attrs: {target: 'p', opacity: '0'}, duration_ms: 500.0}]
+
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term)
+      r.send(:render, slide_with(blocks), current: 0, total: 1, step: 1, progress: 0.5)
+
+      seqs = writes(term)
+      assert(seqs.any? { |s| s.match?(/\e\]7772;cell-alpha;0?\.5\a/) },
+             "expected mid-fade alpha around 0.5 in writes: #{seqs.inspect}")
+      assert(seqs.include?("\e]7772;cell-alpha;1\a"),
+             'expected an alpha=1 reset after the faded block')
+    end
+
+    test 'a block with no opacity attr (and no targeting action) emits no cell-alpha' do
+      blocks = [{type: :paragraph, content: 'plain'}]
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render, slide_with(blocks), current: 0, total: 1, step: 0)
+      assert(writes(term).none? { |s| s.include?('cell-alpha') },
+             'unexpected cell-alpha emitted for an un-faded block')
+    end
+
+    test 'opacity=1 (or fully-settled action) is a no-op — no OSC wrap' do
+      target = {type: :paragraph, content: 'opaque', attrs: {'id' => 'p', 'opacity' => '1'}}
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render, slide_with([target]), current: 0, total: 1, step: 0)
+      assert(writes(term).none? { |s| s.include?('cell-alpha') },
+             'opacity="1" should not emit a redundant cell-alpha wrap')
+    end
+
+    test 'block ships with opacity="0" stays invisible at step 0 (renders inside an alpha=0 wrap)' do
+      target = {type: :paragraph, content: 'hidden', attrs: {'id' => 'p', 'opacity' => '0'}}
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render, slide_with([target]), current: 0, total: 1, step: 0)
+      seqs = writes(term)
+      assert(seqs.include?("\e]7772;cell-alpha;0.0\a"),
+             "expected alpha=0 wrap for an initially-invisible block: #{seqs.inspect}")
+    end
+  end
+
   sub_test_case 'render_code_block: theme.code knobs' do
     class CodeFakeTerm
       attr_reader :ops
