@@ -53,5 +53,22 @@ class PresentationTest < Test::Unit::TestCase
       pres = Przn::Presentation.new(slides)
       assert_same pres.find_by_id('q'), pres.find_by_id('q')
     end
+
+    test 'finds an id declared inside a group block (deck-wide recursion)' do
+      inner = {type: :shape, kind: :rect, attrs: {'id' => 'inner-box', 'x' => '5'}}
+      group = {type: :group, attrs: {id: 'outer'}, children: [inner]}
+      pres = Przn::Presentation.new([Slide.new([group])])
+      assert_equal group, pres.find_by_id('outer'), 'outer group itself is indexed'
+      assert_equal inner, pres.find_by_id('inner-box'),
+                   'an id declared inside a group must be reachable through find_by_id'
+    end
+
+    test 'recursion walks nested groups too' do
+      inner = {type: :at, attrs: {id: 'deep'}, content: 'deep'}
+      mid   = {type: :group, attrs: {id: 'mid'}, children: [inner]}
+      outer = {type: :group, attrs: {id: 'outer'}, children: [mid]}
+      pres = Przn::Presentation.new([Slide.new([outer])])
+      assert_equal inner, pres.find_by_id('deep'), 'descend through nested groups'
+    end
   end
 end

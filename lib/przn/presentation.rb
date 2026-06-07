@@ -49,21 +49,32 @@ module Przn
 
     def build_id_index
       index = {}
-      @slides.each do |slide|
-        slide.blocks.each do |b|
-          next if b[:type] == :ref
-          a = b[:attrs]
-          next unless a
-          # Parser key style is split: `:at` and shapes keep symbols
-          # from parse_xml_attrs, while `:image` (and any other block
-          # that runs `transform_keys(&:to_s)`) stores string keys.
-          # Check both — same as compute_effective_state's by_id build.
-          bid = a['id'] || a[:id]
-          next unless bid
-          index[bid.to_s] ||= b
-        end
-      end
+      @slides.each { |slide| walk_blocks(slide.blocks) { |b| record_id(index, b) } }
       index
+    end
+
+    # Yield every block reachable from `blocks`, descending into
+    # `:group` (or any other) children. Lets the deck-wide index see
+    # ids declared inside composites so `<ref id="inner-x"/>` resolves
+    # to a nested block regardless of which group wraps it.
+    def walk_blocks(blocks, &block)
+      blocks.each do |b|
+        yield b
+        walk_blocks(b[:children], &block) if b[:children].is_a?(Array)
+      end
+    end
+
+    def record_id(index, b)
+      return if b[:type] == :ref
+      a = b[:attrs]
+      return unless a
+      # Parser key style is split: `:at` and shapes keep symbols
+      # from parse_xml_attrs, while `:image` (and any other block
+      # that runs `transform_keys(&:to_s)`) stores string keys.
+      # Check both — same as compute_effective_state's by_id build.
+      bid = a['id'] || a[:id]
+      return unless bid
+      index[bid.to_s] ||= b
     end
   end
 end

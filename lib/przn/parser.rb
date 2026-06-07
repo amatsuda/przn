@@ -204,6 +204,39 @@ module Przn
           attrs = parse_xml_attrs(Regexp.last_match(1))
           blocks << {type: :ref, attrs: attrs} if attrs[:id]
 
+        # Composite container — wraps an arbitrary sequence of child
+        # blocks under one id. `<ref id="x"/>` resolves a group source
+        # the same way it resolves any other id'd block, replaying the
+        # whole bundle on another slide. The opening and closing tags
+        # must each be alone on their own line (matches the line-level
+        # parsing model the rest of the block-level dispatch uses). A
+        # missing close tag or missing id is silently dropped — the
+        # next h1 / end-of-input ends the implicit scan.
+        when %r{\A\s*<group((?:\s+#{ATTR_RE_SRC})*)\s*>\s*\z}o
+          group_attrs = parse_xml_attrs(Regexp.last_match(1))
+          depth = 1
+          scan = i + 1
+          while scan < lines.size
+            if lines[scan] =~ %r{\A\s*<group((?:\s+#{ATTR_RE_SRC})*)\s*>\s*\z}o
+              depth += 1
+            elsif lines[scan] =~ %r{\A\s*</group>\s*\z}
+              depth -= 1
+              break if depth == 0
+            end
+            scan += 1
+          end
+          if depth == 0 && group_attrs[:id]
+            # Recurse on the inner lines via parse_slide so every existing
+            # block-level construct (paragraph, <at>, <img>, shapes, even
+            # nested <group>) works inside without duplicating the dispatch.
+            # Throw away any incidental h1 IAL the inner content yields —
+            # it belongs to the outer slide, not the group.
+            inner_text = lines[(i + 1)...scan].join
+            children = parse_slide(inner_text).blocks
+            blocks << {type: :group, attrs: group_attrs, children: children}
+            i = scan   # outer `i += 1` lands on the line after </group>
+          end
+
         # h2-h6 (sub-headings within slide)
         when /\A(\#{2,6})\s+(.*)/
           level = Regexp.last_match(1).size

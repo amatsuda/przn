@@ -354,9 +354,30 @@ module Przn
       when :table           then render_table(pdf, block, margin_x, content_width, y)
       when :image           then render_image(pdf, block, margin_x, content_width, y)
       when :ref             then render_ref(pdf, block, margin_x, content_width, y, align: align)
+      when :group           then render_group(pdf, block, margin_x, content_width, y, align: align)
       when :blank           then y - @scale_to_pt[DEFAULT_SCALE]
       else y - @scale_to_pt[DEFAULT_SCALE]
       end
+    end
+
+    # Walk a `<group>`'s children, threading y through each child's
+    # render. Same atomic-container semantics as the terminal renderer's
+    # render_group: align flows through; waits / actions pass without
+    # advancing y; everything else dispatches to render_block. v1
+    # caveat: positioned children (`<at>`, shapes) inherit the existing
+    # Prawn fallback limitation — neither type is drawn in PDF today.
+    def render_group(pdf, block, margin_x, content_width, y, align: nil)
+      pending_align = align
+      (block[:children] || []).each do |child|
+        case child[:type]
+        when :align  then pending_align = child[:align]
+        when :wait, :action then next
+        else
+          y = render_block(pdf, child, margin_x, content_width, y, align: pending_align)
+          pending_align = nil
+        end
+      end
+      y
     end
 
     # Look up the source block by id and re-dispatch through render_block.
@@ -371,9 +392,12 @@ module Przn
       source = @presentation.find_by_id(id)
       return y unless source
 
-      synthetic = source.dup
+      # Deep-clone the source (so a group source's children don't share
+      # storage with the deck) and strip ids from every descendant —
+      # mirrors the terminal renderer's render_ref semantics.
+      synthetic = deep_clone_strip_ids(source)
       src_attrs = source[:attrs] || {}
-      merged = src_attrs.dup
+      merged = synthetic[:attrs]
       (block[:attrs] || {}).each do |k, v|
         next if k.to_s == 'id'
         if src_attrs.key?(k.to_sym)
@@ -386,11 +410,24 @@ module Przn
           merged[k.to_s] = v
         end
       end
-      merged.delete(:id)
-      merged.delete('id')
-      synthetic[:attrs] = merged
 
       render_block(pdf, synthetic, margin_x, content_width, y, align: align)
+    end
+
+    # Recursive clone with every node's `id` stripped — same shape as
+    # the terminal renderer's helper. Kept local to the exporter (~10
+    # lines, no shared base class) rather than reaching across module
+    # boundaries.
+    def deep_clone_strip_ids(block)
+      cloned = block.dup
+      attrs = (block[:attrs] || {}).dup
+      attrs.delete(:id)
+      attrs.delete('id')
+      cloned[:attrs] = attrs
+      if block[:children].is_a?(Array)
+        cloned[:children] = block[:children].map { |c| deep_clone_strip_ids(c) }
+      end
+      cloned
     end
 
     def render_heading(pdf, block, margin_x, content_width, y)

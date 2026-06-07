@@ -503,6 +503,30 @@ Give any positioned block an `id="..."` and then re-render it on another slide (
 - Unknown id → silent no-op (no crash, no writes), same fallback as an unknown `<action target="...">`.
 - PDF parity: refs to flow content (paragraph / list / code / blockquote / table / image) render in the Prawn PDF fallback; refs to `<at>` or shapes inherit the source's existing PDF limitation (those positioned types aren't drawn in PDF regardless).
 
+### Composite reuse — `<group id="..."> ... </group>`
+
+`<ref>` re-renders one source block. When the thing you want to reuse is a *bundle* — a heading + backing rectangle + caption, say — wrap it in a `<group id="..."> ... </group>` and `<ref id="..."/>` replays the whole bundle:
+
+```markdown
+# Slide 1
+
+<group id="callout">
+<rect x="10" y="20" width="40" height="6" fill="tomato" opacity="0.3"/>
+<at x="30c" y="22c">Watch this part →</at>
+A caption beneath, in flow.
+</group>
+
+# Slide 5
+
+<ref id="callout"/>
+```
+
+- Children can be anything that already works at slide-body scope — paragraphs, `<at>`, `<img>`, shapes, even nested `<group>`s.
+- Each child's own id stays addressable deck-wide. `<ref id="<inner-id>"/>` resolves to a child of a group from anywhere; `<action target="<inner-id>"/>` on the **source** slide can animate it.
+- When a slide ref's the group, every descendant's id is stripped from the synthetic clone, so per-slide `<action target="..."/>` on the *ref* slide can't bind to any child. (Renaming a child inside a ref'd group is a v1 non-goal.)
+- The opening `<group ...>` and closing `</group>` tags each have to be alone on their own line — same line-level constraint the rest of the block-level dispatch uses. A missing close tag or a missing `id=` silently drops the group; the rest of the slide parses normally.
+- `<wait/>` inside a group does not drive sub-steps in v1. The slide-level step counter only sees waits at slide top level, so all children of a ref'd (or in-place) group render together. Authors who need incremental reveals can use slide-level waits between groups.
+
 ### Actions — `<action target="..."/>`
 
 The same `id="..."` attribute introduced for `<ref>` (above) also lets `<action>` push attribute overrides onto a target block at a later step within a slide. The most common use is moving an element across the slide as builds advance:

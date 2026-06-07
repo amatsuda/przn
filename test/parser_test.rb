@@ -583,6 +583,43 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Composite container: <group id= ...> ... </group>' do
+    test '<group id="x"> ... </group> parses into a :group block with children' do
+      md = "# t\n\n<group id=\"box\">\n## Inner\n\n<rect x=\"5\" y=\"5\" width=\"3\" height=\"3\" fill=\"red\"/>\n</group>\n"
+      slide = Przn::Parser.parse(md).slides[0]
+      g = slide.blocks.find { |b| b[:type] == :group }
+      assert_not_nil g
+      assert_equal 'box', g[:attrs][:id]
+      kinds = g[:children].map { |c| c[:type] }
+      assert_includes kinds, :heading
+      assert_includes kinds, :shape
+    end
+
+    test '<group> without an id= is silently dropped (matches <ref> w/o id=)' do
+      md = "# t\n\n<group>\nContent\n</group>\n"
+      slide = Przn::Parser.parse(md).slides[0]
+      assert(slide.blocks.none? { |b| b[:type] == :group },
+             'a <group> without id= must not produce a block')
+    end
+
+    test 'nested <group> works (inner group becomes a child of the outer)' do
+      md = "# t\n\n<group id=\"outer\">\nOuter text\n<group id=\"inner\">\nInner text\n</group>\nMore outer\n</group>\n"
+      slide = Przn::Parser.parse(md).slides[0]
+      outer = slide.blocks.find { |b| b[:type] == :group && b[:attrs][:id] == 'outer' }
+      assert_not_nil outer, 'outer group should be at slide top level'
+      inner = outer[:children].find { |c| c[:type] == :group && c[:attrs][:id] == 'inner' }
+      assert_not_nil inner, 'inner group should be a child of the outer group'
+    end
+
+    test 'missing </group> close tag is silently dropped — no crash, no partial block' do
+      md = "# t\n\n<group id=\"never-closed\">\nContent\n\nMore content\n"
+      slide = nil
+      assert_nothing_raised { slide = Przn::Parser.parse(md).slides[0] }
+      assert(slide.blocks.none? { |b| b[:type] == :group },
+             'an unclosed <group> must not produce a block (partial bundle would silently mislead)')
+    end
+  end
+
   sub_test_case 'Slide background: <bg .../>' do
     test 'self-closing block with from/to/angle is captured as :bg' do
       slide = Przn::Parser.parse(%(# t\n\n<bg from="#1a1a2e" to="#16213e" angle="90"/>\n)).slides[0]

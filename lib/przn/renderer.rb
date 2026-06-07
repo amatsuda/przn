@@ -299,13 +299,19 @@ module Przn
     def compute_effective_state(blocks, block_step, current_step, progress = 1.0)
       # Pre-index id'd blocks so an animating action can look up its
       # target's *original* attr values when no earlier action has
-      # claimed the same key yet.
+      # claimed the same key yet. Walks into `:group` children too so
+      # `<action target="inner"/>` on the same slide can drive a child
+      # of a sibling group, mirroring the deck-wide find_by_id index.
       by_id = {}
-      blocks.each do |b|
-        a = b[:attrs] || {}
-        bid = a['id'] || a[:id]
-        by_id[bid] = b if bid
+      index_ids = lambda do |bs|
+        bs.each do |b|
+          a = b[:attrs] || {}
+          bid = a['id'] || a[:id]
+          by_id[bid] = b if bid
+          index_ids.call(b[:children]) if b[:children].is_a?(Array)
+        end
       end
+      index_ids.call(blocks)
 
       state = {}
       blocks.each do |block|
@@ -669,9 +675,49 @@ module Przn
         when :action          then row   # state mutation, applied via effective_attrs
         when :at              then render_at(block); row
         when :ref             then render_ref(block, width, row, align: align)
+        when :group           then render_group(block, width, row, align: align)
         else row + 1
         end
       end
+    end
+
+    # Walk a `<group>`'s children in declaration order, threading the
+    # row through each child's render. Mirrors the top-level slide walk
+    # (renderer.rb's `slide.blocks.each` body and the layout path's
+    # `blocks.each`) — the same `:align` / `:wait` / `:action` handling
+    # so a group is a transparent container: anything that works at
+    # slide top level works inside a group. v1 caveat: `:wait` children
+    # don't drive sub-steps (compute_block_step only walks slide.blocks,
+    # not group children), so all children render at every step.
+    #
+    # `:shape` and fully-positioned `:image` children get dispatched to
+    # their renderers DIRECTLY here, not through render_block_or_reserve.
+    # At slide top level those types are drawn in render()'s pre-pass
+    # and skipped during the flow walk; the pre-pass doesn't recurse
+    # into group children, so without these inline calls a `<rect>` or
+    # positioned `<img>` inside a `<group>` would silently disappear
+    # (and so would the ref'd copy on another slide).
+    def render_group(block, width, row, align: nil)
+      pending_align = align
+      (block[:children] || []).each do |child|
+        case child[:type]
+        when :align then pending_align = child[:align]
+        when :wait, :action then next
+        when :shape then render_shape(child)
+        when :image
+          attrs = effective_attrs(child)
+          if attrs['x'] && attrs['y']
+            render_image(child, width, row)
+          else
+            row = render_block_or_reserve(child, width, row, align: pending_align)
+            pending_align = nil
+          end
+        else
+          row = render_block_or_reserve(child, width, row, align: pending_align)
+          pending_align = nil
+        end
+      end
+      row
     end
 
     # Resolve a `<ref id="x"/>` block to its source declaration anywhere
@@ -687,13 +733,18 @@ module Przn
       source = @presentation.find_by_id(id)
       return row unless source
 
-      synthetic = source.dup
+      # Deep-clone the source so a group source's children don't share
+      # storage with the deck (otherwise the id-scrub would mutate the
+      # canonical block). Every descendant's id is stripped too — a
+      # per-slide <action target="..."/> on the ref slide must not bind
+      # to any nested child of the synthesised clone.
+      synthetic = deep_clone_strip_ids(source)
       src_attrs = source[:attrs] || {}
-      # Preserve the source's per-key style (string vs symbol) when
-      # merging the ref's overrides — same trick effective_attrs uses
-      # at the action-override site so downstream renderers keep
-      # reading attrs the way they always have.
-      merged = src_attrs.dup
+      # Merge the ref's own attrs over the clone's top-level attrs,
+      # preserving the source's per-key style (string vs symbol) so
+      # downstream renderers keep reading attrs the way they always
+      # have — same trick effective_attrs uses at the action site.
+      merged = synthetic[:attrs]
       (block[:attrs] || {}).each do |k, v|
         next if k.to_s == 'id'                    # never carry id forward
         if src_attrs.key?(k.to_sym)
@@ -706,11 +757,25 @@ module Przn
           merged[k.to_s] = v
         end
       end
-      merged.delete(:id)
-      merged.delete('id')
-      synthetic[:attrs] = merged
 
       render_block(synthetic, width, row, align: align)
+    end
+
+    # Recursive clone of a block tree with every node's `id` stripped.
+    # Top-level dup is shallow but `:attrs` and `:children` get their
+    # own dup'd containers, so callers can mutate the result without
+    # touching the source. Used by render_ref to produce a tree whose
+    # descendants can't be action-targeted on the ref slide.
+    def deep_clone_strip_ids(block)
+      cloned = block.dup
+      attrs = (block[:attrs] || {}).dup
+      attrs.delete(:id)
+      attrs.delete('id')
+      cloned[:attrs] = attrs
+      if block[:children].is_a?(Array)
+        cloned[:children] = block[:children].map { |c| deep_clone_strip_ids(c) }
+      end
+      cloned
     end
 
     # Wrap a block's render with the Echoes-private OSC 7772 cell-alpha

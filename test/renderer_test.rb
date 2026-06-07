@@ -3039,6 +3039,116 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'group: composite container + ref-of-group' do
+    class GroupFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    test 'render_group walks children in declaration order' do
+      seen = []
+      block = {type: :group, attrs: {id: 'g'}, children: [
+        {type: :paragraph, content: 'first'},
+        {type: :paragraph, content: 'second'},
+        {type: :paragraph, content: 'third'}
+      ]}
+      r = Przn::Renderer.new(GroupFakeTerm.new(w: 80, h: 30))
+      r.instance_variable_set(:@effective_state, {})
+      r.define_singleton_method(:render_block_or_reserve) do |b, *_args, **_kw|
+        seen << b[:content] if b[:type] == :paragraph
+        5  # any row works for the test
+      end
+      r.send(:render_group, block, 80, 5)
+      assert_equal %w[first second third], seen
+    end
+
+    test 'render_ref deep-clones a group source and strips every descendant id' do
+      inner = {type: :shape, kind: :rect, attrs: {'id' => 'inner', 'x' => '5'}}
+      group = {type: :group, attrs: {id: 'g'}, children: [inner]}
+      pres = Object.new
+      pres.define_singleton_method(:find_by_id) { |id| id == 'g' ? group : nil }
+
+      r = Przn::Renderer.new(GroupFakeTerm.new(w: 80, h: 30), presentation: pres)
+      r.instance_variable_set(:@effective_state, {})
+
+      captured = nil
+      r.define_singleton_method(:render_block) do |b, *args, **kw|
+        if b[:type] == :ref
+          super(b, *args, **kw)   # exercise the real render_ref
+        else
+          captured = b   # the synthetic clone arrives here
+          args.last
+        end
+      end
+      r.send(:render_block, {type: :ref, attrs: {id: 'g'}}, 80, 5)
+
+      assert_equal :group, captured[:type]
+      assert_nil captured[:attrs][:id], "synthetic clone's top-level id must be stripped"
+      child = captured[:children].first
+      assert_nil child[:attrs]['id'],
+                 "every descendant id must be stripped so per-slide actions can't bind to the clone"
+      refute_same group, captured,
+                  'clone must be a fresh object, not the deck-wide source'
+      refute_same group[:children], captured[:children],
+                  'children must be deep-cloned, not aliased to the deck source'
+    end
+
+    test 'cloning does not mutate the source block tree' do
+      inner = {type: :shape, kind: :rect, attrs: {'id' => 'inner', 'x' => '5'}}
+      group = {type: :group, attrs: {id: 'g'}, children: [inner]}
+
+      r = Przn::Renderer.new(GroupFakeTerm.new(w: 80, h: 30))
+      clone = r.send(:deep_clone_strip_ids, group)
+      _ = clone  # quiet "unused" warnings if any
+
+      assert_equal 'g',     group[:attrs][:id],     'source group id must survive cloning'
+      assert_equal 'inner', group[:children].first[:attrs]['id'],
+                            'source descendant id must survive cloning'
+    end
+
+    test 'render_group dispatches :shape children directly (pre-pass does not recurse)' do
+      # Regression: at slide top level, :shape blocks are drawn in render()'s
+      # pre-pass and skipped during render_block. The pre-pass walks
+      # slide.blocks only, so a shape sitting inside a <group> would never
+      # be drawn — neither in the source slide nor when ref'd elsewhere.
+      # render_group must call render_shape inline for shape children.
+      shape = {type: :shape, kind: :rect,
+               attrs: {'id' => 'box', 'x' => '5', 'y' => '5', 'width' => '20', 'height' => '6', 'fill' => 'tomato'}}
+      group = {type: :group, attrs: {id: 'g'}, children: [shape]}
+
+      r = Przn::Renderer.new(GroupFakeTerm.new(w: 80, h: 30))
+      r.instance_variable_set(:@effective_state, {})
+
+      seen = []
+      r.define_singleton_method(:render_shape) { |b| seen << b }
+      r.send(:render_group, group, 80, 5)
+
+      assert_equal 1, seen.size,
+                   'render_group must invoke render_shape on shape children'
+      assert_equal shape, seen.first
+    end
+
+    test 'same-slide <action target="inner"> resolves to a child of a sibling group' do
+      # compute_effective_state's by_id should recurse into group children.
+      # Without that, an action targeting a deep id would no-op.
+      inner = {type: :shape, kind: :rect, attrs: {'id' => 'inner', 'x' => '5'}}
+      group = {type: :group, attrs: {id: 'g'}, children: [inner]}
+      action = {type: :action, attrs: {target: 'inner', x: '50'}}
+
+      r = Przn::Renderer.new(GroupFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [group, action], {}, 0, 1.0)
+      assert_equal '50', state['inner']['x'],
+                   "action target=inner should have written x=50 into the state for the nested rect"
+    end
+  end
+
   sub_test_case 'render_code_block: theme.code knobs' do
     class CodeFakeTerm
       attr_reader :ops

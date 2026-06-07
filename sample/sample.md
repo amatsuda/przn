@@ -221,6 +221,21 @@ Declared once above. The next slide ref's it in place — and again, moved.
 
 The text comes from the previous slide; the second `<ref>` overrides `y=`.
 
+# Composite reuse — `<group>`
+
+<group id="callout">
+<rect x="30%" y="50%" width="40%" height="6" fill="tomato" opacity="0.3" stroke="tomato"/>
+<at x="center" y="55%">Watch this part →</at>
+</group>
+
+A rectangle plus a caption, bundled. Press Space →
+
+# …re-used as one bundle
+
+<ref id="callout"/>
+
+Both the rect and the caption land in the same place — declared once.
+
 # Actions — `<action>`
 
 <arrow id="arrow" x1="15" y1="27" x2="15" y2="20" stroke="cyan" stroke-width="0.5"/>
