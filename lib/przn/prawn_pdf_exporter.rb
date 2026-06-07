@@ -435,7 +435,16 @@ module Przn
       if block[:level] == 1
         scale = KittyText::HEADING_SCALES[1]
         pt = @scale_to_pt[scale]
-        formatted = build_formatted_text(text, pt).map { |f| f.merge(styles: (f[:styles] || []) | [:bold]) }
+        # h1 spans get the bold heading weight, except spans that are
+        # already italic — Prawn would look up a `bold_italic` variant
+        # which the CJK fallback font doesn't ship, and the heading
+        # would crash. The italic span keeps its emphasis; the rest
+        # of the title stays bold.
+        formatted = build_formatted_text(text, pt).map do |f|
+          styles = f[:styles] || []
+          styles = styles | [:bold] unless styles.include?(:italic)
+          f.merge(styles: styles)
+        end
         h = render_formatted(pdf, formatted, at: [margin_x, y], width: content_width, align: :center)
         y - h - heading_margin(pt)
       else

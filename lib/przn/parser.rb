@@ -516,10 +516,17 @@ module Przn
           segments << [:bold, scanner[1]]
         elsif scanner.scan(/\*(.+?)\*/)
           segments << [:italic, scanner[1]]
+        # CommonMark spelling of bold / italic via underscores. Word-boundary
+        # guards (`(?<!\w)` / `(?!\w)`) keep `snake_case` and `foo__bar__baz`
+        # identifiers literal — only flanking underscores count.
+        elsif scanner.scan(/(?<!\w)__(.+?)__(?!\w)/)
+          segments << [:bold, scanner[1]]
+        elsif scanner.scan(/(?<!\w)_(.+?)_(?!\w)/)
+          segments << [:italic, scanner[1]]
         elsif scanner.scan(/~~(.+?)~~/)
           segments << [:strikethrough, scanner[1]]
         else
-          segments << [:text, scanner.scan(/[^`*~{<&]+|./)]
+          segments << [:text, scanner.scan(/[^`*~_{<&]+|./)]
         end
       end
 

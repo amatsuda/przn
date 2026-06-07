@@ -272,6 +272,34 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Inline - _emphasis_ and __strong__ (CommonMark underscore form)' do
+    test 'parses _word_ as italic' do
+      assert_equal [[:italic, 'word']], Przn::Parser.parse_inline('_word_')
+    end
+
+    test 'parses __word__ as bold' do
+      assert_equal [[:bold, 'word']], Przn::Parser.parse_inline('__word__')
+    end
+
+    test 'word-boundary guard keeps snake_case identifiers literal' do
+      # If italic underscores matched mid-word, `snake_case_var` would
+      # render as "snake" + italic "case" + "var".
+      result = Przn::Parser.parse_inline('snake_case_var')
+      assert_equal [[:text, 'snake_case_var']], result
+    end
+
+    test 'mid-word double underscores stay literal too (foo__bar__baz)' do
+      result = Przn::Parser.parse_inline('foo__bar__baz')
+      assert_equal [[:text, 'foo__bar__baz']], result
+    end
+
+    test 'flanking spaces qualify as boundaries — italic still wins' do
+      # Real prose use: " Fade — _(Echoes only)_" — leading space, parens.
+      result = Przn::Parser.parse_inline('see _(Echoes only)_ note')
+      assert_includes result, [:italic, '(Echoes only)']
+    end
+  end
+
   sub_test_case 'Rabbit: inline - ~~strikethrough~~' do
     test 'parses ~~strikethrough~~' do
       assert_equal [[:strikethrough, 'word']], Przn::Parser.parse_inline('~~word~~')
