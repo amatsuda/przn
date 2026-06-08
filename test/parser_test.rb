@@ -230,6 +230,22 @@ class ParserTest < Test::Unit::TestCase
       code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
       assert_equal '1', code[:attrs][:size], 'opener IAL is more visible to the author and should win'
     end
+
+    test '```mermaid fences emit a :mermaid block, not :code_block' do
+      md = "```mermaid\ngraph TD\n  A --> B\n```\n"
+      blocks = Przn::Parser.parse_slide(md).blocks
+      mer = blocks.find { |b| b[:type] == :mermaid }
+      assert_not_nil mer, 'expected a :mermaid block from ```mermaid'
+      assert(blocks.none? { |b| b[:type] == :code_block },
+             '```mermaid must not double-emit as a :code_block')
+      assert_equal "graph TD\n  A --> B\n", mer[:content]
+    end
+
+    test 'mermaid block carries per-block IAL through on attrs' do
+      md = "```mermaid {height=70%}\ngraph LR\n  X --> Y\n```\n"
+      mer = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :mermaid }
+      assert_equal '70%', mer[:attrs][:height]
+    end
   end
 
   sub_test_case 'Rabbit: block quotes' do

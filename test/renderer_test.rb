@@ -2003,6 +2003,61 @@ class RendererTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'render_mermaid: success → image dispatch; failure → plain code-block fallback' do
+    class MermaidFakeTerm
+      attr_reader :ops
+      def initialize(w: 80, h: 30); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def with_mermaid_stub(return_value)
+      original = Przn::MermaidRenderer.singleton_class.instance_method(:render)
+      Przn::MermaidRenderer.define_singleton_method(:render) { |*_, **_| return_value }
+      yield
+    ensure
+      Przn::MermaidRenderer.define_singleton_method(:render, original)
+    end
+
+    test 'renders the source as a plain code block when mmdc is unavailable' do
+      r = Przn::Renderer.new(MermaidFakeTerm.new)
+      block = {type: :mermaid, content: "graph TD\n  A --> B\n"}
+      with_mermaid_stub(nil) do
+        assert_nothing_raised { r.send(:render_mermaid, block, 80, 5) }
+      end
+    end
+
+    test 'on success, dispatches to the image render path with the cached PNG' do
+      r = Przn::Renderer.new(MermaidFakeTerm.new)
+      block = {type: :mermaid, content: "graph TD\n  A --> B\n", attrs: {height: '70%'}}
+
+      seen_synthetic = nil
+      r.define_singleton_method(:render_image_or_skip) do |b, *_args|
+        seen_synthetic = b
+        12  # arbitrary row return
+      end
+
+      with_mermaid_stub('/tmp/fake.png') do
+        File.write('/tmp/fake.png', 'X')  # has to exist + be non-empty
+        begin
+          r.send(:render_mermaid, block, 80, 5)
+        ensure
+          File.delete('/tmp/fake.png')
+        end
+      end
+
+      assert_equal :image,        seen_synthetic[:type]
+      assert_equal '/tmp/fake.png', seen_synthetic[:path]
+      assert_equal '70%',           seen_synthetic[:attrs]['height'],
+                   'IAL attrs ride through to the synthetic image block as string keys'
+    end
+  end
+
   sub_test_case 'render_shape' do
     class ShapeFakeTerm
       attr_reader :ops

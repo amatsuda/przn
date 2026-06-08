@@ -164,6 +164,33 @@ end
 
 `size` accepts the same forms as `<size=…>` (numeric `1`–`7` or named `xx-small` … `xxxx-large`). `family`, `color`, and `bg` are also recognized and override `theme.code.family` / `theme.code.color` / `theme.code.bg` for that one block. Multi-attr forms work with either separator: `{size: small, family: Menlo}` and `{size=2, color=cyan}` both parse.
 
+### Mermaid diagrams
+
+A `mermaid` fence renders to an inline image via the [mermaid CLI](https://github.com/mermaid-js/mermaid-cli):
+
+````markdown
+```mermaid
+graph TD
+  A[Idea] --> B{Demo?}
+  B -->|yes| C[Run live]
+  B -->|no| D[Static slide]
+```
+````
+
+The rendered PNG is cached for the session in a tmpdir keyed by SHA256 of the source, so the same diagram repeated across slides (or after a reload) shells out exactly once. Per-block IAL sizes the placement — `height` / `width` / `relative_height` / `relative_width` work the same as on `<img>`:
+
+````markdown
+```mermaid {height=70%}
+…
+```
+````
+
+Requirements:
+- `mmdc` on `PATH` — install via `npm i -g @mermaid-js/mermaid-cli`.
+- Puppeteer's headless Chrome — `mmdc` shells out to it. If you see a "Could not find Chrome" error, run `npx puppeteer browsers install chrome-headless-shell` once.
+
+The diagram is rendered with `-b transparent` so the slide background (theme bg / gradient / `<bg>`) shows through. If `mmdc` is missing or fails, the source falls back to a plain fenced block so the slide still shows the diagram text.
+
 ### Block quotes
 
 ```markdown

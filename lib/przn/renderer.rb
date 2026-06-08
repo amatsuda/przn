@@ -667,6 +667,7 @@ module Przn
         when :blockquote      then render_blockquote(block, width, row)
         when :table           then render_table(block, width, row)
         when :image           then render_image_or_skip(block, width, row)
+        when :mermaid         then render_mermaid(block, width, row)
         when :shape           then row   # rendered in render()'s pre-pass
         when :blank           then row + body_scale
         when :bg              then row
@@ -718,6 +719,38 @@ module Przn
         end
       end
       row
+    end
+
+    # Render a `<mermaid>` block by shelling out to mmdc once per
+    # unique source (cached for the session), then dispatch as an
+    # inline image. Per-block IAL (`{height=70%}` etc.) carries
+    # through to the synthetic image's attrs, so sizing is the same
+    # surface `<img>` already offers.
+    #
+    # When mmdc fails (not installed, headless Chrome missing,
+    # bad-syntax source, …) we fall back to rendering the mermaid
+    # source as a plain code block so the slide still shows
+    # something useful instead of silently going blank.
+    def render_mermaid(block, width, row)
+      png_path = MermaidRenderer.render(block[:content])
+      if png_path && File.exist?(png_path)
+        synthetic = {
+          type: :image,
+          path: png_path,
+          alt: '',
+          title: '',
+          attrs: (block[:attrs] || {}).transform_keys(&:to_s)
+        }
+        render_image_or_skip(synthetic, width, row)
+      else
+        # Plain-text fallback. `language: nil` skips syntax highlight;
+        # the dim-gray bg + body font shape still makes the source
+        # readable and obvious that something failed to render.
+        render_code_block(
+          {type: :code_block, content: block[:content], language: nil},
+          width, row
+        )
+      end
     end
 
     # Resolve a `<ref id="x"/>` block to its source declaration anywhere

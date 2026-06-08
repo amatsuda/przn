@@ -138,7 +138,15 @@ module Przn
             trailing = parse_ial_attrs(lines[i][/\{([^}]*)\}/, 1] || '')
             attrs = trailing.merge(attrs || {}) unless trailing.empty?
           end
-          block = {type: :code_block, content: code_lines.join, language: lang}
+          # ```mermaid is special-cased into its own block type — the
+          # renderer shells out to mmdc to produce a PNG and places it
+          # as an inline image. Per-block IAL (`{height=70%}`, etc.)
+          # rides through on attrs to size the placement.
+          block = if lang == 'mermaid'
+                    {type: :mermaid, content: code_lines.join}
+                  else
+                    {type: :code_block, content: code_lines.join, language: lang}
+                  end
           block[:attrs] = attrs if attrs && !attrs.empty?
           blocks << block
 
