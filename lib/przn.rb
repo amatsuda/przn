@@ -15,6 +15,7 @@ require_relative 'przn/renderer'
 require_relative 'przn/presenter_renderer'
 require_relative 'przn/audience_link'
 require_relative 'przn/echoes_client'
+require_relative 'przn/file_watcher'
 require_relative 'przn/controller'
 require_relative 'przn/screenshot_pdf_exporter'
 require_relative 'przn/theme'
@@ -22,7 +23,7 @@ require_relative 'przn/theme'
 module Przn
   class Error < StandardError; end
 
-  def self.start(file, theme: nil, theme_path: nil, start_at: nil)
+  def self.start(file, theme: nil, theme_path: nil, start_at: nil, watch: true)
     markdown = File.read(file)
     presentation = Parser.parse(markdown)
     presentation.go_to(start_at - 1) if start_at
@@ -30,7 +31,7 @@ module Przn
     base_dir = File.dirname(File.expand_path(file))
     renderer = Renderer.new(terminal, base_dir: base_dir, theme: theme, presentation: presentation)
     Controller.new(presentation, terminal, renderer,
-                   source_file: file, theme_path: theme_path)
+                   source_file: file, theme_path: theme_path, watch: watch)
   end
 
   # Audience-side entry: opens the file, listens on `socket`, and renders

@@ -182,6 +182,86 @@ class ControllerTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'auto-reload: jump_to_change finds the edited slide' do
+    def make_controller_at_path(path, current: 0)
+      ps = Przn::Parser.parse(File.read(path))
+      ps.go_to(current)
+      Przn::Controller.new(ps, @term, @renderer, source_file: path)
+    end
+
+    test 'jumps to the slide whose source markdown changed' do
+      tmp = Tempfile.new(['watched', '.md'])
+      tmp.write("# A\n\nfirst\n\n# B\n\nsecond\n\n# C\n\nthird\n")
+      tmp.flush
+
+      # Construct controller with the initial source snapshot.
+      c = make_controller_at_path(tmp.path, current: 0)
+      c.instance_variable_set(:@last_source, File.read(tmp.path))
+
+      # Edit slide B only.
+      File.write(tmp.path, "# A\n\nfirst\n\n# B\n\nSECOND edited\n\n# C\n\nthird\n")
+      c.send(:reload, jump_to_change: true)
+
+      assert_equal 1, c.instance_variable_get(:@presentation).current,
+                   'reload should land on slide B (index 1) — the one that just changed'
+    ensure
+      tmp&.close!
+    end
+
+    test 'jumps to the new slide when one is appended at the end' do
+      tmp = Tempfile.new(['watched', '.md'])
+      tmp.write("# A\n\nfirst\n\n# B\n\nsecond\n")
+      tmp.flush
+
+      c = make_controller_at_path(tmp.path, current: 0)
+      c.instance_variable_set(:@last_source, File.read(tmp.path))
+
+      File.write(tmp.path, "# A\n\nfirst\n\n# B\n\nsecond\n\n# C\n\nthird\n")
+      c.send(:reload, jump_to_change: true)
+
+      assert_equal 2, c.instance_variable_get(:@presentation).current,
+                   'appending a slide should land the cursor on the new last slide'
+    ensure
+      tmp&.close!
+    end
+
+    test 'jump_to_change with no change falls back to current-slide preservation' do
+      tmp = Tempfile.new(['watched', '.md'])
+      src = "# A\n\nx\n\n# B\n\ny\n"
+      tmp.write(src)
+      tmp.flush
+
+      c = make_controller_at_path(tmp.path, current: 1)
+      c.instance_variable_set(:@last_source, src)
+
+      # Rewrite the same source — no chunk differs.
+      File.write(tmp.path, src)
+      c.send(:reload, jump_to_change: true)
+
+      assert_equal 1, c.instance_variable_get(:@presentation).current
+    ensure
+      tmp&.close!
+    end
+
+    test 'jump_to_change with no prior snapshot stays on the current slide (first-reload semantics)' do
+      tmp = Tempfile.new(['watched', '.md'])
+      tmp.write("# A\n\nx\n\n# B\n\ny\n")
+      tmp.flush
+
+      c = make_controller_at_path(tmp.path, current: 1)
+      # NB: @last_source intentionally unset — emulates the first
+      # reload before the watcher has cached any source.
+
+      File.write(tmp.path, "# A\n\nedited!\n\n# B\n\ny\n")
+      c.send(:reload, jump_to_change: true)
+
+      assert_equal 1, c.instance_variable_get(:@presentation).current,
+                   'without a snapshot to diff against, preserve the current slide'
+    ensure
+      tmp&.close!
+    end
+  end
+
   sub_test_case 'step navigation: <wait/> reveals' do
     def make_controller(markdown)
       ps = Przn::Parser.parse(markdown)

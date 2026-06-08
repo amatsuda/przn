@@ -78,6 +78,10 @@ Without `gs` on `$PATH` the file is left at its lossless-only size and a one-lin
 | `r` | Reload the deck (and `theme.yml`) from disk, keeping the current slide index |
 | `q` `Ctrl-C` | Quit |
 
+### Hot reload
+
+The deck file and the sibling `theme.yml` are watched in the background; saving either re-renders automatically. A source save lands you on the slide you just edited (the first chunk whose markdown differs from the prior snapshot); a theme save re-renders in place. Bad syntax mid-edit is swallowed silently — the previous slide stays on screen until the next save parses cleanly. Pass `--no-watch` to disable; the manual `r` binding still works in either mode.
+
 ## Markdown format
 
 przn's Markdown format is based on [Rabbit](https://rabbit-shocker.org/)'s Markdown mode with some extensions with HTML-ish tags.

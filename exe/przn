@@ -26,6 +26,7 @@ OptionParser.new do |opts|
   opts.on('--present', 'Open the deck in presenter mode (auto-spawns an audience window on the secondary display)') { options[:present] = true }
   opts.on('--audience', 'Run as the audience receiver (spawned by --present; expects --socket)') { options[:audience] = true }
   opts.on('--socket PATH', 'Unix socket path used by --present/--audience to coordinate') { |v| options[:socket] = v }
+  opts.on('--no-watch', 'Disable hot reload (default on; auto-reloads the deck and theme.yml when they change on disk)') { options[:watch] = false }
 end.parse!
 
 if options[:generate_theme]
@@ -76,6 +77,7 @@ else
   elsif options[:present]
     Przn.present(file, theme: theme, theme_path: options[:theme]).run
   else
-    Przn.start(file, theme: theme, theme_path: options[:theme], start_at: start_at).run
+    Przn.start(file, theme: theme, theme_path: options[:theme], start_at: start_at,
+               watch: options.fetch(:watch, true)).run
   end
 end
