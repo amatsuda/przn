@@ -110,10 +110,17 @@ module Przn
         when %r{\A\s*\{::at((?:\s+#{ATTR_RE_SRC})+)\}(.*)\{:/at\}\s*\z}o
           blocks << {type: :at, attrs: parse_xml_attrs(Regexp.last_match(1)), content: Regexp.last_match(2)}
 
-        # Fenced code block
-        when /\A\s*```(\w*)\s*\z/
+        # Fenced code block. Optional kramdown-style IAL right after the
+        # language lets one block override the theme's per-attribute
+        # code defaults — typically `size` to shrink a long snippet to
+        # one scale, or `family` / `color` / `bg` for a one-off look:
+        #   ```ruby {size=1}
+        #   ```ruby {size: small, family: Menlo}
+        when /\A\s*```(\w*)\s*(?:\{([^}]*)\})?\s*\z/
           lang = Regexp.last_match(1)
           lang = nil if lang.empty?
+          ial_inner = Regexp.last_match(2)
+          attrs = ial_inner ? parse_ial_attrs(ial_inner) : nil
           code_lines = []
           i += 1
           while i < lines.size && !lines[i].match?(/\A\s*```\s*\z/)
@@ -126,8 +133,14 @@ module Przn
             if lines[i].match(/lang="(\w+)"/)
               lang = Regexp.last_match(1)
             end
+            # Closing-line IAL can also carry per-block style overrides,
+            # merged WITHOUT clobbering the opener IAL (opener wins).
+            trailing = parse_ial_attrs(lines[i][/\{([^}]*)\}/, 1] || '')
+            attrs = trailing.merge(attrs || {}) unless trailing.empty?
           end
-          blocks << {type: :code_block, content: code_lines.join, language: lang}
+          block = {type: :code_block, content: code_lines.join, language: lang}
+          block[:attrs] = attrs if attrs && !attrs.empty?
+          blocks << block
 
         # Indented code block (4 spaces)
         when /\A {4}(.*)$/
@@ -387,14 +400,25 @@ module Przn
     def extract_h1_ial(content)
       return [content, {}] unless content =~ /\A(.*?)\s*\{([^}]*)\}\s*\z/
       body  = Regexp.last_match(1)
-      inner = Regexp.last_match(2).sub(/\A:?\s*/, '')
+      inner = Regexp.last_match(2)
 
-      attrs = {}
-      inner.scan(/(\w+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|([^\s=:<>"',}]+))/) do |key, dq, sq, uq|
-        attrs[key.to_sym] = dq || sq || uq
-      end
+      attrs = parse_ial_attrs(inner)
       return [content, {}] if attrs.empty?
       [body, attrs]
+    end
+
+    # Scan the inside of an IAL brace block for key=value / key: value
+    # pairs and return a symbol-keyed hash. Accepts quoted (single /
+    # double) and unquoted values; ignores a leading kramdown `:` so
+    # `{:layout=name}` and `{layout=name}` parse the same. Empty inner
+    # → {} (caller decides whether that's a parse failure or a no-op).
+    def parse_ial_attrs(inner)
+      stripped = inner.to_s.sub(/\A:?\s*/, '')
+      attrs = {}
+      stripped.scan(/(\w+)\s*[=:]\s*(?:"([^"]*)"|'([^']*)'|([^\s=:<>"',}]+))/) do |key, dq, sq, uq|
+        attrs[key.to_sym] = dq || sq || uq
+      end
+      attrs
     end
 
     # HTML4-style <font face="..." size="..." color="..."> attributes.

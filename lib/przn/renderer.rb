@@ -1777,10 +1777,15 @@ module Przn
       #   bg     — block background; falls back to the historical
       #            dim gray (ANSI 256-color 236).
       cfg = @theme.code || {}
-      scale = (cfg[:size] && Parser::SIZE_SCALES[cfg[:size].to_s]) || body_scale
-      face = cfg[:family] || @theme.font[:family]
-      bg_sgr = code_bg_sgr(cfg[:bg])
-      default_fg = cfg[:color]
+      # Per-block IAL on the fenced opener (```ruby {size=1}` etc.) wins
+      # over theme.code so an author can shrink one long snippet without
+      # touching the deck-wide default.
+      block_attrs = block[:attrs] || {}
+      size_raw = block_attrs[:size] || cfg[:size]
+      scale = (size_raw && Parser::SIZE_SCALES[size_raw.to_s]) || body_scale
+      face = block_attrs[:family] || cfg[:family] || @theme.font[:family]
+      bg_sgr = code_bg_sgr(block_attrs[:bg] || cfg[:bg])
+      default_fg = block_attrs[:color] || cfg[:color]
       default_fg_sgr = (default_fg && color_code(default_fg)) || ''
 
       left = content_left(width)

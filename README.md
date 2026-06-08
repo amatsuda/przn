@@ -145,6 +145,21 @@ Indented code blocks (4 spaces) with an optional kramdown IAL pick up highlighti
 
 Blocks without a language fall back to the same gray-on-dim plain text. The color scheme is fixed (tuned for the dim background) — comments dim, strings green, keywords cyan, numbers magenta, function / type names yellow / green.
 
+A kramdown-style IAL right after the language overrides the theme's `code.*` defaults for that one block. Most useful for shrinking a long snippet down to a smaller size without touching the deck-wide default:
+
+````markdown
+```ruby {size=1}
+class Slide
+  attr_reader :title, :body, :notes
+  def initialize(title:, body: "", notes: [])
+    # …
+  end
+end
+```
+````
+
+`size` accepts the same forms as `<size=…>` (numeric `1`–`7` or named `xx-small` … `xxxx-large`). `family`, `color`, and `bg` are also recognized and override `theme.code.family` / `theme.code.color` / `theme.code.bg` for that one block. Multi-attr forms work with either separator: `{size: small, family: Menlo}` and `{size=2, color=cyan}` both parse.
+
 ### Block quotes
 
 ```markdown

@@ -3211,6 +3211,57 @@ class RendererTest < Test::Unit::TestCase
       assert(out.include?('s=3;'), "expected s=3 from `size: large`: #{out.inspect[0,200]}")
     end
 
+    def render_block_with_attrs(theme, attrs, code = "x = 1\n")
+      term = CodeFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: theme)
+      r.send(:render_code_block,
+             {type: :code_block, content: code, language: nil, attrs: attrs}, 80, 2)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+    end
+
+    test 'per-block IAL size overrides theme.code.size' do
+      # Theme says size: large (= 3); block IAL says size=1.
+      out = render_block_with_attrs(code_theme(size: 'large'), {size: '1'})
+      assert(out.include?('s=1;'),
+             "block IAL size=1 should win over theme.code.size=large: #{out.inspect[0,200]}")
+      refute(out.include?('s=3;'),
+             "theme.code.size should not bleed through when block overrides it")
+    end
+
+    test 'per-block size accepts named scales (small → s=2)' do
+      out = render_block_with_attrs(code_theme(size: 'large'), {size: 'small'})
+      assert(out.include?('s=2;'),
+             "block IAL size=small should resolve to scale 2: #{out.inspect[0,200]}")
+    end
+
+    test 'per-block IAL family / bg / color override their theme counterparts' do
+      prev = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      begin
+        theme = code_theme(family: 'JetBrains Mono', bg: '#000000', color: 'cyan')
+        out = render_block_with_attrs(theme, {family: 'Menlo', bg: '#1e1e2e', color: 'yellow'})
+        assert(out.include?('f=Menlo'),
+               "block IAL family should win: #{out.inspect[0,200]}")
+        assert(out.include?("\e[48;2;30;30;46m"),
+               "block IAL bg #1e1e2e (truecolor) should win over the theme's #000000")
+        # `yellow` resolves through CSS_NAMED_COLORS (ffff00) → truecolor
+        # SGR rather than the ANSI 33 alias.
+        assert(out.include?("\e[38;2;255;255;0m"),
+               "block IAL color=yellow should emit truecolor 255,255,0: #{out.inspect[0,200]}")
+      ensure
+        ENV['TERM_PROGRAM'] = prev
+      end
+    end
+
+    test 'unset block attrs fall back to theme.code (no clobber)' do
+      # OSC param order is `s=N:f=…;text`, so look for s=3 followed by
+      # any param separator — `:` when family rides along, `;` when it
+      # doesn't.
+      out = render_block_with_attrs(code_theme(size: 'large'), {family: 'Menlo'})
+      assert(out.match?(/s=3[:;]/),
+             "theme.code.size=large should still apply when the block only overrides family")
+    end
+
     test 'code.family is threaded into OSC 66 f= (Echoes path)' do
       prev = ENV['TERM_PROGRAM']
       ENV['TERM_PROGRAM'] = 'Echoes'

@@ -191,6 +191,45 @@ class ParserTest < Test::Unit::TestCase
       code = slide.blocks.find { |b| b[:type] == :code_block }
       assert_equal 'ruby', code[:language]
     end
+
+    test 'opener-line IAL captures per-block size override (numeric)' do
+      md = "```ruby {size=1}\ndef f; end\n```\n"
+      code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
+      assert_equal 'ruby', code[:language]
+      assert_equal '1', code[:attrs][:size]
+    end
+
+    test 'opener-line IAL also accepts named sizes and the colon separator' do
+      md = "```ruby {size: small}\ndef f; end\n```\n"
+      code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
+      assert_equal 'small', code[:attrs][:size]
+    end
+
+    test 'opener-line IAL carries multiple attrs (size + family)' do
+      md = "```ruby {size=2, family=Menlo}\ndef f; end\n```\n"
+      code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
+      assert_equal '2',     code[:attrs][:size]
+      assert_equal 'Menlo', code[:attrs][:family]
+    end
+
+    test 'opener IAL without a language still works' do
+      md = "```{size=1}\nplain\n```\n"
+      code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
+      assert_nil code[:language]
+      assert_equal '1', code[:attrs][:size]
+    end
+
+    test 'no IAL → block carries no :attrs key (back-compat shape preserved)' do
+      md = "```\nplain\n```\n"
+      code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
+      refute code.key?(:attrs), 'plain fenced block must not introduce an :attrs key'
+    end
+
+    test 'opener IAL wins over closing kramdown IAL when both name the same attr' do
+      md = "```ruby {size=1}\ndef f; end\n```\n{: size=\"3\"}\n"
+      code = Przn::Parser.parse_slide(md).blocks.find { |b| b[:type] == :code_block }
+      assert_equal '1', code[:attrs][:size], 'opener IAL is more visible to the author and should win'
+    end
   end
 
   sub_test_case 'Rabbit: block quotes' do
