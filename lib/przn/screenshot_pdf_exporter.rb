@@ -85,7 +85,10 @@ module Przn
       @terminal.hide_cursor
       @presentation.slides.each_with_index do |slide, i|
         pdf_path = File.join(dir, format('slide-%04d.pdf', i))
-        @renderer.render(slide, current: i, total: @presentation.total)
+        # Render at the final reveal — a PDF is a static artifact, so
+        # every `<wait/>` step should already be visible on the page.
+        final_step = @renderer.step_count(slide) - 1
+        @renderer.render(slide, current: i, total: @presentation.total, step: final_step)
         request_capture(pdf_path)
         wait_for_capture(pdf_path)
         paths << pdf_path

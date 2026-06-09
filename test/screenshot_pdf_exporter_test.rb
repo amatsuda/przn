@@ -77,6 +77,29 @@ class ScreenshotPdfExporterTest < Test::Unit::TestCase
     ENV['PRZN_GS'] = @prev_gs
   end
 
+  test 'renders content past <wait/> on each captured page' do
+    # Each page should show the slide's FINAL reveal state — a PDF is a
+    # static artifact, so an exported deck must include everything that
+    # `<wait/>` walks the audience through.
+    presentation = Przn::Parser.parse("# cover\n\n# title\nfoo\n<wait />\nbar\n")
+    fake = FakeEchoes.new
+    # Capture the raw bytes the renderer sends. The hidden block past
+    # `<wait/>` is gated by the renderer's `step:` arg — if step==0,
+    # "bar" never reaches the terminal.
+    seen = +''
+    fake.singleton_class.prepend(Module.new do
+      define_method(:write) { |s| seen << s; super(s) }
+    end)
+    exporter = Przn::ScreenshotPdfExporter.new(presentation, base_dir: '.',
+                                                theme: Przn::Theme.default, terminal: fake)
+
+    Tempfile.create(['przn-wait', '.pdf']) do |out|
+      exporter.export(out.path)
+      assert_includes seen, 'bar',
+                      'the post-<wait/> body must be emitted to the terminal during export'
+    end
+  end
+
   test 'captures one PDF per slide and merges them into a multi-page PDF' do
     presentation = make_deck(3)
     fake = FakeEchoes.new
