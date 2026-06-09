@@ -231,6 +231,47 @@ class ParserTest < Test::Unit::TestCase
       assert_equal '1', code[:attrs][:size], 'opener IAL is more visible to the author and should win'
     end
 
+    test 'opener IAL `lines=1-2|3|4` parses into per-step Sets and appends synthetic waits' do
+      md = "```ruby {lines=1-2|3|4}\nclass S\n  def f\n    1\n  end\nend\n```\n"
+      slide = Przn::Parser.parse_slide(md)
+      types = slide.blocks.map { |b| b[:type] }
+      assert_equal [:code_block, :wait, :wait], types.reject { |t| t == :blank },
+                   'one wait per pipe-separated extra group should follow the block'
+      code = slide.blocks.find { |b| b[:type] == :code_block }
+      assert_equal [Set[1, 2], Set[3], Set[4]], code[:line_steps]
+    end
+
+    test 'quoted `lines=` allows commas inside a step group' do
+      md = "```ruby {lines=\"1-2,4|3,5\"}\na\nb\nc\nd\ne\n```\n"
+      slide = Przn::Parser.parse_slide(md)
+      code = slide.blocks.find { |b| b[:type] == :code_block }
+      assert_equal [Set[1, 2, 4], Set[3, 5]], code[:line_steps]
+      assert_equal 1, slide.blocks.count { |b| b[:type] == :wait }
+    end
+
+    test 'single-phase `lines=1-2` emits zero synthetic waits' do
+      md = "```ruby {lines=1-2}\na\nb\nc\n```\n"
+      slide = Przn::Parser.parse_slide(md)
+      code = slide.blocks.find { |b| b[:type] == :code_block }
+      assert_equal [Set[1, 2]], code[:line_steps]
+      assert_equal 0, slide.blocks.count { |b| b[:type] == :wait }
+    end
+
+    test 'malformed `lines=` value silently no-ops — no crash, no line_steps key' do
+      md = "```ruby {lines=garbage}\na\n```\n"
+      slide = Przn::Parser.parse_slide(md)
+      code = slide.blocks.find { |b| b[:type] == :code_block }
+      refute code.key?(:line_steps), 'garbage spec must not produce a line_steps key'
+      assert_equal 0, slide.blocks.count { |b| b[:type] == :wait }
+    end
+
+    test '`lines=all` opts out of dimming entirely' do
+      md = "```ruby {lines=all}\na\nb\n```\n"
+      slide = Przn::Parser.parse_slide(md)
+      code = slide.blocks.find { |b| b[:type] == :code_block }
+      refute code.key?(:line_steps)
+    end
+
     test '```mermaid fences emit a :mermaid block, not :code_block' do
       md = "```mermaid\ngraph TD\n  A --> B\n```\n"
       blocks = Przn::Parser.parse_slide(md).blocks

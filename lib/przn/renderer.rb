@@ -1828,12 +1828,24 @@ module Przn
 
       highlighted = highlighted_code_lines(block, code_lines)
 
-      highlighted.each do |line_tokens|
+      # Per-line highlight stepping (`{lines=1-2|3|4}` IAL): walk the
+      # pipe-separated phase the slide's current step lands on; lines
+      # outside that phase's Set get wrapped in OSC 7772 cell-alpha so
+      # Echoes paints them dim. Non-Echoes terminals drop the OSC and
+      # render every line at full opacity (documented limitation).
+      active_lines = if block[:line_steps] && @current_step && @block_step
+                       phase = (@current_step - (@block_step[block] || 0)).clamp(0, block[:line_steps].size - 1)
+                       block[:line_steps][phase]
+                     end
+
+      highlighted.each_with_index do |line_tokens, idx|
         fitted, used_w = fit_tokens_to_width(line_tokens, box_content_w)
         pad_len = [box_content_w - used_w, 0].max
+        dim = active_lines && !active_lines.include?(idx + 1)
         term_move(row, left + 1)
         @terminal.write bg_sgr
         @terminal.write default_fg_sgr unless default_fg_sgr.empty?
+        @terminal.write "\e]7772;cell-alpha;0.35\a" if dim
         @terminal.write KittyText.sized('  ', s: scale, f: face)
         fitted.each do |color, value|
           if color && !value.empty?
@@ -1852,6 +1864,7 @@ module Przn
           end
         end
         @terminal.write KittyText.sized("#{' ' * pad_len}  ", s: scale, f: face)
+        @terminal.write "\e]7772;cell-alpha;1\a" if dim
         @terminal.write ANSI[:reset]
         row += scale
       end

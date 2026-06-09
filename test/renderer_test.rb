@@ -3317,6 +3317,67 @@ class RendererTest < Test::Unit::TestCase
              "theme.code.size=large should still apply when the block only overrides family")
     end
 
+    def render_block_with_line_steps(theme, line_steps, code, current_step: 0)
+      term = CodeFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: theme)
+      block = {type: :code_block, content: code, language: nil, line_steps: line_steps}
+      r.instance_variable_set(:@current_step, current_step)
+      r.instance_variable_set(:@block_step, {block => 0})
+      r.send(:render_code_block, block, 80, 2)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s }
+    end
+
+    # Tiny helper: given the per-line writes the fake terminal captured,
+    # group them by line so each test can ask "which writes happened on
+    # line N?" — each line is delimited by an ANSI reset that the code
+    # block emits at the end of every row.
+    def writes_per_line(writes)
+      buckets = [+'']
+      writes.each do |w|
+        buckets.last << w
+        buckets << +'' if w == "\e[0m"
+      end
+      buckets.pop if buckets.last.empty?
+      buckets
+    end
+
+    test 'lines=1-2|3 dims non-active lines at each step via cell-alpha OSC' do
+      code = "a\nb\nc\nd\n"
+      # Phase 0 (current_step=0): lines 1 and 2 active, 3 and 4 dim.
+      writes = render_block_with_line_steps(code_theme, [Set[1, 2], Set[3]], code, current_step: 0)
+      lines = writes_per_line(writes)
+      assert_equal 4, lines.size, "expected 4 line buckets, got: #{lines.inspect}"
+      refute(lines[0].include?("cell-alpha;0.35"), "line 1 (active) must NOT be dimmed")
+      refute(lines[1].include?("cell-alpha;0.35"), "line 2 (active) must NOT be dimmed")
+      assert(lines[2].include?("cell-alpha;0.35"), "line 3 (inactive) must be dimmed")
+      assert(lines[3].include?("cell-alpha;0.35"), "line 4 (inactive) must be dimmed")
+      # Reset to 1.0 comes after the dimmed text, before \e[0m.
+      assert(lines[2].include?("cell-alpha;1\a"), "dimmed line should restore alpha=1 before reset")
+    end
+
+    test 'advancing the step swaps which lines are dimmed' do
+      code = "a\nb\nc\n"
+      writes = render_block_with_line_steps(code_theme, [Set[1], Set[2], Set[3]], code, current_step: 1)
+      lines = writes_per_line(writes)
+      assert(lines[0].include?("cell-alpha;0.35"), "step 1: line 1 dim")
+      refute(lines[1].include?("cell-alpha;0.35"), "step 1: line 2 active")
+      assert(lines[2].include?("cell-alpha;0.35"), "step 1: line 3 dim")
+    end
+
+    test 'stepping past the last phase clamps to the final phase (no out-of-bounds)' do
+      code = "a\nb\n"
+      writes = render_block_with_line_steps(code_theme, [Set[1], Set[2]], code, current_step: 99)
+      lines = writes_per_line(writes)
+      assert(lines[0].include?("cell-alpha;0.35"), "clamped to last phase: line 1 dim")
+      refute(lines[1].include?("cell-alpha;0.35"), "clamped to last phase: line 2 active")
+    end
+
+    test 'no line_steps → no cell-alpha emitted (back-compat shape)' do
+      out = render_with(code_theme)
+      refute(out.include?("cell-alpha"),
+             "plain code blocks must not emit the cell-alpha dim OSC")
+    end
+
     test 'code.family is threaded into OSC 66 f= (Echoes path)' do
       prev = ENV['TERM_PROGRAM']
       ENV['TERM_PROGRAM'] = 'Echoes'

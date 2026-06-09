@@ -34,6 +34,19 @@ def fib(n):
     return n if n < 2 else fib(n-1) + fib(n-2)
 ```
 
+# Code blocks — per-line stepping `{lines=…|…}`
+
+```ruby {lines=1|2-3|4-5}
+class Slide
+  attr_reader :title, :body
+  def initialize(title:, body: "")
+    @title, @body = title, body
+  end
+end
+```
+
+Press Space → the highlight walks: line 1, then 2-3, then 4-5.
+
 # Block quotes
 
 > Code is read more often than it is written.

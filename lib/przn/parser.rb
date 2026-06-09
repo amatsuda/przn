@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'set'
 require 'strscan'
 
 module Przn
@@ -148,7 +149,18 @@ module Przn
                     {type: :code_block, content: code_lines.join, language: lang}
                   end
           block[:attrs] = attrs if attrs && !attrs.empty?
-          blocks << block
+          # Per-line highlight stepping: `{lines=1-2|3|4}` parses pipe-
+          # separated step groups and emits one synthetic `<wait/>` per
+          # extra group so the step counter advances naturally. The
+          # renderer dims lines outside the active group via the
+          # OSC 7772 cell-alpha pipeline.
+          if attrs && (raw = attrs[:lines]) && (steps = parse_line_steps(raw))
+            block[:line_steps] = steps
+            blocks << block
+            (steps.size - 1).times { blocks << {type: :wait} }
+          else
+            blocks << block
+          end
 
         # Indented code block (4 spaces)
         when /\A {4}(.*)$/
@@ -436,6 +448,40 @@ module Przn
       attrs = parse_xml_attrs(str)
       attrs[:face] = attrs.delete(:name) if attrs.key?(:name) && !attrs.key?(:face)
       attrs.slice(:face, :size, :color)
+    end
+
+    # Parse a code-fence `lines=` spec into an array of line-number Sets
+    # — one Set per pipe-separated step group. Inside a group, single
+    # integers and `a-b` ranges separate by commas (quoted IAL value
+    # required when commas are present, since `,` is the multi-attr
+    # separator at the IAL level). Returns nil for malformed input so a
+    # typo in the deck doesn't crash parsing.
+    #
+    #   "1-2|3|4"           → [Set[1, 2], Set[3], Set[4]]
+    #   "1-2,4|3"           → [Set[1, 2, 4], Set[3]]
+    #   "all" / "" / garbage → nil
+    def parse_line_steps(spec)
+      return nil if spec.nil?
+      str = spec.to_s.strip
+      return nil if str.empty? || str == 'all' || str == '*'
+
+      groups = str.split('|').map do |group|
+        set = group.split(',').each_with_object(Set.new) do |chunk, acc|
+          chunk = chunk.strip
+          next if chunk.empty?
+          if (m = chunk.match(/\A(\d+)\s*-\s*(\d+)\z/))
+            lo, hi = m[1].to_i, m[2].to_i
+            (lo..hi).each { |n| acc << n }
+          elsif chunk =~ /\A\d+\z/
+            acc << chunk.to_i
+          else
+            return nil
+          end
+        end
+        return nil if set.empty?
+        set
+      end
+      groups.empty? ? nil : groups
     end
 
     # Generic attribute scanner — three value forms accepted:

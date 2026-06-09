@@ -164,6 +164,21 @@ end
 
 `size` accepts the same forms as `<size=…>` (numeric `1`–`7` or named `xx-small` … `xxxx-large`). `family`, `color`, and `bg` are also recognized and override `theme.code.family` / `theme.code.color` / `theme.code.bg` for that one block. Multi-attr forms work with either separator: `{size: small, family: Menlo}` and `{size=2, color=cyan}` both parse.
 
+**Per-line stepping via `lines=…`** _(Echoes only for the dim effect)_ — pipe-separated step groups walk through which line range is highlighted as the user advances:
+
+````markdown
+```ruby {lines=1-2|3|4}
+class Slide
+  attr_reader :title, :body
+  def initialize(title:, body: "")
+    @title, @body = title, body
+  end
+end
+```
+````
+
+On the slide's initial reveal, lines 1-2 are at full opacity and the rest are dimmed (via OSC 7772 `cell-alpha`); space steps the highlight to line 3, then line 4. Each pipe-separated extra group adds a synthetic step to the slide (the deck's normal step counter walks them with the existing `<wait/>` infrastructure). Comma-separated ranges inside a group need quoting because `,` is the multi-attr separator at the IAL level: `lines="1-2,4|3,5"`. `lines=all` or omitting the directive turns dimming off. Non-Echoes terminals drop the OSC silently — the steps still tick but every line renders at full opacity.
+
 ### Mermaid diagrams
 
 A `mermaid` fence renders to an inline image via the [mermaid CLI](https://github.com/mermaid-js/mermaid-cli):
