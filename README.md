@@ -537,7 +537,15 @@ Conclusion — revealed on the second Space press.
 ```
 
 - Each `<wait/>` adds one step. A slide with N waits has N+1 steps; the last Space press flips to the next slide. Left / Up walk backward, with the previous slide re-entered at its **last** step so backtracking shows full content first.
-- Block-level only — a `<wait/>` on its own line. Inline `<wait/>` mid-paragraph is still consumed as a silent no-op (so prose that mentions the marker doesn't accidentally split into steps).
+- A leading `<wait/>` on a list item or paragraph counts the same way — the item / paragraph appears at the next step. Lists keep their list semantics (no broken numbering):
+
+  ```markdown
+  - foo
+  - <wait/>bar
+  - <wait/>baz
+  ```
+
+- Mid-text `<wait/>` (inside prose, not at the start of a block) is still consumed as a silent no-op — splitting a sentence mid-flow has no defined rendering semantics yet. Prose that mentions the marker literally should wrap it in backticks (`` `<wait/>` ``) like the rest of this section.
 - Reload (`r`) rewinds the current slide to step 0 so a re-parsed deck always starts collapsed.
 - Both forms are accepted: `<wait/>` (XML self-closing), `<wait></wait>` (paired), and the kramdown spelling `{::wait/}`.
 

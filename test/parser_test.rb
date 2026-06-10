@@ -625,6 +625,33 @@ class ParserTest < Test::Unit::TestCase
       refute(slide.blocks.any? { |b| b[:type] == :wait },
              "inline <wait/> must not produce a block-level :wait")
     end
+
+    test 'leading `<wait/>` on an unordered list item flags the item' do
+      slide = Przn::Parser.parse("# t\n\n- foo\n- <wait/>bar\n- <wait />baz\n").slides[0]
+      list = slide.blocks.find { |b| b[:type] == :unordered_list }
+      assert_equal [['foo', nil], ['bar', true], ['baz', true]],
+                   list[:items].map { |i| [i[:text], i[:wait]] }
+    end
+
+    test 'leading `{::wait/}` on a list item also flags the item' do
+      slide = Przn::Parser.parse("# t\n\n- foo\n- {::wait/}bar\n").slides[0]
+      list = slide.blocks.find { |b| b[:type] == :unordered_list }
+      assert_equal [nil, true], list[:items].map { |i| i[:wait] }
+      assert_equal 'bar', list[:items].last[:text]
+    end
+
+    test 'leading `<wait/>` on an ordered list item flags the item' do
+      slide = Przn::Parser.parse("# t\n\n1. foo\n2. <wait/>bar\n3. <wait />baz\n").slides[0]
+      list = slide.blocks.find { |b| b[:type] == :ordered_list }
+      assert_equal [nil, true, true], list[:items].map { |i| i[:wait] }
+      assert_equal %w[foo bar baz], list[:items].map { |i| i[:text] }
+    end
+
+    test 'leading `<wait/>` on a paragraph emits a preceding `:wait` block' do
+      slide = Przn::Parser.parse("# t\n\nfirst\n\n<wait/>second\n").slides[0]
+      assert_equal [:heading, :paragraph, :wait, :paragraph], content_types(slide)
+      assert_equal 'second', slide.blocks.last[:content]
+    end
   end
 
   sub_test_case 'Action: <action target= .../>' do

@@ -92,7 +92,9 @@ module Przn
         # Block alignment, XML form: <center>content</center> or <right>content</right>
         when /\A\s*<(center|right)>(.*)<\/\1>\s*\z/
           blocks << {type: :align, align: Regexp.last_match(1).to_sym}
-          blocks << {type: :paragraph, content: Regexp.last_match(2)}
+          content = Regexp.last_match(2).dup
+          blocks << {type: :wait} if strip_leading_wait!(content)
+          blocks << {type: :paragraph, content: content}
 
         # Slide background (Echoes OSC 7772):
         #   <bg color="#..."/>                              — solid (bg-color)
@@ -199,10 +201,12 @@ module Przn
         # A `<wait/>` on its own line divides the slide's block sequence
         # into a group; the renderer renders all blocks up to the current
         # step and *reserves* layout space for the rest. Pressing Space
-        # advances by one step before flipping to the next slide. The
-        # inline form (`<wait/>` mid-paragraph) is still consumed as a
-        # silent no-op in `parse_inline`, so existing prose that mentions
-        # the marker survives intact.
+        # advances by one step before flipping to the next slide. A
+        # leading `<wait/>` on a list item or paragraph (handled at the
+        # respective push sites) is the same boundary scoped one notch
+        # finer. Mid-text `<wait/>` is still silently dropped in
+        # `parse_inline` — splitting a sentence mid-flow has no defined
+        # rendering semantics yet.
         when %r{\A\s*<wait\s*/>\s*\z}, %r{\A\s*<wait>\s*</wait>\s*\z}, %r{\A\s*\{::wait/\}\s*\z}
           blocks << {type: :wait}
 
@@ -300,7 +304,10 @@ module Przn
           while i < lines.size && (lines[i].match?(/\A[*\-]\s+/) || lines[i].match?(/\A {2,}[*\-]\s+/) || lines[i].match?(/\A {2,}\S/))
             if lines[i].match(/\A(\s*)[*\-]\s+(.*)/)
               depth = Regexp.last_match(1).size / 2
-              items << {text: Regexp.last_match(2), depth: depth}
+              text = Regexp.last_match(2).dup
+              item = {text: text, depth: depth}
+              item[:wait] = true if strip_leading_wait!(text)
+              items << item
             elsif lines[i].match(/\A {2,}(\S.*)/)
               # Continuation line
               items.last[:text] << ' ' << Regexp.last_match(1) if items.last
@@ -318,7 +325,10 @@ module Przn
           while i < lines.size && lines[i].match?(/\A\s*\d+\.\s+/)
             lines[i].match(/\A(\s*)\d+\.\s+(.*)/)
             depth = Regexp.last_match(1).size / 3
-            items << {text: Regexp.last_match(2), depth: depth}
+            text = Regexp.last_match(2).dup
+            item = {text: text, depth: depth}
+            item[:wait] = true if strip_leading_wait!(text)
+            items << item
             i += 1
           end
           i -= 1
@@ -392,14 +402,18 @@ module Przn
             i -= 1
             blocks << {type: :definition_list, term: term, definition: definition_lines.join("\n")}
           else
-            blocks << {type: :paragraph, content: Regexp.last_match(1).strip}
+            content = Regexp.last_match(1).strip
+            blocks << {type: :wait} if strip_leading_wait!(content)
+            blocks << {type: :paragraph, content: content}
           end
 
         when /\A\s*\z/
           blocks << {type: :blank}
 
         else
-          blocks << {type: :paragraph, content: line.strip}
+          content = line.strip
+          blocks << {type: :wait} if strip_leading_wait!(content)
+          blocks << {type: :paragraph, content: content}
         end
         i += 1
       end
@@ -631,6 +645,15 @@ module Przn
     # way it would inside plain text. Without this, the `.*?` inside
     # the wrapper regex captures `<br>` literally and the styled
     # segment carries it as text.
+    # Leading `<wait/>` (or `{::wait/}`) on a list item or paragraph.
+    # When matched, mutate the source text to drop the marker plus any
+    # trailing whitespace before the real content; callers attach a
+    # step-boundary flag to the surrounding block.
+    LEADING_WAIT_RE = %r{\A(?:<wait\s*/>|<wait>\s*</wait>|\{::wait/\})\s*}
+    def strip_leading_wait!(text)
+      !!text.sub!(LEADING_WAIT_RE, '')
+    end
+
     BR_RE = /<br\s*\/?>/i
     def push_with_breaks(segments, content)
       chunks = content.split(BR_RE, -1)

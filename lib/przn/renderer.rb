@@ -222,7 +222,20 @@ module Przn
     # controller uses this to decide whether Space advances within
     # the slide or flips to the next one.
     def step_count(slide)
-      slide.blocks.count { |b| b[:type] == :wait } + 1
+      slide.blocks.sum { |b| block_step_count(b) } + 1
+    end
+
+    # Number of step boundaries a block contributes — `:wait` blocks
+    # contribute 1, list blocks contribute one per item flagged with
+    # `:wait` (an inline `<wait/>` on a list item, parsed by the
+    # `LEADING_WAIT_RE` strip path), everything else contributes 0.
+    def block_step_count(block)
+      case block[:type]
+      when :wait then 1
+      when :unordered_list, :ordered_list
+        block[:items].count { |i| i[:wait] }
+      else 0
+      end
     end
 
     # Longest `duration_ms` among the `:action` blocks whose
@@ -274,7 +287,7 @@ module Przn
       map = {}
       blocks.each do |block|
         map[block] = step
-        step += 1 if block[:type] == :wait
+        step += block_step_count(block)
       end
       map
     end
@@ -1959,62 +1972,97 @@ module Przn
 
     def render_unordered_list(block, width, row)
       left = content_left(width)
+      # Per-item step gating only applies when the list is reached via
+      # the slide-level walk that populated @block_step. Inside a group
+      # (or any nested context that doesn't seed an entry) — match the
+      # group's "no sub-steps in v1" rule and render every item.
+      gated = @block_step && @block_step.key?(block)
+      item_step = gated ? @block_step[block] : nil
       block[:items].each do |item|
-        depth = item[:depth] || 0
-        indent = '  ' * depth
-        prefix = "#{indent}#{@theme.bullet[:text]}"
-        prefix_w = display_width(prefix)
-        # Plain text renders at body_scale; lines containing a sized
-        # span (e.g. `<size=5>BIG</size>`) advance the row by that
-        # span's height per-line. Mixing `body` and `BIG` on the same
-        # line keeps body at body size — only the BIG span grows.
-        base_scale = body_scale
-        max_w = max_text_width(width, left, base_scale) - prefix_w
+        item_step += 1 if gated && item[:wait]
+        with_item_visibility(item_step) do
+          depth = item[:depth] || 0
+          indent = '  ' * depth
+          prefix = "#{indent}#{@theme.bullet[:text]}"
+          prefix_w = display_width(prefix)
+          # Plain text renders at body_scale; lines containing a sized
+          # span (e.g. `<size=5>BIG</size>`) advance the row by that
+          # span's height per-line. Mixing `body` and `BIG` on the same
+          # line keeps body at body size — only the BIG span grows.
+          base_scale = body_scale
+          max_w = max_text_width(width, left, base_scale) - prefix_w
 
-        segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, base_scale)
+          segments = Parser.parse_inline(item[:text])
+          wrapped = wrap_segments(segments, max_w, base_scale)
 
-        wrapped.each_with_index do |line_segs, li|
-          line_h = max_segment_scale(line_segs, base_scale)
-          term_move(row, left)
-          if li == 0
-            @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
-          else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+          wrapped.each_with_index do |line_segs, li|
+            line_h = max_segment_scale(line_segs, base_scale)
+            term_move(row, left)
+            if li == 0
+              @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+            else
+              @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+            end
+            row += line_h
           end
-          row += line_h
+          row += 1
         end
-        row += 1
       end
       row
     end
 
     def render_ordered_list(block, width, row)
       left = content_left(width)
+      gated = @block_step && @block_step.key?(block)
+      item_step = gated ? @block_step[block] : nil
       block[:items].each_with_index do |item, i|
-        depth = item[:depth] || 0
-        indent = '  ' * depth
-        prefix = "#{indent}#{i + 1}. "
-        prefix_w = display_width(prefix)
-        base_scale = body_scale
-        max_w = max_text_width(width, left, base_scale) - prefix_w
+        item_step += 1 if gated && item[:wait]
+        with_item_visibility(item_step) do
+          depth = item[:depth] || 0
+          indent = '  ' * depth
+          prefix = "#{indent}#{i + 1}. "
+          prefix_w = display_width(prefix)
+          base_scale = body_scale
+          max_w = max_text_width(width, left, base_scale) - prefix_w
 
-        segments = Parser.parse_inline(item[:text])
-        wrapped = wrap_segments(segments, max_w, base_scale)
+          segments = Parser.parse_inline(item[:text])
+          wrapped = wrap_segments(segments, max_w, base_scale)
 
-        wrapped.each_with_index do |line_segs, li|
-          line_h = max_segment_scale(line_segs, base_scale)
-          term_move(row, left)
-          if li == 0
-            @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
-          else
-            @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+          wrapped.each_with_index do |line_segs, li|
+            line_h = max_segment_scale(line_segs, base_scale)
+            term_move(row, left)
+            if li == 0
+              @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+            else
+              @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+            end
+            row += line_h
           end
-          row += line_h
+          row += 1
         end
-        row += 1
       end
       row
+    end
+
+    # Run the block with @terminal swapped to a NullTerm if `item_step`
+    # is past the current reveal — the per-item parallel of
+    # `suppressed_render`. Items past the current step still execute
+    # their render path so `row` advances naturally (reserving layout
+    # space), but no bytes reach the real terminal. A nil `item_step`
+    # disables gating entirely (used when the surrounding block isn't
+    # reached via the slide-level step walk).
+    def with_item_visibility(item_step)
+      if item_step && @current_step && item_step > @current_step
+        real = @terminal
+        @terminal = NullTerm.new(real)
+        begin
+          yield
+        ensure
+          @terminal = real
+        end
+      else
+        yield
+      end
     end
 
     def render_definition_list(block, width, row)

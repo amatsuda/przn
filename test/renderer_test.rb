@@ -2692,6 +2692,98 @@ class RendererTest < Test::Unit::TestCase
                    'reserved-space render at step 0 should produce the same overall layout extent as step 1'
     end
 
+    test 'step_count counts waited list items alongside block-level waits' do
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      slide = step_slide([
+        {type: :unordered_list, items: [
+          {text: 'foo', depth: 0},
+          {text: 'bar', depth: 0, wait: true},
+          {text: 'baz', depth: 0, wait: true},
+        ]},
+      ])
+      assert_equal 3, r.step_count(slide)
+    end
+
+    test 'list with waited items: only revealed items reach the terminal' do
+      slide = step_slide([
+        {type: :unordered_list, items: [
+          {text: 'FOO', depth: 0},
+          {text: 'BAR', depth: 0, wait: true},
+          {text: 'BAZ', depth: 0, wait: true},
+        ]},
+      ])
+      # Step 0 — only FOO visible
+      t0 = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(t0).render(slide, current: 0, total: 1, step: 0)
+      text0 = writes_text(t0)
+      assert_match(/FOO/, text0)
+      refute_match(/BAR/, text0, 'BAR is gated behind a wait — must not write at step 0')
+      refute_match(/BAZ/, text0)
+      # Step 1 — FOO and BAR
+      t1 = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(t1).render(slide, current: 0, total: 1, step: 1)
+      text1 = writes_text(t1)
+      assert_match(/FOO/, text1)
+      assert_match(/BAR/, text1)
+      refute_match(/BAZ/, text1)
+      # Step 2 — all three
+      t2 = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(t2).render(slide, current: 0, total: 1, step: 2)
+      text2 = writes_text(t2)
+      assert_match(/FOO/, text2)
+      assert_match(/BAR/, text2)
+      assert_match(/BAZ/, text2)
+    end
+
+    test 'render_unordered_list returns the same row whether items are revealed or hidden' do
+      # The flow guarantee: hidden items still advance `row` so following
+      # blocks land at the right spot. Probe the return value of
+      # render_unordered_list directly — using the full render() pipeline
+      # would gate the comparison block behind the list's own step count.
+      block = {type: :unordered_list, items: [
+        {text: 'a', depth: 0},
+        {text: 'b', depth: 0, wait: true},
+        {text: 'c', depth: 0, wait: true},
+      ]}
+      slide = step_slide([block])
+      end_row = lambda do |step|
+        r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+        r.instance_variable_set(:@block_step, {block => 0})
+        r.instance_variable_set(:@current_step, step)
+        # Match the call signature render_block uses internally.
+        r.send(:render_unordered_list, block, 80, 5)
+      end
+      assert_equal end_row.call(2), end_row.call(0),
+                   'hidden items must still advance the returned flow row'
+      slide # silence unused-var warning; documents intent
+    end
+
+    test 'waited items in following blocks: post-list :wait blocks still tick' do
+      # A list whose items contribute 2 internal steps, followed by a
+      # block-level `<wait/>` and a tail paragraph. The tail paragraph
+      # should appear at step 3 (list:0, list-item-1:1, list-item-2:2,
+      # block-wait:3).
+      r = Przn::Renderer.new(StepFakeTerm.new(w: 80, h: 30))
+      slide = step_slide([
+        {type: :unordered_list, items: [
+          {text: 'a', depth: 0},
+          {text: 'b', depth: 0, wait: true},
+          {text: 'c', depth: 0, wait: true},
+        ]},
+        {type: :wait},
+        {type: :paragraph, content: 'TAIL'},
+      ])
+      assert_equal 4, r.step_count(slide)
+      t = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(t).render(slide, current: 0, total: 1, step: 2)
+      refute_match(/TAIL/, writes_text(t),
+                   'tail paragraph past the block wait must stay hidden until step 3')
+      t = StepFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(t).render(slide, current: 0, total: 1, step: 3)
+      assert_match(/TAIL/, writes_text(t),
+                   'tail paragraph must appear at step 3')
+    end
+
     test '<action> on a moveable <img> shifts its kitty_place coords between steps' do
       png = Tempfile.new(['action', '.png'])
       png.binmode

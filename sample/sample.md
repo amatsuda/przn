@@ -221,6 +221,14 @@ Press Space again — the next group reveals.
 
 And again — the layout doesn't reflow, the hidden text was already reserved.
 
+# Step builds — inline `<wait/>` in a list
+
+- foo
+- <wait/>bar
+- <wait/>baz
+
+The same step boundary, scoped to a single list item — the bullets stay in one list (numbering and indentation intact), and each `<wait/>` walks one item in.
+
 # Cross-slide ref — `<ref id=…/>`
 
 <at id="quote" x="center" y="40%">🤘 Fall to your knees and repent if you please</at>
