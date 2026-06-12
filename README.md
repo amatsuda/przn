@@ -566,6 +566,27 @@ The slide carrying the attribute fades out when you leave it and fades in when y
 - Acts on slide-boundary navigation (→, ←, Space, `j`/`k`, etc., plus `g` / `G`). `<wait/>` step builds within a slide are independent and not affected.
 - Reload (`r`) skips the fade — it's a refresh, not navigation.
 
+### Fragment animations — `fragment="fade-..."`
+
+A positioned block can opt into a one-shot directional reveal via `fragment=`. The block appears at the *next* step boundary, sliding in from a direction while fading from alpha 0 to alpha 1:
+
+```markdown
+<at x="10" y="5" fragment="fade-up">A callout</at>
+<at x="40" y="5" fragment="fade-right">Another</at>
+<img src="chart.png" x="20" y="10" fragment="fade-in"/>
+<rect x="5" y="5" width="20" height="6" fill="tomato" fragment="fade-in"/>
+```
+
+Styles: `fade-up`, `fade-down`, `fade-left`, `fade-right`, `fade-in`. Each `fragment=` block adds one step boundary (matches reveal.js's `.fragment` semantics) — three fragments become a three-step build with no explicit `<wait/>` between them. Mix freely with `<wait/>`; each contributes a step independently.
+
+Settings & limits:
+- Accepted on `<at>`, `<img>`, and shape tags (`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<arrow>`, `<polyline>`, `<polygon>`, `<path>`).
+- `theme.fragment.duration` (ms) controls the animation length; default 300ms.
+- The hardcoded slide-in distance is 2 cells vertical, 4 cells horizontal.
+- Non-numeric coords (`x="center"`, `y="40%"`, alignment keywords) fall back to fade-only — the positional offset is skipped.
+- The alpha portion is Echoes-only (OSC 7772 `cell-alpha`); on other terminals the position still moves but the fade snaps.
+- `id="..."` is auto-generated (`__frag_N`) when not supplied so the existing action / state machinery can target the block. An explicit `id=` is preserved.
+
 ### Cross-slide reference — `<ref id="..."/>`
 
 Give any positioned block an `id="..."` and then re-render it on another slide (or twice on the same slide) by writing `<ref id="..."/>`. The reference looks up the block whose original declaration carries that id anywhere in the deck and dispatches to the same render path, so `<at>` text, `<img>` placements, and shapes all reappear at their original spot:

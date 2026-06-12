@@ -418,8 +418,34 @@ module Przn
         i += 1
       end
 
+      hoist_fragment_attrs!(blocks)
       layout = slide_attrs.delete(:layout)
       Slide.new(blocks, layout: layout, attrs: slide_attrs)
+    end
+
+    # Pull `fragment="..."` off the attrs of `<at>` / `<img>` / shape
+    # blocks and stash it on the block itself as `:fragment`. Auto-
+    # generate an `id=` when none is present so the renderer's effective-
+    # state machinery can target the block. Counter is per-slide; cross-
+    # slide id collisions are fine because each slide computes its own
+    # effective_state independently.
+    def hoist_fragment_attrs!(blocks)
+      counter = 0
+      blocks.each do |block|
+        next unless %i[at image shape].include?(block[:type])
+        attrs = block[:attrs] or next
+        fragment = attrs.delete(:fragment) || attrs.delete('fragment')
+        next unless fragment
+        block[:fragment] = fragment.to_s
+        unless attrs[:id] || attrs['id']
+          # Match the attr's existing key style — `:at` uses symbols,
+          # `:image` and `:shape` use strings (their parsers run
+          # `transform_keys(&:to_s)`).
+          key = block[:type] == :at ? :id : 'id'
+          attrs[key] = "__frag_#{counter}"
+          counter += 1
+        end
+      end
     end
 
     # Pull a trailing IAL block off an h1's content. Accepted spellings:

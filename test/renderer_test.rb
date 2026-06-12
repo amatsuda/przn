@@ -3541,4 +3541,131 @@ class RendererTest < Test::Unit::TestCase
       assert(out.include?("\e[38;2;0;255;255m"), 'expected cyan truecolor fg open in the code block')
     end
   end
+
+  sub_test_case 'fragment animations: fragment="fade-..." reveals' do
+    SlideStruct2 = Struct.new(:blocks, :layout, :attrs) do
+      def initialize(blocks, layout: nil, attrs: {}); super(blocks, layout, attrs); end
+    end
+
+    class FragFakeTerm
+      def initialize(w:, h:); @w, @h = w, h; end
+      def width;  @w; end
+      def height; @h; end
+      def write(_); end
+      def move_to(_, _); end
+      def clear; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def slide(blocks)
+      SlideStruct2.new(blocks)
+    end
+
+    def at_block(x:, y:, id:, fragment:)
+      {type: :at, attrs: {x: x, y: y, id: id}, fragment: fragment, content: 'x'}
+    end
+
+    test 'step_count counts each fragment block as one step boundary' do
+      s = slide([
+        at_block(x: '10', y: '5',  id: 'a', fragment: 'fade-up'),
+        at_block(x: '10', y: '10', id: 'b', fragment: 'fade-up'),
+        at_block(x: '10', y: '15', id: 'c', fragment: 'fade-up'),
+      ])
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      assert_equal 4, r.step_count(s), 'three fragments + the initial collapsed state = 4 steps'
+    end
+
+    test 'fragment block_step is post-bump (the fragment appears AT its step, not before)' do
+      blocks = [at_block(x: '10', y: '5', id: 'a', fragment: 'fade-up')]
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      bstep = r.send(:compute_block_step, blocks)
+      assert_equal 1, bstep[blocks.first],
+                   'a fragment block must occupy the post-boundary step, not the initial one'
+    end
+
+    test 'before its step, a fragment is overridden to opacity 0 + offset position' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-up')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      bstep = {block => 1}
+      state = r.send(:compute_effective_state, [block], bstep, 0)
+      assert_equal '0', state['a']['opacity'],
+                   'before reveal the fragment should be opacity=0'
+      # fade-up: starts 2 cells below declared y (5 → 7)
+      assert_equal '7', state['a']['y'],
+                   'fade-up should sit 2 cells below declared y before reveal'
+    end
+
+    test 'fade-down offsets y upward (declared y - 2)' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-down')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 0)
+      assert_equal '3', state['a']['y']
+    end
+
+    test 'fade-left offsets x to the right (declared x + 4)' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-left')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 0)
+      assert_equal '14', state['a']['x']
+    end
+
+    test 'fade-right offsets x to the left (declared x - 4)' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-right')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 0)
+      assert_equal '6', state['a']['x']
+    end
+
+    test 'fade-in only sets opacity (no position offset)' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-in')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 0)
+      assert_equal '0', state['a']['opacity']
+      refute state['a'].key?('x'), 'fade-in should not move x'
+      refute state['a'].key?('y'), 'fade-in should not move y'
+    end
+
+    test 'at its step (progress 0.5), fragment lerps initial → declared' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-up')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 1, 0.5)
+      assert_equal '0.5', state['a']['opacity'], 'opacity at progress 0.5 is 0.5'
+      # lerp_attr collapses whole floats to integer form: "6" not "6.0".
+      assert_equal '6', state['a']['y'], 'y mid-fade: 7 → 5 at 0.5 = 6'
+    end
+
+    test 'past its step, the fragment leaves no override (declared attrs win)' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-up')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 2)
+      # No override needed — the block's declared y=5 + implicit opacity=1
+      # are what the renderer will use. state["a"] is either absent or empty.
+      assert(state['a'].nil? || state['a'].empty?,
+             'past the fragment step, no override should be left in state')
+    end
+
+    test 'max_duration_for_step returns the fragment duration at the fragment step' do
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-up')
+      term = FragFakeTerm.new(w: 80, h: 30)
+      theme = Przn::Theme.default
+      r = Przn::Renderer.new(term, theme: theme)
+      d = r.max_duration_for_step(slide([block]), 1)
+      assert_equal theme.fragment[:duration], d,
+                   'fragment step should report its lerp duration so the controller animates'
+    end
+
+    test 'fragment with keyword coords (x: "center") falls back to fade-only (no positional offset)' do
+      # parse_dimension returns nil for non-numeric values, which lerp_attr
+      # treats as a snap. The fragment animation should still set opacity
+      # to 0 (and lerp it to 1) but leave the keyword x/y alone.
+      block = {type: :at, attrs: {x: 'center', y: 'center', id: 'a'},
+               fragment: 'fade-up', content: 'x'}
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30))
+      state = r.send(:compute_effective_state, [block], {block => 1}, 0)
+      assert_equal '0', state['a']['opacity']
+      # y kept as keyword — no numeric offset applied
+      assert_equal 'center', state['a']['y']
+    end
+  end
 end

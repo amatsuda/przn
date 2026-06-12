@@ -25,7 +25,7 @@ module Przn
     # per-segment.
     Slot = Struct.new(:name, :x, :y, :width, :height, :size, :family, :color)
 
-    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts, :transition
+    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts, :transition, :fragment
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -51,6 +51,11 @@ module Przn
         # a slide opts in via `# Title {transition=fade}`. Empty by
         # default — the renderer's fallback duration kicks in.
         transition: defaults[:transition].merge(overrides[:transition] || {}),
+        # `fragment` carries the per-fragment animation `duration:` (ms)
+        # used by `<at fragment="fade-up">` and friends. Empty hash if the
+        # user opts out entirely; the renderer falls back to its hardcoded
+        # 300ms when the key is missing.
+        fragment: defaults[:fragment].merge(overrides[:fragment] || {}),
         # Layouts: per-name replacement (no deep merge across slot lists —
         # an override redefines that layout's slot list end-to-end). The
         # name `default` is special: when a slide has no `{layout=...}`
@@ -107,6 +112,7 @@ module Przn
         code: (data[:code] || {}).compact,
         counter: (data[:counter] || {}).compact,
         transition: (data[:transition] || {}).compact,
+        fragment: (data[:fragment] || {}).compact,
         layouts: parse_layouts(data[:layouts])
       }
     end
@@ -152,6 +158,7 @@ module Przn
       @code = config[:code] || {}
       @counter = config[:counter] || {}
       @transition = config[:transition] || {}
+      @fragment = config[:fragment] || {}
       @layouts = config[:layouts] || {}
     end
   end

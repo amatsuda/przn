@@ -71,6 +71,15 @@ counter:
 transition:
   duration: 200         # ms per fade half — full A→B fade is twice this when both sides opt in
 
+# Fragment animations (`<at fragment="fade-up">`, etc.). `duration:` is
+# the per-fragment animation length in ms — drives the lerp from the
+# fragment's initial offset position + alpha 0 to its declared position
+# + alpha 1. Same OSC 7772 cell-alpha plumbing as `<action opacity>`;
+# the x/y move uses the existing action interpolation so non-Echoes
+# terminals still see the slide-in even when the fade portion snaps.
+fragment:
+  duration: 300         # ms per fragment animation
+
 # Slide layouts. Each layout names an ordered list of slots; a slot is a
 # rectangular region with x / y / width / height (1-based cells, or N%
 # of the terminal width/height). A slide picks a layout via an h1 IAL,

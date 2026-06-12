@@ -353,6 +353,21 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 200, Przn::Theme.load(theme_path).transition[:duration],
                    'omitting `transition:` should keep the default 200ms'
     end
+
+    test 'user file sets fragment.duration (per-fragment animation ms)' do
+      write_theme <<~YAML
+        fragment:
+          duration: 450
+      YAML
+
+      assert_equal 450, Przn::Theme.load(theme_path).fragment[:duration]
+    end
+
+    test 'unset fragment keeps the shipped default duration (300 ms)' do
+      write_theme "font: {}\n"
+      assert_equal 300, Przn::Theme.load(theme_path).fragment[:duration],
+                   'omitting `fragment:` should keep the default 300ms'
+    end
   end
 
   private

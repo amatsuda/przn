@@ -241,29 +241,46 @@ module Przn
     # Number of step boundaries a block contributes — `:wait` blocks
     # contribute 1, list blocks contribute one per item flagged with
     # `:wait` (an inline `<wait/>` on a list item, parsed by the
-    # `LEADING_WAIT_RE` strip path), everything else contributes 0.
+    # `LEADING_WAIT_RE` strip path), fragment blocks contribute 1
+    # (each `<at fragment="…">` adds an implicit step boundary before
+    # itself, matching reveal.js parity), everything else contributes 0.
     def block_step_count(block)
       case block[:type]
       when :wait then 1
       when :unordered_list, :ordered_list
         block[:items].count { |i| i[:wait] }
-      else 0
+      else
+        block[:fragment] ? 1 : 0
       end
     end
 
-    # Longest `duration_ms` among the `:action` blocks whose
-    # `block_step` matches the given step. Returns 0 if no action
-    # at that step carries a duration — the controller takes the
-    # snap path when this is 0, the animation loop otherwise.
+    # Longest `duration_ms` among the `:action` and fragment blocks
+    # whose `block_step` matches the given step. Returns 0 if neither
+    # an action nor a fragment at that step has a duration — the
+    # controller takes the snap path when this is 0, the animation loop
+    # otherwise. Fragment blocks pull their duration from
+    # `theme.fragment.duration` (default 300 ms).
     def max_duration_for_step(slide, step)
       bstep = compute_block_step(slide.blocks)
       max = 0.0
       slide.blocks.each do |b|
-        next unless b[:type] == :action && b[:duration_ms]
         next unless (bstep[b] || 0) == step
-        max = b[:duration_ms] if b[:duration_ms] > max
+        d = if b[:type] == :action && b[:duration_ms]
+              b[:duration_ms]
+            elsif b[:fragment]
+              fragment_duration_ms
+            end
+        max = d if d && d > max
       end
       max
+    end
+
+    # Duration (ms) for a fragment animation half — read from
+    # `theme.fragment.duration` with a hardcoded 300 ms fallback. Lives
+    # here (not on the controller) so any caller of the renderer reuses
+    # the same value.
+    def fragment_duration_ms
+      ((@theme && @theme.respond_to?(:fragment) && @theme.fragment && @theme.fragment[:duration]) || 300).to_i
     end
 
     private
@@ -299,8 +316,19 @@ module Przn
       step = 0
       map = {}
       blocks.each do |block|
+        # Fragment blocks declare their own step boundary AHEAD of their
+        # rendering — the bump runs BEFORE the assignment so the fragment
+        # block lands AT its post-boundary step, not on the step preceding
+        # it. `:wait` and list-item waits keep the existing post-assignment
+        # bump (the wait/item itself stays "at" the step it's revealed at,
+        # following blocks live one step further).
+        step += 1 if block[:fragment]
         map[block] = step
-        step += block_step_count(block)
+        case block[:type]
+        when :wait then step += 1
+        when :unordered_list, :ordered_list
+          step += block[:items].count { |i| i[:wait] }
+        end
       end
       map
     end
@@ -340,6 +368,14 @@ module Przn
       index_ids.call(blocks)
 
       state = {}
+      # Fragment pass — synthesize an action-equivalent state for each
+      # block carrying `:fragment`. Walks first so a later explicit
+      # `<action target="…">` overrides anything the fragment leaves.
+      blocks.each do |block|
+        next unless block[:fragment]
+        apply_fragment_state(state, block, block_step, current_step, progress)
+      end
+
       blocks.each do |block|
         next unless block[:type] == :action
         bstep = block_step[block] || 0
@@ -378,6 +414,83 @@ module Przn
         end
       end
       state
+    end
+
+    # Cells of positional offset baked into the four directional
+    # fragment styles. `fade-up` starts FRAG_OFFSET_Y cells *below* its
+    # declared y (so it slides upward into place); fade-down mirrors.
+    # Horizontal styles use the wider FRAG_OFFSET_X (text is roughly
+    # half as tall as it is wide on a cell grid). All hardcoded in v1;
+    # a theme knob can land later if anyone wants to tune the throw.
+    FRAG_OFFSET_Y = 2
+    FRAG_OFFSET_X = 4
+
+    # Synthesize an action-equivalent override for a fragment block at
+    # the current step. Writes into `state[block.id]` the same way the
+    # explicit `<action>` pass does — but uses the fragment's `style` to
+    # decide what the "before" state is (the offset position + opacity 0)
+    # versus the "after" state (the block's own declared attrs). When
+    # `current_step < bstep`, the block hasn't been revealed yet — pin it
+    # at the offset position. When `current_step == bstep` and
+    # `progress < 1.0`, lerp from offset → declared. Once
+    # `current_step > bstep` we leave no override; the block's own attrs
+    # take over (which is exactly the declared, final state).
+    def apply_fragment_state(state, block, block_step, current_step, progress)
+      bid = (block[:attrs] && (block[:attrs]['id'] || block[:attrs][:id])) or return
+      bstep = block_step[block] || 0
+      return if current_step > bstep   # past reveal: declared attrs win
+      initial = fragment_initial_attrs(block) or return
+      bucket = (state[bid] ||= {})
+      if current_step < bstep
+        # Pre-reveal: pin the offset state. No lerp.
+        initial.each { |k, v| bucket[k] = v }
+      else
+        # Animating at bstep — lerp each offset attr toward the declared
+        # value (or 1.0 for opacity, which has no per-attr fallback).
+        declared = block[:attrs] || {}
+        initial.each do |k, v|
+          target = declared[k] || declared[k.to_sym] || (k == 'opacity' ? '1.0' : nil)
+          bucket[k] = lerp_attr(v, target, progress)
+        end
+      end
+    end
+
+    # Compute the "before reveal" attrs for a fragment style — the
+    # state the renderer pins the block at when current_step has not
+    # yet reached the fragment's own step. Returns `{key => value}`
+    # with string keys (matching `state[id]` convention). Non-numeric
+    # x/y (e.g. `x="center"`) skip the offset; only opacity gets set —
+    # the block still slides into existence visually via the fade.
+    def fragment_initial_attrs(block)
+      attrs = block[:attrs] || {}
+      case block[:fragment].to_s
+      when 'fade-up'
+        {'opacity' => '0'}.merge(offset_attr('y', attrs, +FRAG_OFFSET_Y))
+      when 'fade-down'
+        {'opacity' => '0'}.merge(offset_attr('y', attrs, -FRAG_OFFSET_Y))
+      when 'fade-left'
+        {'opacity' => '0'}.merge(offset_attr('x', attrs, +FRAG_OFFSET_X))
+      when 'fade-right'
+        {'opacity' => '0'}.merge(offset_attr('x', attrs, -FRAG_OFFSET_X))
+      when 'fade-in'
+        {'opacity' => '0'}
+      else
+        nil   # unknown style — no-op
+      end
+    end
+
+    # Compute the offset variant of one positional attr. Numeric coords
+    # shift by `delta` cells; non-numeric coords (keyword `center`, `%`
+    # values, etc.) pass through unchanged so the lerp still has a
+    # consistent prev/target and falls back to "snap" on its own.
+    def offset_attr(key, attrs, delta)
+      v = attrs[key] || attrs[key.to_sym]
+      return {} if v.nil?
+      parsed = parse_dimension(v)
+      return {key => v} unless parsed && parsed[1] == ''   # cells only
+      shifted = parsed[0] + delta
+      shifted = shifted.to_i if shifted == shifted.to_i
+      {key => shifted.to_s}
     end
 
     # Split a coordinate-ish string into `[numeric_float, unit_string]`.

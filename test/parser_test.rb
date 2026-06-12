@@ -1023,6 +1023,88 @@ class ParserTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'Fragment animations: fragment="fade-..."' do
+    test '<at fragment="fade-up"> stores the style on the block' do
+      slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5" fragment="fade-up">hi</at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      assert_equal 'fade-up', block[:fragment]
+      # The fragment attribute is consumed off attrs to keep the renderer's
+      # attr-merge path clean (no `fragment` leaking into x/y interpolation).
+      refute(block[:attrs].key?(:fragment) || block[:attrs].key?('fragment'),
+             'fragment= should be consumed off attrs and stored on the block')
+    end
+
+    test 'fragment block without an explicit id gets an auto-generated one for action targeting' do
+      slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5" fragment="fade-up">hi</at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      bid = block[:attrs][:id] || block[:attrs]['id']
+      assert_not_nil bid, 'fragment block should have an id (auto-generated if none supplied)'
+      assert_match(/\A__frag_\d+\z/, bid, 'auto id should follow the __frag_N pattern')
+    end
+
+    test 'explicit id="..." is preserved on a fragment block (no auto-id override)' do
+      slide = Przn::Parser.parse(%(# t\n\n<at id="callout" x="10" y="5" fragment="fade-up">hi</at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      bid = block[:attrs][:id] || block[:attrs]['id']
+      assert_equal 'callout', bid
+    end
+
+    test 'multiple fragment blocks on one slide get unique auto-ids' do
+      slide = Przn::Parser.parse(<<~MD).slides[0]
+        # t
+
+        <at x="10" y="5"  fragment="fade-up">one</at>
+        <at x="10" y="10" fragment="fade-down">two</at>
+        <at x="10" y="15" fragment="fade-left">three</at>
+      MD
+      ids = slide.blocks.select { |b| b[:type] == :at }
+                       .map { |b| b[:attrs][:id] || b[:attrs]['id'] }
+      assert_equal ids.size, ids.uniq.size, "auto-generated ids must be unique: #{ids.inspect}"
+    end
+
+    test '<img src=… fragment="fade-right"/> recognized' do
+      slide = Przn::Parser.parse(%(# t\n\n<img src="ruby.png" x="20" y="10" fragment="fade-right"/>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :image }
+      assert_equal 'fade-right', block[:fragment]
+      bid = block[:attrs]['id'] || block[:attrs][:id]
+      assert_not_nil bid
+    end
+
+    test '<rect fragment="fade-in"/> recognized' do
+      slide = Przn::Parser.parse(%(# t\n\n<rect x="5" y="5" width="20" height="6" fill="tomato" fragment="fade-in"/>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :shape }
+      assert_equal 'fade-in', block[:fragment]
+      bid = block[:attrs]['id'] || block[:attrs][:id]
+      assert_not_nil bid
+    end
+
+    test 'blocks without fragment= keep block[:fragment] nil' do
+      slide = Przn::Parser.parse(%(# t\n\n<at x="10" y="5">plain</at>\n)).slides[0]
+      block = slide.blocks.find { |b| b[:type] == :at }
+      assert_nil block[:fragment]
+    end
+
+    test 'auto-id counter resets across slides (no cross-slide collision needed)' do
+      deck = Przn::Parser.parse(<<~MD)
+        # A
+
+        <at x="10" y="5" fragment="fade-up">a</at>
+
+        # B
+
+        <at x="10" y="5" fragment="fade-up">b</at>
+      MD
+      a_id = deck.slides[0].blocks.find { |b| b[:type] == :at }[:attrs][:id] ||
+             deck.slides[0].blocks.find { |b| b[:type] == :at }[:attrs]['id']
+      b_id = deck.slides[1].blocks.find { |b| b[:type] == :at }[:attrs][:id] ||
+             deck.slides[1].blocks.find { |b| b[:type] == :at }[:attrs]['id']
+      assert_not_nil a_id
+      assert_not_nil b_id
+      # Cross-slide collisions are acceptable since each slide has its
+      # own effective-state computation; the test documents the choice.
+    end
+  end
+
   sub_test_case 'Slide layouts: h1 IAL + <slot/>' do
     test 'h1 IAL {layout=name} sets slide.layout and strips the IAL from the title' do
       slide = Przn::Parser.parse(%(# Title {layout=two-column}\n\nbody\n)).slides[0]

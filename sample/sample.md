@@ -239,6 +239,15 @@ This slide also opts in, so the previous one fades out AND this one fades in. Ei
 
 `theme.transition.duration` (ms) controls the per-half speed; default 200ms.
 
+# Fragment animations — directional fades
+
+<at x="10" y="40%" fragment="fade-up">fade-up</at>
+<at x="30" y="40%" fragment="fade-down">fade-down</at>
+<at x="50" y="40%" fragment="fade-left">fade-left</at>
+<at x="70" y="40%" fragment="fade-right">fade-right</at>
+
+Each `<at fragment="…">` adds a step boundary — press → to walk them in, one by one. The text slides into its declared spot while fading from alpha 0 to 1.
+
 # Cross-slide ref — `<ref id=…/>`
 
 <at id="quote" x="center" y="40%">🤘 Fall to your knees and repent if you please</at>
