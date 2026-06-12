@@ -3667,5 +3667,18 @@ class RendererTest < Test::Unit::TestCase
       # y kept as keyword — no numeric offset applied
       assert_equal 'center', state['a']['y']
     end
+
+    test 'max_duration_for_step returns a Float for fragments (controllers integer-divide-it-by-zero otherwise)' do
+      # Regression: a duration of 300 returned as Integer caused
+      # `elapsed / duration_ms` in Controller#animate_step to do integer
+      # division — progress stays at 0 for every frame except the last,
+      # so cell-alpha never lerps. Stays Float here so `elapsed / Float`
+      # produces fractional progress per frame.
+      block = at_block(x: '10', y: '5', id: 'a', fragment: 'fade-up')
+      r = Przn::Renderer.new(FragFakeTerm.new(w: 80, h: 30), theme: Przn::Theme.default)
+      d = r.max_duration_for_step(slide([block]), 1)
+      assert_kind_of Float, d,
+                     'fragment duration must be Float so animate_step lerps per frame'
+    end
   end
 end

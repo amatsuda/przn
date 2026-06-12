@@ -275,12 +275,15 @@ module Przn
       max
     end
 
-    # Duration (ms) for a fragment animation half — read from
+    # Duration (ms) for a fragment animation — read from
     # `theme.fragment.duration` with a hardcoded 300 ms fallback. Lives
     # here (not on the controller) so any caller of the renderer reuses
-    # the same value.
+    # the same value. Returned as Float so `Controller#animate_step`'s
+    # `elapsed / duration_ms` lerps fractionally per frame — an integer
+    # value here triggers integer division and pins progress at 0 until
+    # the final frame.
     def fragment_duration_ms
-      ((@theme && @theme.respond_to?(:fragment) && @theme.fragment && @theme.fragment[:duration]) || 300).to_i
+      ((@theme && @theme.respond_to?(:fragment) && @theme.fragment && @theme.fragment[:duration]) || 300).to_f
     end
 
     private
