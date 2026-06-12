@@ -227,10 +227,12 @@ module Przn
         else
           render_current
         end
-      else
-        @presentation.next_slide
-        @slide_step = 0
+      elsif @presentation.last_slide?
+        # Nothing further to advance to — keep the slide rendered as-is
+        # rather than running a fade-out that would land on the same slide.
         render_current
+      else
+        cross_slide_boundary { @presentation.next_slide; @slide_step = 0 }
       end
     end
 
@@ -274,6 +276,68 @@ module Przn
       Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
     end
 
+    # Wrap a slide change with optional fade-out / fade-in halves so a
+    # slide opted into the fade transition via `# Title {transition=fade}`
+    # animates instead of snapping. The two halves are independent:
+    # leaving slide A fades out iff A opted in; arriving at slide B fades
+    # in iff B opted in. Block yields the slide-change mutation (next or
+    # prev) sandwiched between the halves.
+    #
+    # Gated on Echoes — non-Echoes terminals skip the fade entirely and
+    # just snap, so the OSC 7772 cell-alpha bytes don't reach a terminal
+    # that would drop them and leave the loop's per-frame re-renders
+    # visible as flicker.
+    def cross_slide_boundary
+      outgoing = @presentation.current_slide
+      duration = slide_fade_duration_ms
+      can_fade = ImageUtil.echoes_terminal? && duration > 0
+      out_fade = can_fade && fade_slide?(outgoing)
+
+      animate_slide_fade(outgoing, from: 1.0, to: 0.0, duration_ms: duration) if out_fade
+      yield
+      incoming = @presentation.current_slide
+      in_fade  = can_fade && fade_slide?(incoming)
+      animate_slide_fade(incoming, from: 0.0, to: 1.0, duration_ms: duration) if in_fade
+      render_current
+    end
+
+    # `{transition=fade}` on the slide's h1 IAL → @attrs[:transition] == "fade".
+    # Symbols and strings both accepted for forward-compat.
+    def fade_slide?(slide)
+      v = slide&.attrs && slide.attrs[:transition]
+      v.to_s == 'fade'
+    end
+
+    def slide_fade_duration_ms
+      theme = @renderer.respond_to?(:theme) ? @renderer.theme : nil
+      ((theme && theme.transition && theme.transition[:duration]) || 200).to_i
+    end
+
+    # Per-half slide fade — same shape as `animate_step` but lerps a
+    # slide-level `opacity:` from `from` → `to` over `duration_ms`.
+    def animate_slide_fade(slide, from:, to:, duration_ms:)
+      frame_ms = 1000.0 / ANIMATION_FPS
+      current = @presentation.current
+      total = @presentation.total
+      started = monotonic_ms
+      loop do
+        elapsed = monotonic_ms - started
+        progress = (elapsed / duration_ms.to_f).clamp(0.0, 1.0)
+        alpha = from + (to - from) * progress
+        @renderer.render(
+          slide,
+          current: current,
+          total: total,
+          started_at: @started_at,
+          step: @slide_step,
+          opacity: alpha
+        )
+        break if progress >= 1.0
+        sleep_for = (frame_ms - (monotonic_ms - started - elapsed)) / 1000.0
+        sleep(sleep_for) if sleep_for > 0
+      end
+    end
+
     # Left / up: step backward within the current slide if there's
     # an earlier step to fall back to; otherwise jump to the previous
     # slide and LAND on its last step so backtracking shows the full
@@ -282,17 +346,19 @@ module Przn
     def retreat_step_or_slide
       if @slide_step > 0
         @slide_step -= 1
+        render_current
       else
         prev_idx = @presentation.current - 1
-        @presentation.prev_slide
-        if @presentation.current != prev_idx
-          # prev_slide was a no-op (already on slide 0); stay put.
-          @slide_step = 0
+        if prev_idx < 0
+          # Already on slide 0; stay put. No fade.
+          render_current
         else
-          @slide_step = [@renderer.step_count(@presentation.current_slide) - 1, 0].max
+          cross_slide_boundary do
+            @presentation.prev_slide
+            @slide_step = [@renderer.step_count(@presentation.current_slide) - 1, 0].max
+          end
         end
       end
-      render_current
     end
 
     # Number of slides on each side of the current slide to pre-upload

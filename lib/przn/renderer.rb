@@ -65,8 +65,17 @@ module Przn
       @bg_image_id = nil
     end
 
-    def render(slide, current:, total:, started_at: nil, step: 0, progress: 1.0)
+    def render(slide, current:, total:, started_at: nil, step: 0, progress: 1.0, opacity: 1.0)
       @mutex.synchronize do
+        # Slide-level fade: when the controller drives a fractional
+        # opacity, bracket the entire slide render in OSC 7772
+        # `cell-alpha` so every text write inherits the alpha as
+        # terminal-side paint state. This is the slide-transition
+        # building block; the per-block `with_block_opacity` path
+        # (action-driven fades) is independent and still nests inside.
+        slide_alpha = opacity.to_f.clamp(0.0, 1.0)
+        slide_fade  = slide_alpha < 1.0
+        @terminal.write "\e]7772;cell-alpha;#{slide_alpha}\a" if slide_fade
         # Per-block visibility for incremental reveals. Each `<wait/>`
         # block bumps the step counter, so block_step[b] = "step at
         # which block b becomes visible." A block is rendered iff
@@ -166,6 +175,10 @@ module Przn
           @terminal.write "#{counter_color_open}#{status}#{ANSI[:reset]}"
         end
 
+        # Close the slide-level cell-alpha bracket so the next render
+        # (or any other terminal write outside the renderer) lands at
+        # full opacity. Mirrors the per-block reset in `with_block_opacity`.
+        @terminal.write "\e]7772;cell-alpha;1\a" if slide_fade
         @terminal.flush
       end
     end

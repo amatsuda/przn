@@ -549,6 +549,23 @@ Conclusion — revealed on the second Space press.
 - Reload (`r`) rewinds the current slide to step 0 so a re-parsed deck always starts collapsed.
 - Both forms are accepted: `<wait/>` (XML self-closing), `<wait></wait>` (paired), and the kramdown spelling `{::wait/}`.
 
+### Slide transition — `{transition=fade}` _(Echoes only)_
+
+A slide opts into a fade transition via the h1 IAL:
+
+```markdown
+# Intro {transition=fade}
+
+…content…
+```
+
+The slide carrying the attribute fades out when you leave it and fades in when you arrive at it. The two halves are independent — `A → B` fades out from A iff `A` has `{transition=fade}` and fades in to B iff `B` does. If only one side opts in, the other snaps. Set `theme.transition.duration` (ms) to control per-half speed; default is 200ms.
+
+- Echoes-only: drives OSC 7772 `cell-alpha` paint state under the hood. Other terminals skip the animation entirely and snap.
+- Text-only in v1: paragraphs, headings, lists, code blocks, tables, and `<at>` text all fade. Kitty-graphics placements (background images, `<img>`, shapes) stay opaque — Kitty's per-placement opacity isn't wired yet.
+- Acts on slide-boundary navigation (→, ←, Space, `j`/`k`, etc., plus `g` / `G`). `<wait/>` step builds within a slide are independent and not affected.
+- Reload (`r`) skips the fade — it's a refresh, not navigation.
+
 ### Cross-slide reference — `<ref id="..."/>`
 
 Give any positioned block an `id="..."` and then re-render it on another slide (or twice on the same slide) by writing `<ref id="..."/>`. The reference looks up the block whose original declaration carries that id anywhere in the deck and dispatches to the same render path, so `<at>` text, `<img>` placements, and shapes all reappear at their original spot:

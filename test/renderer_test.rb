@@ -3057,6 +3057,41 @@ class RendererTest < Test::Unit::TestCase
              "expected alpha=0 wrap for an initially-invisible block: #{seqs.inspect}")
     end
 
+    test 'render(opacity: 0.5) brackets the whole slide in a cell-alpha pair (slide-fade transition)' do
+      # Slide-level opacity is the building block for slide-to-slide fade
+      # transitions: one OSC opens before any content, one closes after.
+      blocks = [{type: :paragraph, content: 'body'}]
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render, slide_with(blocks),
+                                    current: 0, total: 1, step: 0, opacity: 0.5)
+      seqs = writes(term)
+      assert(seqs.any? { |s| s.match?(/\e\]7772;cell-alpha;0?\.5\a/) },
+             "expected slide-fade alpha=0.5 in writes: #{seqs.inspect}")
+      assert(seqs.include?("\e]7772;cell-alpha;1\a"),
+             'expected an alpha=1 reset at the end of the slide render')
+      # The two halves should bracket the slide content — the alpha=0.5 open
+      # comes before any non-OSC writes, and alpha=1 close comes after.
+      open_idx  = seqs.index { |s| s.match?(/\e\]7772;cell-alpha;0?\.5\a/) }
+      close_idx = seqs.rindex("\e]7772;cell-alpha;1\a")
+      assert(open_idx < close_idx,
+             'open alpha must precede close alpha')
+    end
+
+    test 'render(opacity: 1.0) emits no slide-level cell-alpha (default no-op)' do
+      blocks = [{type: :paragraph, content: 'body'}]
+      term = FadeFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).send(:render, slide_with(blocks),
+                                    current: 0, total: 1, step: 0, opacity: 1.0)
+      # No bracketing OSC pair — but action-driven block-level cell-alpha
+      # may still appear; this assertion uses the "slide-level bracket" pattern:
+      # the slide should NOT open with a cell-alpha < 1 before any text writes.
+      seqs = writes(term)
+      first_alpha = seqs.find { |s| s.match?(/\e\]7772;cell-alpha;/) }
+      next unless first_alpha
+      refute(first_alpha.match?(/cell-alpha;0?\.\d/),
+             "opacity: 1.0 should not open with a fractional cell-alpha: #{first_alpha.inspect}")
+    end
+
     test 'fade-out without an explicit initial opacity still interpolates from 1.0' do
       # A block with no `opacity=` declares its default visibility (fully
       # opaque). A naive lerp_attr(nil, "0", progress) would snap to 0 —

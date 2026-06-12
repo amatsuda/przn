@@ -229,6 +229,16 @@ And again — the layout doesn't reflow, the hidden text was already reserved.
 
 The same step boundary, scoped to a single list item — the bullets stay in one list (numbering and indentation intact), and each `<wait/>` walks one item in.
 
+# Slide transition — fade _(Echoes only)_ {transition=fade}
+
+The h1 IAL `{transition=fade}` opts this slide into a fade transition. Press → to leave: the text smoothly fades to nothing before the next slide arrives.
+
+# …and fades back in {transition=fade}
+
+This slide also opts in, so the previous one fades out AND this one fades in. Either side can opt in independently — leave one off and that half snaps.
+
+`theme.transition.duration` (ms) controls the per-half speed; default 200ms.
+
 # Cross-slide ref — `<ref id=…/>`
 
 <at id="quote" x="center" y="40%">🤘 Fall to your knees and repent if you please</at>

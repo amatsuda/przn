@@ -25,7 +25,7 @@ module Przn
     # per-segment.
     Slot = Struct.new(:name, :x, :y, :width, :height, :size, :family, :color)
 
-    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts
+    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts, :transition
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -47,6 +47,10 @@ module Przn
         # opts into the 🐇 runner bar; without it the renderer shows the
         # plain " N / M " footer. `counter.color` styles both modes.
         counter: defaults[:counter].merge(overrides[:counter] || {}),
+        # `transition` carries the slide-fade `duration:` (ms) used when
+        # a slide opts in via `# Title {transition=fade}`. Empty by
+        # default — the renderer's fallback duration kicks in.
+        transition: defaults[:transition].merge(overrides[:transition] || {}),
         # Layouts: per-name replacement (no deep merge across slot lists —
         # an override redefines that layout's slot list end-to-end). The
         # name `default` is special: when a slide has no `{layout=...}`
@@ -102,6 +106,7 @@ module Przn
         title: (data[:title] || {}).compact,
         code: (data[:code] || {}).compact,
         counter: (data[:counter] || {}).compact,
+        transition: (data[:transition] || {}).compact,
         layouts: parse_layouts(data[:layouts])
       }
     end
@@ -146,6 +151,7 @@ module Przn
       @title = config[:title]
       @code = config[:code] || {}
       @counter = config[:counter] || {}
+      @transition = config[:transition] || {}
       @layouts = config[:layouts] || {}
     end
   end

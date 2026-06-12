@@ -12,11 +12,16 @@ class ControllerTest < Test::Unit::TestCase
   end
 
   class FakeRenderer
-    attr_accessor :theme, :renders, :last_step, :presentation
-    def initialize; @renders = 0; @last_step = nil; end
-    def render(*, **kwargs)
+    attr_accessor :theme, :renders, :last_step, :presentation, :render_log
+    def initialize; @renders = 0; @last_step = nil; @render_log = []; end
+    def render(slide = nil, *, **kwargs)
       @renders += 1
       @last_step = kwargs[:step]
+      # Capture opacity-bearing render calls so slide-fade tests can verify
+      # the fade lerp. Identifies the slide by the FIRST block's content (or
+      # type) since slide objects don't have a stable display name.
+      label = slide&.blocks&.first&.then { |b| b[:content] || b[:type] }
+      @render_log << {slide: label, opacity: kwargs[:opacity], step: kwargs[:step]}
     end
     def preload(_); end
     # Mirror Renderer#step_count so step-aware navigation logic can be
@@ -318,6 +323,118 @@ class ControllerTest < Test::Unit::TestCase
       c.instance_variable_set(:@slide_step, 0)
       assert_equal 0, c.instance_variable_get(:@presentation).current
       assert_equal 0, c.instance_variable_get(:@slide_step)
+    end
+  end
+
+  sub_test_case 'slide-fade transition: {transition=fade}' do
+    def setup
+      super
+      # Sweep theme.transition.duration down to keep the test loops snappy.
+      # The controller divides this in half between out + in halves.
+      # Enough wall-clock for the 30 fps loop to land 3-4 frames per half
+      # without making the test slow.
+      @renderer.theme = Struct.new(:transition, :counter)
+                              .new({duration: 120}, {})
+      @prev_term_program = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'  # gate for the fade path
+    end
+
+    def teardown
+      ENV['TERM_PROGRAM'] = @prev_term_program
+    end
+
+    def make_controller(markdown)
+      ps = Przn::Parser.parse(markdown)
+      Przn::Controller.new(ps, @term, @renderer)
+    end
+
+    def fade_renders_for(label)
+      @renderer.render_log.select { |r| r[:slide] == label && r[:opacity] && r[:opacity] < 1.0 }
+    end
+
+    test 'outgoing slide with {transition=fade} lerps opacity 1 → 0 before flipping' do
+      md = "# OUT {transition=fade}\n\nbody\n\n# IN\n\nbody\n"
+      c = make_controller(md)
+      c.send(:advance_step_or_slide)
+
+      outgoing = fade_renders_for('OUT')
+      assert(outgoing.size >= 2, "expected several fade-out frames on the outgoing slide: #{outgoing.inspect}")
+      assert(outgoing.first[:opacity] > outgoing.last[:opacity],
+             'fade-out opacity should monotonically decrease (1 → 0)')
+      assert_equal 0.0, outgoing.last[:opacity], 'fade-out should land at 0.0'
+      assert_equal 1, c.instance_variable_get(:@presentation).current,
+                   'presentation must have advanced to the next slide after the fade-out'
+    end
+
+    test 'incoming slide with {transition=fade} lerps opacity 0 → 1 after the flip' do
+      md = "# OUT\n\nbody\n\n# IN {transition=fade}\n\nbody\n"
+      c = make_controller(md)
+      c.send(:advance_step_or_slide)
+
+      incoming = fade_renders_for('IN')
+      assert(incoming.size >= 2, "expected several fade-in frames on the incoming slide: #{incoming.inspect}")
+      assert(incoming.first[:opacity] < incoming.last[:opacity],
+             'fade-in opacity should monotonically increase (0 → 1)')
+      assert_equal 0.0, incoming.first[:opacity], 'fade-in should start at 0.0'
+      assert_equal 1, c.instance_variable_get(:@presentation).current
+    end
+
+    test 'mixed: only outgoing has fade — fades out, then snaps in' do
+      md = "# OUT {transition=fade}\n\nbody\n\n# IN\n\nbody\n"
+      c = make_controller(md)
+      c.send(:advance_step_or_slide)
+      assert(fade_renders_for('OUT').any?, 'outgoing should have fade frames')
+      assert_empty fade_renders_for('IN'), 'incoming without {transition=fade} should not fade in'
+    end
+
+    test 'neither slide has {transition=fade}: no fade frames emitted' do
+      md = "# OUT\n\nbody\n\n# IN\n\nbody\n"
+      c = make_controller(md)
+      c.send(:advance_step_or_slide)
+      fade_frames = @renderer.render_log.select { |r| r[:opacity] && r[:opacity] < 1.0 }
+      assert_empty fade_frames, "no slide opted in; no fade frames expected: #{fade_frames.inspect}"
+    end
+
+    test 'non-Echoes terminal snaps even when {transition=fade} is set' do
+      ENV['TERM_PROGRAM'] = 'kitty'
+      md = "# OUT {transition=fade}\n\nbody\n\n# IN {transition=fade}\n\nbody\n"
+      c = make_controller(md)
+      c.send(:advance_step_or_slide)
+      fade_frames = @renderer.render_log.select { |r| r[:opacity] && r[:opacity] < 1.0 }
+      assert_empty fade_frames, "non-Echoes terminal must snap: #{fade_frames.inspect}"
+      assert_equal 1, c.instance_variable_get(:@presentation).current
+    end
+
+    test 'advance on the LAST slide does not fade (no real slide change)' do
+      md = "# OUT\n\nbody\n\n# LAST {transition=fade}\n\nbody\n"
+      c = make_controller(md)
+      c.instance_variable_get(:@presentation).go_to(1)  # already on last slide
+      c.send(:advance_step_or_slide)
+      fade_frames = @renderer.render_log.select { |r| r[:opacity] && r[:opacity] < 1.0 }
+      assert_empty fade_frames,
+                   "no slide change happens at last-slide → press; no fade should run: #{fade_frames.inspect}"
+    end
+
+    test 'retreat on slide 0 does not fade (no real slide change)' do
+      md = "# FIRST {transition=fade}\n\nbody\n\n# NEXT\n\nbody\n"
+      c = make_controller(md)
+      # already on slide 0
+      c.send(:retreat_step_or_slide)
+      fade_frames = @renderer.render_log.select { |r| r[:opacity] && r[:opacity] < 1.0 }
+      assert_empty fade_frames,
+                   "no slide change happens at slide-0 ← press; no fade should run: #{fade_frames.inspect}"
+    end
+
+    test 'retreat with {transition=fade} also fades in both directions' do
+      md = "# DESTINATION {transition=fade}\n\nbody\n\n# LEAVING {transition=fade}\n\nbody\n"
+      c = make_controller(md)
+      c.instance_variable_get(:@presentation).go_to(1)
+      c.send(:retreat_step_or_slide)
+      assert(fade_renders_for('LEAVING').any?,
+             'leaving slide should fade out on backward navigation')
+      assert(fade_renders_for('DESTINATION').any?,
+             'arriving slide should fade in on backward navigation')
+      assert_equal 0, c.instance_variable_get(:@presentation).current
     end
   end
 end

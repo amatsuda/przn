@@ -67,6 +67,14 @@ module Przn
         ENV['TERM_PROGRAM'] == 'Echoes'
     end
 
+    # Echoes-specific gate for OSC 7772 features (cell-alpha slide fades,
+    # bg-color / bg-gradient, hide-pointer). Strictly checked by
+    # TERM_PROGRAM since the OSC is private — other terminals would
+    # silently drop it but the renderer still spends time emitting bytes.
+    def echoes_terminal?
+      ENV['TERM_PROGRAM'] == 'Echoes'
+    end
+
     PNG_MAGIC = "\x89PNG\r\n\x1a\n".b.freeze
 
     def png?(path)

@@ -61,6 +61,16 @@ counter:
   rabbit: "\e]7772;multicell;s=2:flip=h;🐇\a"
   turtle: "\e]7772;multicell;s=2:flip=h;🐢\a"
 
+# Slide-to-slide fade transition. Opt-in per slide via the h1 IAL —
+# `# Title {transition=fade}`. The slide carrying the attribute fades
+# out when leaving it and fades in when arriving at it; the two halves
+# are independent (slide A → B can fade-out from A and snap into B if
+# only A opts in). `duration:` controls the total ms of one half. The
+# fade only paints text — Kitty-graphics images and shapes stay opaque
+# in v1. Echoes-only (uses OSC 7772 cell-alpha); other terminals snap.
+transition:
+  duration: 200         # ms per fade half — full A→B fade is twice this when both sides opt in
+
 # Slide layouts. Each layout names an ordered list of slots; a slot is a
 # rectangular region with x / y / width / height (1-based cells, or N%
 # of the terminal width/height). A slide picks a layout via an h1 IAL,

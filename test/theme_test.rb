@@ -338,6 +338,21 @@ class ThemeTest < Test::Unit::TestCase
 
       assert_equal 'cyan', Przn::Theme.load(theme_path).counter[:color]
     end
+
+    test 'user file sets transition.duration (slide-fade speed in ms)' do
+      write_theme <<~YAML
+        transition:
+          duration: 350
+      YAML
+
+      assert_equal 350, Przn::Theme.load(theme_path).transition[:duration]
+    end
+
+    test 'unset transition keeps the shipped default duration' do
+      write_theme "font: {}\n"
+      assert_equal 200, Przn::Theme.load(theme_path).transition[:duration],
+                   'omitting `transition:` should keep the default 200ms'
+    end
   end
 
   private
