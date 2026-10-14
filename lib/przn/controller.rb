@@ -71,7 +71,7 @@ module Przn
       @warmup_thread&.kill
       @warmup_thread&.join
       if @audience_link
-        AudienceLink.send(@audience_link, type: "quit")
+        AudienceLink.send_message(@audience_link, type: "quit")
         @audience_link.close
       end
       @terminal.write "\e]7772;bg-clear\a"
@@ -200,10 +200,10 @@ module Przn
         step: @slide_step
       )
       if @audience_link
-        AudienceLink.send(@audience_link,
-                          type: "goto",
-                          index: @presentation.current,
-                          started_at: @started_at.to_f)
+        AudienceLink.send_message(@audience_link,
+                                  type: "goto",
+                                  index: @presentation.current,
+                                  started_at: @started_at.to_f)
       end
       schedule_preload
     end

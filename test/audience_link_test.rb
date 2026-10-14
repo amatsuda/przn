@@ -20,10 +20,10 @@ class AudienceLinkTest < Test::Unit::TestCase
       client = Przn::AudienceLink.connect(sock)
       assert_equal({type: 'ready'}, JSON.parse(client.gets, symbolize_names: true))
 
-      Przn::AudienceLink.send(client, type: 'goto', index: 0)
-      Przn::AudienceLink.send(client, type: 'goto', index: 1)
-      Przn::AudienceLink.send(client, type: 'goto', index: 2)
-      Przn::AudienceLink.send(client, type: 'quit')
+      Przn::AudienceLink.send_message(client, type: 'goto', index: 0)
+      Przn::AudienceLink.send_message(client, type: 'goto', index: 1)
+      Przn::AudienceLink.send_message(client, type: 'goto', index: 2)
+      Przn::AudienceLink.send_message(client, type: 'quit')
 
       audience.join(2)
       client.close

@@ -21,7 +21,7 @@ module Przn
       File.unlink(path) if File.exist?(path)
       server = UNIXServer.new(path)
       client = server.accept
-      send(client, {type: "ready"})
+      send_message(client, {type: "ready"})
       while (line = client.gets)
         msg = JSON.parse(line.chomp, symbolize_names: true)
         break if msg[:type] == "quit"
@@ -36,13 +36,13 @@ module Przn
     end
 
     # Presenter-side: connect to an audience socket at `path` and return a
-    # client object that responds to `#send` and `#close`. Caller drives the
+    # UNIXSocket to hand to `send_message` and `#close`. Caller drives the
     # protocol from the controller.
     def connect(path)
       UNIXSocket.new(path)
     end
 
-    def send(io, msg)
+    def send_message(io, msg)
       io.puts(JSON.generate(msg))
     rescue Errno::EPIPE, IOError
       # Other side hung up — caller decides whether to keep going.
