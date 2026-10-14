@@ -61,6 +61,20 @@ module Przn
       nil
     end
 
+    # Flatten inline markup to plain text via the parser's own inline
+    # scanner, so the preview tracks every tag the slide itself renders.
+    # Notes are presenter-strip material, not title text; `<br>` reads
+    # as a space on the one-line strip.
+    def strip_markup(text)
+      Parser.parse_inline(text).filter_map { |type, content|
+        case type
+        when :note then nil
+        when :break then ' '
+        else content
+        end
+      }.join
+    end
+
     def format_elapsed(seconds)
       h = (seconds / 3600).to_i
       m = ((seconds % 3600) / 60).to_i
