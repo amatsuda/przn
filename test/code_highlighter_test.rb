@@ -43,6 +43,16 @@ class CodeHighlighterTest < Test::Unit::TestCase
       refute_empty string_pieces, 'expected at least one green string-token piece'
     end
 
+    test 'diff hunks color removed lines red and added lines green' do
+      code = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n ctx\n"
+      result = Przn::CodeHighlighter.highlight(code, 'diff')
+      assert_equal 'yellow', result.find { |_, v| v.start_with?('diff --git') }.first
+      assert_equal 'red',    result.find { |_, v| v == "-old\n" }.first
+      assert_equal 'green',  result.find { |_, v| v == "+new\n" }.first
+      assert_nil             result.find { |_, v| v == " ctx\n" }.first
+      assert_equal result, Przn::CodeHighlighter.highlight(code, 'patch')
+    end
+
     test 'unknown token types fall back to nil (default fg)' do
       # Plain text the lexer marks as Text → nil.
       result = Przn::CodeHighlighter.highlight("plain words here\n", 'plaintext')

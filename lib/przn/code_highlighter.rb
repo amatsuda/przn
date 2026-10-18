@@ -65,7 +65,13 @@ module Przn
       'Literal.Number'             => 'magenta',
       'Comment'                    => 'bright_black',
       'Operator'                   => 'red',
-      'Operator.Word'              => 'cyan'
+      'Operator.Word'              => 'cyan',
+      # Diff / patch hunks, coloured the way `git diff` does: removed
+      # lines red, added lines green, file headers stand out.
+      'Generic.Deleted'            => 'red',
+      'Generic.Inserted'           => 'green',
+      'Generic.Heading'            => 'yellow',
+      'Generic.Subheading'         => 'cyan'
     }.freeze
 
     module_function

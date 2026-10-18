@@ -149,7 +149,7 @@ Indented code blocks (4 spaces) with an optional kramdown IAL pick up highlighti
 {: lang="ruby"}
 ```
 
-Blocks without a language fall back to the same gray-on-dim plain text. The color scheme is fixed (tuned for the dim background) — comments dim, strings green, keywords cyan, numbers magenta, function / type names yellow / green.
+Blocks without a language fall back to the same gray-on-dim plain text. The color scheme is fixed (tuned for the dim background) — comments dim, strings green, keywords cyan, numbers magenta, function / type names yellow / green. ` ```diff ` / ` ```patch ` blocks follow `git diff`: removed lines red, added lines green, file headers yellow.
 
 A kramdown-style IAL right after the language overrides the theme's `code.*` defaults for that one block. Most useful for shrinking a long snippet down to a smaller size without touching the deck-wide default:
 
