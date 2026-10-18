@@ -2,6 +2,7 @@
 
 require 'test_helper'
 require 'tempfile'
+require 'stringio'
 
 class ControllerTest < Test::Unit::TestCase
   # Minimal stubs — Controller#reload only touches Presentation,
@@ -435,6 +436,47 @@ class ControllerTest < Test::Unit::TestCase
       assert(fade_renders_for('DESTINATION').any?,
              'arriving slide should fade in on backward navigation')
       assert_equal 0, c.instance_variable_get(:@presentation).current
+    end
+  end
+
+  sub_test_case 'read_key: mouse clicks' do
+    def read_key(input)
+      stdin, $stdin = $stdin, StringIO.new(input)
+      c = Przn::Controller.new(Przn::Parser.parse("# A\n"), @term, @renderer)
+      [c.send(:read_key), $stdin.read]
+    ensure
+      $stdin = stdin
+    end
+
+    test 'left-button press is :click_left' do
+      assert_equal [:click_left, ''], read_key("\e[<0;12;5M")
+    end
+
+    test 'right-button press is :click_right' do
+      assert_equal [:click_right, ''], read_key("\e[<2;80;24M")
+    end
+
+    test 'a modifier held during the click still counts' do
+      assert_equal :click_left, read_key("\e[<4;1;1M").first
+      assert_equal :click_right, read_key("\e[<18;1;1M").first
+    end
+
+    test 'releases, middle button and wheel are swallowed whole' do
+      ["\e[<0;12;5m", "\e[<1;1;1M", "\e[<64;1;1M", "\e[<65;1;1M"].each do |seq|
+        assert_equal [:mouse, 'x'], read_key("#{seq}x"), seq.inspect
+      end
+    end
+
+    test 'press then release read as one click and one no-op' do
+      stdin, $stdin = $stdin, StringIO.new("\e[<0;3;3M\e[<0;3;3m")
+      c = Przn::Controller.new(Przn::Parser.parse("# A\n"), @term, @renderer)
+      assert_equal [:click_left, :mouse], [c.send(:read_key), c.send(:read_key)]
+    ensure
+      $stdin = stdin
+    end
+
+    test 'arrow keys are unaffected' do
+      assert_equal :right, read_key("\e[C").first
     end
   end
 end

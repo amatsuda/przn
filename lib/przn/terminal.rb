@@ -5,6 +5,9 @@ require 'io/console'
 module Przn
   class Terminal
     MOUSE_OFF = "\e[?1006l\e[?1003l\e[?1002l\e[?1000l"
+    # Button press/release reporting (1000) in SGR encoding (1006) — no
+    # motion tracking, so plain clicks are all that ever arrive.
+    MOUSE_ON = "\e[?1000h\e[?1006h"
 
     def initialize(input: $stdin, output: $stdout)
       @in = input
@@ -48,6 +51,12 @@ module Przn
     def enter_alt_screen
       write "\e[?1049h"
       write MOUSE_OFF
+    end
+
+    # Report clicks so the controller can page with the mouse. Cleared
+    # by `leave_alt_screen`'s MOUSE_OFF.
+    def enable_mouse
+      write MOUSE_ON
     end
 
     def leave_alt_screen

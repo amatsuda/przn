@@ -16,6 +16,13 @@ class TerminalTest < Test::Unit::TestCase
     end
   end
 
+  sub_test_case 'enable_mouse' do
+    test 'turns on click reporting in SGR encoding, without motion tracking' do
+      @terminal.enable_mouse
+      assert_equal "\e[?1000h\e[?1006h", @out.string
+    end
+  end
+
   sub_test_case 'leave_alt_screen' do
     test "disables mouse tracking before switching back, so leaked state never lands on the user's shell" do
       @terminal.leave_alt_screen

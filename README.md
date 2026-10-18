@@ -71,12 +71,14 @@ Without `gs` on `$PATH` the file is left at its lossless-only size and a one-lin
 
 | Key | Action |
 |-----|--------|
-| `→` `↓` `l` `j` `Space` | Next slide |
-| `←` `↑` `h` `k` | Previous slide |
+| `→` `↓` `l` `j` `Space` / left-click | Next slide |
+| `←` `↑` `h` `k` / right-click | Previous slide |
 | `g` | First slide |
 | `G` | Last slide |
 | `r` | Reload the deck (and `theme.yml`) from disk, keeping the current slide index |
 | `q` `Ctrl-C` | Quit |
+
+Clicks step through `<wait/>` builds exactly like the keys. With mouse reporting on, most terminals still let you select text by holding a modifier while dragging (Shift in kitty / Ghostty / xterm, Option in iTerm2).
 
 ### Hot reload
 

@@ -35,6 +35,7 @@ module Przn
       @started_at = Time.now
       @terminal.enter_alt_screen
       @terminal.hide_cursor
+      @terminal.enable_mouse
       EchoesClient.hide_pointer(io_out: @terminal)
       warm_code_highlight_cache
       render_current
@@ -44,9 +45,9 @@ module Przn
       @terminal.raw do
         loop do
           case read_event
-          when :right, :down, 'l', 'j', ' '
+          when :right, :down, 'l', 'j', ' ', :click_left
             advance_step_or_slide
-          when :left, :up, 'h', 'k'
+          when :left, :up, 'h', 'k', :click_right
             retreat_step_or_slide
           when 'g'
             @presentation.first_slide!
@@ -473,6 +474,7 @@ module Przn
         when '[D' then :left
         when '[H' then :home
         when '[F' then :end
+        when '[<' then read_mouse
         else :escape
         end
       else
@@ -480,6 +482,29 @@ module Przn
       end
     rescue IO::WaitReadable
       :escape
+    end
+
+    # SGR mouse report (`Terminal#enable_mouse`), the `ESC [ <` already
+    # consumed: `Cb ; Cx ; Cy` then `M` on press, `m` on release. Only
+    # presses navigate — left is next, right is previous. Releases, the
+    # middle button and the wheel come back as `:mouse` so the whole
+    # sequence is swallowed rather than leaking digits into the key loop.
+    def read_mouse
+      params = +''
+      while (c = $stdin.getc)
+        break if c == 'M' || c == 'm'
+        return :mouse if params.size > 16
+        params << c
+      end
+      return :mouse unless c == 'M'
+
+      # Strip the shift / meta / ctrl modifier bits (4 / 8 / 16), so a
+      # modified click still counts as a click.
+      case params.split(';').first.to_i & ~0b11100
+      when 0 then :click_left
+      when 2 then :click_right
+      else :mouse
+      end
     end
 
     # Multiplex stdin and the file-watcher pipe. Without the watcher
