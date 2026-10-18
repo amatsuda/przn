@@ -3746,4 +3746,57 @@ class RendererTest < Test::Unit::TestCase
       assert_include written(term), theme.counter[:rabbit]
     end
   end
+
+  # 80 cols, 11 slides: the track runs from col 3 to col 77, so the
+  # 4-cell 🐇 sits at col 3 on slide 0 and col 39 on slide 5.
+  sub_test_case 'runner bar drag hit-testing' do
+    def runner_theme
+      Tempfile.create(['theme', '.yml']) do |f|
+        f.write("counter:\n  duration: 30m\n")
+        f.flush
+        Przn::Theme.load(f.path)
+      end
+    end
+
+    def renderer(theme: runner_theme)
+      Przn::Renderer.new(CounterFakeTerm.new(w: 80, h: 30), theme: theme)
+    end
+
+    test 'runner_grab returns the offset into the rabbit glyph on either of its two rows' do
+      r = renderer
+      assert_equal 0, r.runner_grab(29, 3, current: 0, total: 11)
+      assert_equal 2, r.runner_grab(30, 5, current: 0, total: 11)
+      assert_equal 1, r.runner_grab(29, 40, current: 5, total: 11)
+    end
+
+    test 'runner_grab allows one cell of slack either side' do
+      r = renderer
+      assert_equal(-1, r.runner_grab(29, 38, current: 5, total: 11))
+      assert_equal 4, r.runner_grab(29, 43, current: 5, total: 11)
+      assert_nil r.runner_grab(29, 37, current: 5, total: 11)
+      assert_nil r.runner_grab(29, 44, current: 5, total: 11)
+    end
+
+    test 'runner_grab misses above the bottom two rows' do
+      assert_nil renderer.runner_grab(28, 3, current: 0, total: 11)
+    end
+
+    test 'runner_grab is nil without a runner bar' do
+      assert_nil renderer(theme: nil).runner_grab(29, 3, current: 0, total: 11)
+
+      r = renderer
+      r.render(Przn::Slide.new([{type: :heading, level: 1, content: 'T'}], attrs: {counter: 'hide'}),
+               current: 0, total: 11, started_at: Time.now)
+      assert_nil r.runner_grab(29, 3, current: 0, total: 11)
+    end
+
+    test 'runner_slide_at inverts the rabbit position and clamps to the deck' do
+      r = renderer
+      assert_equal 0,  r.runner_slide_at(3,   current: 0, total: 11)
+      assert_equal 5,  r.runner_slide_at(39,  current: 0, total: 11)
+      assert_equal 10, r.runner_slide_at(74,  current: 0, total: 11)
+      assert_equal 0,  r.runner_slide_at(-20, current: 0, total: 11)
+      assert_equal 10, r.runner_slide_at(200, current: 0, total: 11)
+    end
+  end
 end

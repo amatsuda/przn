@@ -237,6 +237,34 @@ module Przn
       end
     end
 
+    # Mouse hit test for dragging the 🐇. Returns the grab offset (cell
+    # column of the press minus the rabbit's left column) when `row` /
+    # `col` land on the rabbit, nil otherwise — including whenever the
+    # runner bar isn't on screen. A cell of slack either side makes the
+    # 4-cell glyph easier to catch.
+    def runner_grab(row, col, current:, total:)
+      return nil unless runner_bar_shown?
+      h = @terminal.height
+      track = runner_track(@terminal.width, current, total)
+      return nil unless track && row >= [h - 1, 1].max
+      rabbit_col = runner_col(current, [total - 1, 1].max, *track)
+      return nil unless col.between?(rabbit_col - 1, rabbit_col + EMOJI_RUNNER_CELLS)
+      col - rabbit_col
+    end
+
+    # Inverse of `runner_col`: the slide index whose rabbit position is
+    # nearest to `rabbit_col`, clamped to the deck. `current` fixes the
+    # track geometry (the left anchor's digit count shifts it).
+    def runner_slide_at(rabbit_col, current:, total:)
+      track = runner_track(@terminal.width, current, total)
+      return current unless track
+      track_left, track_right = track
+      span = (track_right - (EMOJI_RUNNER_CELLS - 1)) - track_left
+      return current if span <= 0
+      max = [total - 1, 1].max
+      ((rabbit_col - track_left).to_f / span * max).round.clamp(0, total - 1)
+    end
+
     # How many discrete steps a slide has — one per `<wait/>` block,
     # plus one for the initial state with nothing revealed. The
     # controller uses this to decide whether Space advances within
@@ -654,6 +682,11 @@ module Przn
     def counter_duration
       raw = @theme.counter && @theme.counter[:duration]
       raw && Theme.parse_duration(raw)
+    end
+
+    # The 🐇 / 🐢 bar is what's on the bottom row right now.
+    def runner_bar_shown?
+      !@export_mode && counter_duration && !@counter_hidden
     end
 
     # True when the slide's h1 IAL carries `counter=hide`. Duck-typed on
@@ -1806,9 +1839,9 @@ module Przn
     def draw_runner_bar(h, w, current, total, started_at)
       left  = (current + 1).to_s
       right = total.to_s
-      track_left  = left.size + 2          # 1 cell gap after the left number
-      track_right = w - right.size - 1     # 1 cell gap before the right number
-      return if track_right - track_left < EMOJI_RUNNER_CELLS
+      track = runner_track(w, current, total)
+      return unless track
+      track_left, track_right = track
 
       rabbit_row = [h - 1, 1].max
 
@@ -1840,6 +1873,16 @@ module Przn
       turtle_col = track_left + (frac * [span, 0].max).round
       @terminal.move_to(rabbit_row, turtle_col)
       @terminal.write counter[:turtle].to_s
+    end
+
+    # `[track_left, track_right]` columns of the runner track, or nil
+    # when the terminal is too narrow to fit an emoji between the anchor
+    # numbers.
+    def runner_track(w, current, total)
+      track_left  = (current + 1).to_s.size + 2   # 1 cell gap after the left number
+      track_right = w - total.to_s.size - 1        # 1 cell gap before the right number
+      return nil if track_right - track_left < EMOJI_RUNNER_CELLS
+      [track_left, track_right]
     end
 
     # Linear-interpolate a runner's column inside the track. `step` is 0..max

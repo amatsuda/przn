@@ -439,7 +439,7 @@ class ControllerTest < Test::Unit::TestCase
     end
   end
 
-  sub_test_case 'read_key: mouse clicks' do
+  sub_test_case 'read_key: SGR mouse reports' do
     def read_key(input)
       stdin, $stdin = $stdin, StringIO.new(input)
       c = Przn::Controller.new(Przn::Parser.parse("# A\n"), @term, @renderer)
@@ -448,35 +448,131 @@ class ControllerTest < Test::Unit::TestCase
       $stdin = stdin
     end
 
-    test 'left-button press is :click_left' do
-      assert_equal [:click_left, ''], read_key("\e[<0;12;5M")
+    def mouse(*args) = Przn::Controller::Mouse.new(*args)
+
+    test 'button presses decode to button, column, row' do
+      assert_equal [mouse(0, 12, 5, :press), ''], read_key("\e[<0;12;5M")
+      assert_equal [mouse(2, 80, 24, :press), ''], read_key("\e[<2;80;24M")
     end
 
-    test 'right-button press is :click_right' do
-      assert_equal [:click_right, ''], read_key("\e[<2;80;24M")
+    test 'a trailing m is a release' do
+      assert_equal mouse(0, 12, 5, :release), read_key("\e[<0;12;5m").first
     end
 
-    test 'a modifier held during the click still counts' do
-      assert_equal :click_left, read_key("\e[<4;1;1M").first
-      assert_equal :click_right, read_key("\e[<18;1;1M").first
+    test 'motion with a button held is a drag of that button' do
+      assert_equal mouse(0, 40, 29, :drag), read_key("\e[<32;40;29M").first
     end
 
-    test 'releases, middle button and wheel are swallowed whole' do
-      ["\e[<0;12;5m", "\e[<1;1;1M", "\e[<64;1;1M", "\e[<65;1;1M"].each do |seq|
-        assert_equal [:mouse, 'x'], read_key("#{seq}x"), seq.inspect
-      end
+    test 'modifier bits are stripped' do
+      assert_equal mouse(0, 1, 1, :press), read_key("\e[<4;1;1M").first
+      assert_equal mouse(2, 1, 1, :press), read_key("\e[<18;1;1M").first
     end
 
-    test 'press then release read as one click and one no-op' do
-      stdin, $stdin = $stdin, StringIO.new("\e[<0;3;3M\e[<0;3;3m")
-      c = Przn::Controller.new(Przn::Parser.parse("# A\n"), @term, @renderer)
-      assert_equal [:click_left, :mouse], [c.send(:read_key), c.send(:read_key)]
-    ensure
-      $stdin = stdin
+    test 'the whole report is consumed, wheel included' do
+      assert_equal [mouse(64, 1, 1, :press), 'x'], read_key("\e[<64;1;1Mx")
     end
 
     test 'arrow keys are unaffected' do
       assert_equal :right, read_key("\e[C").first
+    end
+  end
+
+  sub_test_case 'handle_mouse' do
+    # Pretends the 🐇 occupies cols 10-13 of row 29 and maps a rabbit
+    # column to slide `col / 10`.
+    class RunnerRenderer < FakeRenderer
+      def runner_grab(row, col, current:, total:)
+        col - 10 if row == 29 && col.between?(10, 13)
+      end
+      def runner_slide_at(col, current:, total:) = (col / 10).clamp(0, total - 1)
+    end
+
+    def setup
+      super
+      @renderer = RunnerRenderer.new
+      @c = Przn::Controller.new(Przn::Parser.parse((1..6).map { "# S#{_1}\n" }.join("\n")), @term, @renderer)
+      @c.instance_variable_get(:@presentation).go_to(1)
+      @pending = false
+      pending = -> { @pending }
+      @c.define_singleton_method(:input_pending?) { pending.call }
+    end
+
+    def press(col, row = 29, button: 0) = @c.send(:handle_mouse, Przn::Controller::Mouse.new(button, col, row, :press))
+    def drag(col)    = @c.send(:handle_mouse, Przn::Controller::Mouse.new(0, col, 29, :drag))
+    def release(col) = @c.send(:handle_mouse, Przn::Controller::Mouse.new(0, col, 29, :release))
+    def current      = @c.instance_variable_get(:@presentation).current
+
+    test 'left-click off the rabbit is next, right-click is previous' do
+      press(40, 5)
+      assert_equal 2, current
+      press(40, 5, button: 2)
+      assert_equal 1, current
+    end
+
+    test 'dragging the rabbit scrubs the slide along with it' do
+      press(12)
+      drag(32)
+      assert_equal 3, current
+      assert_equal 1, @renderer.renders
+      drag(52)
+      assert_equal 5, current
+      assert_equal 2, @renderer.renders
+
+      release(52)
+      assert_equal 5, current
+      assert_equal 2, @renderer.renders
+    end
+
+    test 'a burst of queued motion renders only the latest position' do
+      press(12)
+      @pending = true
+      drag(32)
+      drag(42)
+      assert_equal 1, current
+      assert_equal 0, @renderer.renders
+      @pending = false
+      drag(52)
+      assert_equal 5, current
+      assert_equal 1, @renderer.renders
+    end
+
+    test 'release settles on a target a queued burst left unrendered' do
+      press(12)
+      @pending = true
+      drag(42)
+      release(42)
+      assert_equal 4, current
+      assert_equal 1, @renderer.renders
+    end
+
+    test 'a release reported with another button code still ends the drag' do
+      press(12)
+      @pending = true
+      drag(32)
+      @c.send(:handle_mouse, Przn::Controller::Mouse.new(3, 32, 29, :release))
+      assert_equal 3, current
+      assert_nil @c.instance_variable_get(:@runner_drag)
+    end
+
+    test 'the grab offset carries through the drag' do
+      press(13)        # grabbed 3 cells into the glyph
+      drag(35)         # rabbit's left edge at 32 -> slide 3
+      release(35)
+      assert_equal 3, current
+    end
+
+    test 'grabbing and letting go in place does nothing' do
+      press(10)
+      release(10)
+      assert_equal 1, current
+      assert_equal 0, @renderer.renders
+    end
+
+    test 'drags and releases without a grab are ignored' do
+      drag(52)
+      release(52)
+      assert_equal 1, current
+      assert_equal 0, @renderer.renders
     end
   end
 end

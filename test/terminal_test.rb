@@ -17,9 +17,9 @@ class TerminalTest < Test::Unit::TestCase
   end
 
   sub_test_case 'enable_mouse' do
-    test 'turns on click reporting in SGR encoding, without motion tracking' do
+    test 'turns on button-event tracking (clicks and drags, no hover) in SGR encoding' do
       @terminal.enable_mouse
-      assert_equal "\e[?1000h\e[?1006h", @out.string
+      assert_equal "\e[?1002h\e[?1006h", @out.string
     end
   end
 

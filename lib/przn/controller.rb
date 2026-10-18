@@ -31,6 +31,15 @@ module Przn
     # is plenty for visible movement without being noisy.
     RUNNER_BAR_TICK_SECONDS = 1.0
 
+    # One decoded SGR mouse report. `button` is 0 (left) / 1 (middle) /
+    # 2 (right) / 64+ (wheel); `kind` is :press, :release or :drag
+    # (motion with a button held). `col` / `row` are 1-based cells.
+    Mouse = Struct.new(:button, :col, :row, :kind)
+
+    # An in-progress 🐇 drag: where on the glyph it was grabbed, and the
+    # slide index the rabbit currently sits at.
+    RunnerDrag = Struct.new(:offset, :target)
+
     def run
       @started_at = Time.now
       @terminal.enter_alt_screen
@@ -44,10 +53,12 @@ module Przn
 
       @terminal.raw do
         loop do
-          case read_event
-          when :right, :down, 'l', 'j', ' ', :click_left
+          case (event = read_event)
+          when Mouse
+            handle_mouse(event)
+          when :right, :down, 'l', 'j', ' '
             advance_step_or_slide
-          when :left, :up, 'h', 'k', :click_right
+          when :left, :up, 'h', 'k'
             retreat_step_or_slide
           when 'g'
             @presentation.first_slide!
@@ -485,10 +496,10 @@ module Przn
     end
 
     # SGR mouse report (`Terminal#enable_mouse`), the `ESC [ <` already
-    # consumed: `Cb ; Cx ; Cy` then `M` on press, `m` on release. Only
-    # presses navigate — left is next, right is previous. Releases, the
-    # middle button and the wheel come back as `:mouse` so the whole
-    # sequence is swallowed rather than leaking digits into the key loop.
+    # consumed: `Cb ; Cx ; Cy` then `M` on press / drag, `m` on release.
+    # Always returns a Mouse (or :mouse for a garbled report) so the
+    # whole sequence is swallowed rather than leaking digits into the
+    # key loop.
     def read_mouse
       params = +''
       while (c = $stdin.getc)
@@ -496,15 +507,69 @@ module Przn
         return :mouse if params.size > 16
         params << c
       end
-      return :mouse unless c == 'M'
+      return :mouse unless c
 
-      # Strip the shift / meta / ctrl modifier bits (4 / 8 / 16), so a
-      # modified click still counts as a click.
-      case params.split(';').first.to_i & ~0b11100
-      when 0 then :click_left
-      when 2 then :click_right
-      else :mouse
+      cb, col, row = params.split(';').map(&:to_i)
+      kind = if c == 'm' then :release
+             elsif cb & 32 != 0 then :drag
+             else :press
+             end
+      # Strip the shift / meta / ctrl modifier bits (4 / 8 / 16) and the
+      # motion bit (32), so a modified click still counts as a click.
+      Mouse.new(cb & ~0b111100, col, row, kind)
+    end
+
+    # Left-click is next, right-click is previous — except a left press
+    # on the 🐇 of the runner bar, which grabs it: dragging scrubs the
+    # deck, the slide following the rabbit along the track.
+    def handle_mouse(ev)
+      if @runner_drag && ev.kind != :press
+        drag_runner(ev)
+        return
       end
+      @runner_drag = nil
+      return unless ev.kind == :press
+
+      case ev.button
+      when 0
+        offset = @renderer.respond_to?(:runner_grab) &&
+                 @renderer.runner_grab(ev.row, ev.col, current: @presentation.current, total: @presentation.total)
+        if offset
+          @runner_drag = RunnerDrag.new(offset, @presentation.current)
+        else
+          advance_step_or_slide
+        end
+      when 2
+        retreat_step_or_slide
+      end
+    end
+
+    # A fast drag queues a burst of motion reports; rendering a slide
+    # for each would lag behind the pointer. Track the target on every
+    # report but render only once the queue is drained (the latest
+    # report wins), and settle on release for good measure.
+    def drag_runner(ev)
+      drag = @runner_drag
+      case ev.kind
+      when :drag
+        return unless ev.button == 0
+        drag.target = @renderer.runner_slide_at(ev.col - drag.offset, current: @presentation.current, total: @presentation.total)
+        show_runner_target(drag) unless input_pending?
+      when :release
+        @runner_drag = nil
+        show_runner_target(drag)
+      end
+    end
+
+    def show_runner_target(drag)
+      return if drag.target == @presentation.current
+      @presentation.go_to(drag.target)
+      @slide_step = 0
+      render_current
+    end
+
+    def input_pending?
+      !IO.select([$stdin], nil, nil, 0).nil?
     end
 
     # Multiplex stdin and the file-watcher pipe. Without the watcher

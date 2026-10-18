@@ -5,9 +5,10 @@ require 'io/console'
 module Przn
   class Terminal
     MOUSE_OFF = "\e[?1006l\e[?1003l\e[?1002l\e[?1000l"
-    # Button press/release reporting (1000) in SGR encoding (1006) — no
-    # motion tracking, so plain clicks are all that ever arrive.
-    MOUSE_ON = "\e[?1000h\e[?1006h"
+    # Button-event tracking (1002: presses, releases, and motion only
+    # while a button is held — for dragging the 🐇) in SGR encoding
+    # (1006). Bare hovering is never reported.
+    MOUSE_ON = "\e[?1002h\e[?1006h"
 
     def initialize(input: $stdin, output: $stdout)
       @in = input
