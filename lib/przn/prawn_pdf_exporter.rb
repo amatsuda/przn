@@ -325,11 +325,14 @@ module Przn
 
       # Page number — reads `theme.counter.color` like the terminal's
       # bottom-right counter does, so a single theme key styles both.
-      total = @presentation.total
-      status = "#{slide_index + 1} / #{total}"
-      pdf.fill_color @counter_color
-      pdf.text_box status, at: [0, 16], width: PAGE_WIDTH - 10, height: 14, size: 8, align: :right
-      pdf.fill_color @fg_color
+      # Skipped on a `{counter=hide}` slide, as in the terminal.
+      unless slide.attrs[:counter].to_s == 'hide'
+        total = @presentation.total
+        status = "#{slide_index + 1} / #{total}"
+        pdf.fill_color @counter_color
+        pdf.text_box status, at: [0, 16], width: PAGE_WIDTH - 10, height: 14, size: 8, align: :right
+        pdf.fill_color @fg_color
+      end
     end
 
     def draw_background(pdf)

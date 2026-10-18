@@ -1137,6 +1137,12 @@ class ParserTest < Test::Unit::TestCase
       assert_equal({align: 'center'}, slide.attrs)
     end
 
+    test 'h1 IAL {counter=hide} rides on slide.attrs and is stripped from the title' do
+      slide = Przn::Parser.parse(%(# Title {counter=hide}\n)).slides[0]
+      assert_equal 'hide', slide.attrs[:counter]
+      assert_equal 'Title', slide.blocks.find { |b| b[:type] == :heading }[:content]
+    end
+
     test 'h1 without IAL leaves slide.layout nil' do
       slide = Przn::Parser.parse(%(# Title\n\nbody\n)).slides[0]
       assert_nil slide.layout

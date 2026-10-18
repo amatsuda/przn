@@ -3681,4 +3681,69 @@ class RendererTest < Test::Unit::TestCase
                      'fragment duration must be Float so animate_step lerps per frame'
     end
   end
+
+  sub_test_case 'per-slide {counter=hide}' do
+    class CounterFakeTerm
+      attr_reader :ops
+      def initialize(w:, h:); @w, @h, @ops = w, h, []; end
+      def width;  @w; end
+      def height; @h; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def clear; @ops << [:clear]; end
+      def flush; end
+      def cell_pixel_size; [10, 20]; end
+    end
+
+    def slide(attrs = {})
+      Przn::Slide.new([{type: :heading, level: 1, content: 'Title'}], attrs: attrs)
+    end
+
+    def written(term)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s.to_s }.join
+    end
+
+    def runner_theme
+      Tempfile.create(['theme', '.yml']) do |f|
+        f.write("counter:\n  duration: 30m\n")
+        f.flush
+        Przn::Theme.load(f.path)
+      end
+    end
+
+    test 'plain N / M counter is drawn by default' do
+      term = CounterFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).render(slide, current: 0, total: 3)
+      assert_include written(term), ' 1 / 3 '
+    end
+
+    test 'plain N / M counter is skipped on a counter=hide slide' do
+      term = CounterFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term).render(slide(counter: 'hide'), current: 0, total: 3)
+      assert_not_include written(term), ' 1 / 3 '
+    end
+
+    test 'runner bar is skipped on a counter=hide slide' do
+      theme = runner_theme
+      term = CounterFakeTerm.new(w: 80, h: 30)
+      Przn::Renderer.new(term, theme: theme).render(slide(counter: 'hide'), current: 0, total: 3, started_at: Time.now)
+      assert_not_include written(term), theme.counter[:rabbit]
+      assert_not_include written(term), theme.counter[:turtle]
+    end
+
+    test 'the 1 s runner-bar refresh stays off while a counter=hide slide is up, and resumes after' do
+      theme = runner_theme
+      term = CounterFakeTerm.new(w: 80, h: 30)
+      renderer = Przn::Renderer.new(term, theme: theme)
+      renderer.render(slide(counter: 'hide'), current: 0, total: 3, started_at: Time.now)
+      term.ops.clear
+      renderer.redraw_runner_bar(current: 0, total: 3, started_at: Time.now)
+      assert_not_include written(term), theme.counter[:rabbit]
+
+      renderer.render(slide, current: 1, total: 3, started_at: Time.now)
+      term.ops.clear
+      renderer.redraw_runner_bar(current: 1, total: 3, started_at: Time.now)
+      assert_include written(term), theme.counter[:rabbit]
+    end
+  end
 end

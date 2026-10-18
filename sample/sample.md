@@ -1,4 +1,4 @@
-# przn
+# przn {counter=hide}
 
 A terminal presentation tool written in Ruby
 

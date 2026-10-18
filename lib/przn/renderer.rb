@@ -167,12 +167,18 @@ module Przn
           end
         end
 
-        if counter_duration && !@export_mode
-          draw_runner_bar(h, w, current, total, started_at)
-        else
-          status = " #{current + 1} / #{total} "
-          @terminal.move_to(h, w - status.size)
-          @terminal.write "#{counter_color_open}#{status}#{ANSI[:reset]}"
+        # `# Title {counter=hide}` opts a slide (typically the title
+        # page) out of the bottom row. Remembered for the runner-bar
+        # refresh thread, which only knows the slide index.
+        @counter_hidden = counter_hidden?(slide)
+        unless @counter_hidden
+          if counter_duration && !@export_mode
+            draw_runner_bar(h, w, current, total, started_at)
+          else
+            status = " #{current + 1} / #{total} "
+            @terminal.move_to(h, w - status.size)
+            @terminal.write "#{counter_color_open}#{status}#{ANSI[:reset]}"
+          end
         end
 
         # Close the slide-level cell-alpha bracket so the next render
@@ -224,6 +230,7 @@ module Przn
     def redraw_runner_bar(current:, total:, started_at:)
       return if @export_mode
       return unless counter_duration
+      return if @counter_hidden
       @mutex.synchronize do
         draw_runner_bar(@terminal.height, @terminal.width, current, total, started_at)
         @terminal.flush
@@ -647,6 +654,13 @@ module Przn
     def counter_duration
       raw = @theme.counter && @theme.counter[:duration]
       raw && Theme.parse_duration(raw)
+    end
+
+    # True when the slide's h1 IAL carries `counter=hide`. Duck-typed on
+    # `attrs` so callers can hand in lightweight slide stand-ins.
+    def counter_hidden?(slide)
+      attrs = slide.respond_to?(:attrs) && slide.attrs
+      !!(attrs && attrs[:counter].to_s == 'hide')
     end
 
     # Open-SGR for the bottom-row counter (plain `N / M` and the

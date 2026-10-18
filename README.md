@@ -566,6 +566,16 @@ The slide carrying the attribute fades out when you leave it and fades in when y
 - Acts on slide-boundary navigation (→, ←, Space, `j`/`k`, etc., plus `g` / `G`). `<wait/>` step builds within a slide are independent and not affected.
 - Reload (`r`) skips the fade — it's a refresh, not navigation.
 
+### Hiding the counter — `{counter=hide}`
+
+A slide can opt out of the bottom-row counter via the h1 IAL — handy for the title page:
+
+```markdown
+# My Talk {counter=hide}
+```
+
+Both forms are suppressed on that slide: the plain `N / M` counter and the 🐇/🐢 runner bar (`counter.duration`). The slide still counts toward the total, so the next slide shows `2 / M`. `--export prawn` leaves the page number off that page too.
+
 ### Fragment animations — `fragment="fade-..."`
 
 A positioned block can opt into a one-shot directional reveal via `fragment=`. The block appears at the *next* step boundary, sliding in from a direction while fading from alpha 0 to alpha 1:
@@ -736,7 +746,7 @@ Notes:
 - **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` _(Echoes only)_ does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is set, h1 lines emit as one slot-spanning multicell with halign=2 so Echoes' proportional-font measurement centers the text pixel-precisely instead of using the cell-grid estimate. h2–h6 stay body text.
 - **`code`** — fenced code block (and inline `<code>`) typography. `code.family` _(Echoes only)_ sets the OSC 66 `f=` face for code (falls back to `font.family` when unset, so a single body-font override usually styles code too); `code.size` is the OSC 66 scale (default = `font.size`); `code.color` is the foreground colour for **all** code text — fenced blocks and inline `<code>` alike — falling back to the body fg when unset; `code.bg` is the **fenced-block** background — accepts the same forms as `font.color` (CSS / ANSI named or 6-digit hex; default is dim gray, ANSI 256-color 236). Inline `<code>` segments in the **terminal** keep the historical gray-background styling for the bg; only fenced blocks read `code.bg`. `code.highlight` picks the syntax-highlight colour scheme: any Rouge theme name works — common picks are `monokai`, `gruvbox`, `github.dark`, `base16.solarized.dark`, `tulip`. Unset (the default) uses przn's built-in ANSI palette, which maps tokens to ANSI colour names and so picks up the user's terminal palette (handy on light terminals where absolute monokai-style hex would clash). Unknown / mistyped theme names silently fall through to the ANSI palette.
 - **`background`** _(Echoes only)_ — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
-- **`counter`** — bottom-of-screen slide counter. Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. `counter.rabbit` and `counter.turtle` are the **raw escape sequences** the renderer writes at the two runner positions — the default theme ships an Echoes-private OSC 7772 `;multicell` with `flip=h` so the emojis face rightward (towards the right anchor); terminals that don't speak OSC 7772 silently drop the sequence and no runner glyph appears. To stay portable, override these with a plain glyph or a standard OSC 66 multicell — at the cost of the flip on Echoes.
+- **`counter`** — bottom-of-screen slide counter (hide it on a single slide with `# Title {counter=hide}`). Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. `counter.rabbit` and `counter.turtle` are the **raw escape sequences** the renderer writes at the two runner positions — the default theme ships an Echoes-private OSC 7772 `;multicell` with `flip=h` so the emojis face rightward (towards the right anchor); terminals that don't speak OSC 7772 silently drop the sequence and no runner glyph appears. To stay portable, override these with a plain glyph or a standard OSC 66 multicell — at the cost of the flip on Echoes.
 
 ## License
 
