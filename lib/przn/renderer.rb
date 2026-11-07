@@ -1127,11 +1127,44 @@ module Przn
       # next line starts. Falls back to body_scale when a line
       # carries no explicit size, matching the pre-fix behavior.
       y_cursor = y
+      centered = %w[center middle].include?(alignment_keyword(attrs[:x], :x))
       lines.zip(line_heights).each do |line_segs, line_h|
-        @terminal.move_to(y_cursor, x)
-        @terminal.write render_segments_scaled(line_segs, body_scale, line_height: line_h)
+        if centered && (line = at_server_centered_line(line_segs))
+          # Same shortcut as centered headings / paragraphs: a
+          # proportional face makes the cell-grid `x` above land the
+          # line well left of center (Helvetica digits are far narrower
+          # than their cells), so hand the centering to Echoes' halign
+          # inside a pane-spanning block instead.
+          text, scale, face, color = line
+          col, body = server_centered_emit(text, scale, face, @terminal.width)
+          body = "#{color_code(color)}#{body}#{ANSI[:reset]}" if color && !color.to_s.empty?
+          @terminal.move_to(y_cursor, col)
+          @terminal.write body
+        else
+          @terminal.move_to(y_cursor, x)
+          @terminal.write render_segments_scaled(line_segs, body_scale, line_height: line_h)
+        end
         y_cursor += line_h
       end
+    end
+
+    # The `<at x="center">` lines Echoes should center itself (see
+    # `server_centered_eligible?` for the reasoning): a bare text run in
+    # a proportional theme / slot font, or a single `<font>` run that
+    # carries or inherits a face. Returns `[text, scale, face, color]`,
+    # or nil to keep the cell-grid path.
+    def at_server_centered_line(line_segs)
+      return nil unless KittyText.echoes? && line_segs.size == 1
+      type, content, attrs = line_segs.first
+      attrs ||= {}
+      return nil unless type == :text || type == :font
+
+      face = (type == :font && attrs[:face]) || slot_family || @theme.font[:family]
+      return nil if face.nil? || face.to_s.empty?
+      scale = (type == :font && attrs[:size] && Parser::SIZE_SCALES[attrs[:size]]) || body_scale
+      return nil unless scale > 0 && (@terminal.width.to_f / scale).floor >= 1
+      color = (type == :font && attrs[:color]) || slot_color || @theme.font[:color]
+      [content, scale, face, color]
     end
 
     # `<at x|y="…">` extension over `resolve_at_coord` that adds the

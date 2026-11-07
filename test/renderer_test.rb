@@ -1151,6 +1151,81 @@ class RendererTest < Test::Unit::TestCase
                       'expected centered cursor at col 39'
     end
 
+    def with_echoes
+      prev = ENV['TERM_PROGRAM']
+      ENV['TERM_PROGRAM'] = 'Echoes'
+      yield
+    ensure
+      ENV['TERM_PROGRAM'] = prev
+    end
+
+    def helvetica_theme
+      Przn::Theme.new(colors: {}, font: {family: 'Helvetica'}, bullet: {text: '・'},
+                      background: {}, title: {}, counter: {})
+    end
+
+    def at_center(content, theme:, term: RunnerFakeTerm.new(w: 80, h: 30))
+      Przn::Renderer.new(term, theme: theme).send(:render_at, {type: :at, attrs: {x: 'center', y: '5'}, content: content})
+      [term.ops.select { |op, *| op == :move_to }, term.ops.select { |op, *| op == :write }.map { |_, s| s }.join]
+    end
+
+    test 'x="center" in a proportional theme font on Echoes hands the centering to a pane-spanning halign=2 block' do
+      with_echoes do
+        moves, writes = at_center('123451234512345', theme: helvetica_theme)
+        # body_scale = 2 on an 80-wide pane → w = 40 units, block spans
+        # the pane, so the cursor sits at col 1 and Echoes centers inside.
+        assert_match(/s=2:w=40:h=2:f=Helvetica;123451234512345/, writes)
+        assert_includes moves, [:move_to, 5, 1]
+      end
+    end
+
+    test 'x="center" with a single <font face> run centers in that face' do
+      with_echoes do
+        _, writes = at_center('<font face="Menlo" size="3">Menlo 12345</font>', theme: helvetica_theme)
+        assert_match(/s=3:w=26:h=2:f=Menlo;Menlo 12345/, writes)
+      end
+    end
+
+    test 'x="center" centers each <br> line of a proportional run on its own row' do
+      with_echoes do
+        moves, writes = at_center('one<br>two', theme: helvetica_theme)
+        assert_equal 2, writes.scan(':w=40:h=2:f=Helvetica;').size
+        assert_includes moves, [:move_to, 5, 1]
+        assert_includes moves, [:move_to, 7, 1]
+      end
+    end
+
+    test 'x="center" keeps the cell-grid math outside Echoes, without a face, or for mixed runs' do
+      # RendererTest#setup pins TERM_PROGRAM=Echoes; drop it for the first case.
+      prev = ENV.delete('TERM_PROGRAM')
+      begin
+        moves, writes = at_center('hi', theme: helvetica_theme)
+        assert_includes moves, [:move_to, 5, 39]
+        refute_match(/:h=2/, writes)
+      ensure
+        ENV['TERM_PROGRAM'] = prev
+      end
+
+      with_echoes do
+        moves, writes = at_center('hi', theme: nil)
+        assert_includes moves, [:move_to, 5, 39]
+        refute_match(/:h=2/, writes)
+
+        moves, writes = at_center('<color=red>h</color>i', theme: helvetica_theme)
+        assert_includes moves, [:move_to, 5, 39]
+        refute_match(/:h=2/, writes)
+      end
+    end
+
+    test 'a numeric x in a proportional font is untouched' do
+      with_echoes do
+        term = RunnerFakeTerm.new(w: 80, h: 30)
+        Przn::Renderer.new(term, theme: helvetica_theme).send(:render_at, {type: :at, attrs: {x: '10', y: '5'}, content: 'hi'})
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        refute_match(/:h=2/, writes)
+      end
+    end
+
     test 'x="right" anchors the content flush to the right edge' do
       # "hi" → 4 cells; right-edge math: x = 80 - 4 + 1 = 77.
       # Content then occupies cols 77, 78, 79, 80 — right edge at the
