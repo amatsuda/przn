@@ -1951,7 +1951,7 @@ module Przn
             vis = segments_visible_cells(line_segs, scale)
             pad = compute_pad(width, vis, align)
             term_move(row, pad + 1)
-            @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: 2, default_color: color)}#{ANSI[:reset]}"
+            @terminal.write "#{ANSI[:bold]}#{render_segments_scaled(line_segs, scale, default_face: face, default_h: heading_halign(align), default_color: color)}#{ANSI[:reset]}"
           end
           row += scale
         end
@@ -1979,6 +1979,19 @@ module Przn
           row += body_scale
         end
         row
+      end
+    end
+
+    # OSC 66 `h=` for an h1 line drawn by the cell-grid path, so the
+    # glyphs of a proportional `title.family` sit inside their reserved
+    # cell block the way the line itself is aligned (Echoes: 1 = right,
+    # 2 = center). A left / unaligned title gets no `h=` — the default
+    # left placement is the right one, and h=2 would quietly center the
+    # text inside a block that nearly spans the slot.
+    def heading_halign(align)
+      case align
+      when :center then 2
+      when :right  then 1
       end
     end
 
@@ -2755,10 +2768,10 @@ module Przn
     # `<color=...>` runs still win for their own segments.
     #
     # `default_h:` threads an OSC 66 `h=` (horizontal alignment) into every
-    # emit on the line. h1 uses h=2 so a proportional `title.family` is
-    # centered within the reserved cell block — without it the glyphs left-
-    # align inside the block and the visible text drifts left of the center
-    # column we computed.
+    # emit on the line. A centered h1 uses h=2 so a proportional
+    # `title.family` is centered within the reserved cell block — without
+    # it the glyphs left-align inside the block and the visible text drifts
+    # left of the center column we computed.
     def render_segments_scaled(segments, para_scale, line_height: nil, default_face: :body, default_h: nil, default_color: :body)
       f = default_face == :body ? (slot_family || @theme.font[:family]) : default_face
       h = default_h

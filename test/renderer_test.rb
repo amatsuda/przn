@@ -447,6 +447,35 @@ class RendererTest < Test::Unit::TestCase
       end
     end
 
+    def h1_writes(align:, content: 'Hello', width: 80)
+      term = CenterFakeTerm.new(w: 80, h: 30)
+      r = Przn::Renderer.new(term, theme: heading_theme(family: 'Yu Gothic'))
+      r.send(:render_heading, {type: :heading, level: 1, content: content}, width, 3, align: align)
+      term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+    end
+
+    test 'an unaligned h1 (numeric slot x:) in a proportional face carries no h= — it stays left-aligned' do
+      with_echoes do
+        writes = h1_writes(align: nil)
+        assert_match(/s=5:f=Yu Gothic;Hello/, writes)
+        refute_match(/:h=/, writes, 'h=2 would re-center the glyphs inside a block that nearly spans the slot')
+      end
+    end
+
+    test 'a right-aligned h1 in a proportional face asks Echoes for halign=1 (right)' do
+      with_echoes do
+        assert_match(/s=5:h=1:f=Yu Gothic;Hello/, h1_writes(align: :right))
+      end
+    end
+
+    test 'a centered h1 that cannot take the slot-spanning shortcut still gets h=2 per segment' do
+      with_echoes do
+        writes = h1_writes(align: :center, content: 'Hel<color=red>lo</color>')
+        refute_match(/:w=/, writes)
+        assert_equal 2, writes.scan(':h=2:').size
+      end
+    end
+
     test 'cursor lands at the lead-cells offset so the slot-undersized block is slot-centered' do
       with_echoes do
         # Slot width = 72, scale = 5 → block_w_units = 14, block_w = 70.
