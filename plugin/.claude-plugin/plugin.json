@@ -1,0 +1,8 @@
+{
+  "name": "przn",
+  "description": "Skills for przn, the terminal presentation tool: import a Keynote file as a przn theme.",
+  "author": {
+    "name": "Akira Matsuda"
+  },
+  "homepage": "https://github.com/amatsuda/przn"
+}
