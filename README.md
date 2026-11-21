@@ -750,6 +750,26 @@ Notes:
 - **`background`** _(Echoes only)_ — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
 - **`counter`** — bottom-of-screen slide counter (hide it on a single slide with `# Title {counter=hide}`). Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. Drag the 🐇 with the mouse to jump to another slide. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. `counter.rabbit` and `counter.turtle` are the **raw escape sequences** the renderer writes at the two runner positions — the default theme ships an Echoes-private OSC 7772 `;multicell` with `flip=h` so the emojis face rightward (towards the right anchor); terminals that don't speak OSC 7772 silently drop the sequence and no runner glyph appears. To stay portable, override these with a plain glyph or a standard OSC 66 multicell — at the cost of the flip on Echoes.
 
+## Claude Code skill
+
+przn ships with `keynote-import`, a skill for [Claude Code](https://claude.com/claude-code) that converts a Keynote file into a przn theme. From a `.key` file it builds `theme.yml` and the background images (and a sample deck when there is none yet), renders the result in Echoes, and matches it to the original Keynote slides.
+
+Install it from inside Claude Code:
+
+```
+/plugin install przn --marketplace amatsuda/przn
+```
+
+Then, in the directory that holds your deck, ask Claude Code for something like "turn template.key into a przn theme".
+
+Requirements:
+
+- macOS
+- [Echoes](https://github.com/amatsuda/echoes). The resulting theme is meant to be shown in Echoes
+- ImageMagick
+
+Keynote theme files (`.kth`) are not supported yet.
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
