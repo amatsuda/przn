@@ -17,7 +17,8 @@ title:                  # h1 typography (slide titles); each attribute is indepe
 
 bullet:                 # unordered-list marker; also h2–h6 heading prefix
   text: "・"            # the glyph
-  size:                 # OSC 66 scale (1–7) for the bullet; default = body text's scale
+  image:                # PNG drawn instead of the glyph, path relative to the deck; needs Kitty graphics, otherwise `text` is used
+  size:                 # OSC 66 scale (1–7) for the bullet, or the image's height in rows; default = body text's scale
   color:                # named ANSI or 6-digit hex; falls back to body text color (font.color) when unset
 
 code:                   # fenced code block (and inline `<code>`) typography

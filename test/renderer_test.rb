@@ -3903,4 +3903,97 @@ class RendererTest < Test::Unit::TestCase
       assert_equal 10, r.runner_slide_at(200, current: 0, total: 11)
     end
   end
+
+  sub_test_case 'bullet.image: an image in place of the text bullet' do
+    class BulletFakeTerm
+      attr_reader :ops
+      def initialize; @ops = []; end
+      def width;  80; end
+      def height; 30; end
+      def write(s); @ops << [:write, s]; end
+      def move_to(r, c); @ops << [:move_to, r, c]; end
+      def cell_pixel_size; [10, 20]; end
+      def writes; @ops.select { |op, *| op == :write }.map { |_, s| s }.join; end
+      # The cursor position the image placement was anchored at
+      def placed_at; @ops[@ops.index { |op, s| op == :write && s.start_with?("\e_Ga=p") } - 1]; end
+    end
+
+    # sample/ruby.png is close to square (995x996): at 10x20 cells a 2-row
+    # bullet is 40px tall, so it spans 4 columns.
+    PNG = File.expand_path('../sample/ruby.png', __dir__)
+
+    def setup
+      super
+      @orig_kitty = Przn::ImageUtil.method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { true }
+    end
+
+    def teardown
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?, @orig_kitty)
+      super
+    end
+
+    def render(bullet, method, block)
+      term = BulletFakeTerm.new
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・'}.merge(bullet), background: {}, title: {})
+      Przn::Renderer.new(term, theme: theme).send(method, block, 80, 5)
+      term
+    end
+
+    def list(text, depth = 0)
+      {type: :unordered_list, items: [{text: text, depth: depth}]}
+    end
+
+    test 'places the image where the bullet goes, then the text after one blank cell' do
+      term = render({image: PNG}, :render_unordered_list, list('item'))
+      assert_match(/\e_Ga=t,t=f,f=100,i=1,q=2;/, term.writes, 'expected the image to be uploaded')
+      assert_match(/\e_Ga=p,i=1,c=4,r=2,C=1,q=2\e\\/, term.writes)
+      assert_equal [:move_to, 5, 5], term.placed_at, 'content_left(80) = 5'
+      # 4 columns of image = 2 body-scale cells, plus the blank one
+      assert_includes term.writes, "\e]66;s=2;   \a\e]66;s=2;item\a"
+      refute_includes term.writes, '・'
+    end
+
+    test 'a nested item gets its image after the indent' do
+      term = render({image: PNG}, :render_unordered_list, list('child', 1))
+      # two indent cells at body scale 2 = 4 columns right of content_left
+      assert_equal [:move_to, 5, 9], term.placed_at
+    end
+
+    test 'an image smaller than the body line is centered in it' do
+      term = render({image: PNG, size: 1}, :render_unordered_list, list('item'))
+      # 1 row in a 2-row line: half a row (10px) down from the top
+      assert_match(/\e_Ga=p,i=1,c=2,r=1,C=1,q=2,Y=10\e\\/, term.writes)
+    end
+
+    test 'h2 headings use the image too' do
+      term = render({image: PNG}, :render_heading, {type: :heading, level: 2, content: 'sub'})
+      assert_match(/\e_Ga=p,i=1,c=4,r=2,C=1,q=2\e\\/, term.writes)
+      refute_includes term.writes, '・'
+    end
+
+    test 'falls back to bullet.text without Kitty graphics or when the path is not a file' do
+      missing = render({image: '/nonexistent/bullet.png'}, :render_unordered_list, list('item'))
+      directory = render({image: __dir__}, :render_unordered_list, list('item'))
+      Przn::ImageUtil.singleton_class.remove_method(:kitty_terminal?)
+      Przn::ImageUtil.define_singleton_method(:kitty_terminal?) { false }
+      no_kitty = render({image: PNG}, :render_unordered_list, list('item'))
+      [missing, directory, no_kitty].each do |term|
+        refute_includes term.writes, "\e_G"
+        assert_includes term.writes, '・'
+      end
+    end
+
+    test 'a hidden item does not place the image' do
+      block = {type: :unordered_list, items: [{text: 'shown', depth: 0}, {text: 'later', depth: 0, wait: true}]}
+      term = BulletFakeTerm.new
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・', image: PNG}, background: {}, title: {})
+      r = Przn::Renderer.new(term, theme: theme)
+      r.instance_variable_set(:@block_step, {block => 0})
+      r.instance_variable_set(:@current_step, 0)
+      r.send(:render_unordered_list, block, 80, 5)
+      assert_equal 1, term.writes.scan("\e_Ga=p").size
+    end
+  end
 end

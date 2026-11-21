@@ -1964,14 +1964,16 @@ module Przn
       else
         left = content_left(width)
         prefix = @theme.bullet[:text]
-        prefix_w = display_width(prefix)
+        image = bullet_image
+        prefix_w = image ? image[:width] : display_width(prefix)
         max_w = max_text_width(width, left, body_scale) - prefix_w
         segments = Parser.parse_inline(text)
         wrapped = wrap_segments(segments, max_w, body_scale)
 
         wrapped.each_with_index do |line_segs, li|
+          place_bullet_image(image, row, left) if image && li == 0
           term_move(row, left)
-          if li == 0
+          if li == 0 && !image
             @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, body_scale)}"
           else
             @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
@@ -2210,13 +2212,14 @@ module Przn
       # group's "no sub-steps in v1" rule and render every item.
       gated = @block_step && @block_step.key?(block)
       item_step = gated ? @block_step[block] : nil
+      image = bullet_image
       block[:items].each do |item|
         item_step += 1 if gated && item[:wait]
         with_item_visibility(item_step) do
           depth = item[:depth] || 0
           indent = '  ' * depth
           prefix = "#{indent}#{@theme.bullet[:text]}"
-          prefix_w = display_width(prefix)
+          prefix_w = image ? display_width(indent) + image[:width] : display_width(prefix)
           # Plain text renders at body_scale; lines containing a sized
           # span (e.g. `<size=5>BIG</size>`) advance the row by that
           # span's height per-line. Mixing `body` and `BIG` on the same
@@ -2229,8 +2232,9 @@ module Przn
 
           wrapped.each_with_index do |line_segs, li|
             line_h = max_segment_scale(line_segs, base_scale)
+            place_bullet_image(image, row, left + display_width(indent) * base_scale) if image && li == 0
             term_move(row, left)
-            if li == 0
+            if li == 0 && !image
               @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
             else
               @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
@@ -2705,6 +2709,46 @@ module Przn
       color = @theme.bullet[:color]
       return sized unless color && !color.to_s.empty?
       "#{color_code(color.to_s)}#{sized}#{ANSI[:reset]}"
+    end
+
+    # `bullet.image` as something the terminal can draw in place of the
+    # text bullet: the PNG's path, the cell box it fills (`bullet.size`
+    # rows tall, as wide as the image's aspect ratio needs), and `width`,
+    # the room the bullet takes in body-scale cells — the image plus one
+    # blank cell before the item text, the gap a text bullet carries in
+    # its own trailing space.
+    #
+    # nil when the image can't be shown: no Kitty graphics, a missing
+    # file, or not a PNG. Callers fall back to `bullet.text`.
+    def bullet_image
+      image = @theme.bullet[:image]
+      return nil unless image && ImageUtil.kitty_terminal?
+
+      path = resolve_image_path(image.to_s)
+      return nil unless File.file?(path) && ImageUtil.png?(path)
+
+      img_w, img_h = ImageUtil.image_size(path)
+      cell_w, cell_h = @terminal.cell_pixel_size
+      rows = @theme.bullet[:size] || body_scale
+      cols = [(rows * cell_h * img_w / img_h.to_f / cell_w).ceil, 1].max
+      {path: path, cols: cols, rows: rows, width: (cols / body_scale.to_f).ceil + 1}
+    end
+
+    # Place the bullet image with its top-left at (row, col). An image
+    # shorter than the body line is centered in it, like a text bullet
+    # smaller than the body scale: whole rows by moving the anchor cell,
+    # the leftover half row by a pixel offset.
+    def place_bullet_image(image, row, col)
+      # A hidden list item renders into a NullTerm. Uploading there would
+      # record the image as sent while the bytes went nowhere, and the
+      # item's later reveal would place an image the terminal never got.
+      return if @terminal.is_a?(NullTerm)
+
+      image_id = ensure_kitty_uploaded(image[:path])
+      _, cell_h = @terminal.cell_pixel_size
+      top = [(body_scale - image[:rows]) * cell_h / 2, 0].max
+      term_move(row + top / cell_h, col)
+      @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: image[:cols], rows: image[:rows], y_off: top % cell_h)
     end
 
     # Render a <font face="..." size="..." color="..."> run. The face goes out

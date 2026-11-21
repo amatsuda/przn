@@ -275,6 +275,17 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 1, bullet[:size]
     end
 
+    test 'user file sets bullet.image, keeps default text' do
+      write_theme <<~YAML
+        bullet:
+          image: images/bullet.png
+      YAML
+
+      bullet = Przn::Theme.load(theme_path).bullet
+      assert_equal 'images/bullet.png', bullet[:image]
+      assert_equal '・', bullet[:text]
+    end
+
     test 'unspecified bullet falls back to all defaults' do
       write_theme <<~YAML
         colors:
