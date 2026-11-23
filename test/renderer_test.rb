@@ -3985,6 +3985,15 @@ class RendererTest < Test::Unit::TestCase
       end
     end
 
+    test 'bullet.nested.image replaces the marker for nested items only' do
+      block = {type: :unordered_list, items: [{text: 'top', depth: 0}, {text: 'child', depth: 1}]}
+      term = render({nested: {image: PNG}}, :render_unordered_list, block)
+      assert_includes term.writes, "\e]66;s=2;・\a"
+      # one 2-row line and a blank row below the top item, after the indent
+      assert_equal [:move_to, 8, 9], term.placed_at
+      assert_equal 1, term.writes.scan("\e_Ga=p").size
+    end
+
     test 'a hidden item does not place the image' do
       block = {type: :unordered_list, items: [{text: 'shown', depth: 0}, {text: 'later', depth: 0, wait: true}]}
       term = BulletFakeTerm.new
@@ -3994,6 +4003,37 @@ class RendererTest < Test::Unit::TestCase
       r.instance_variable_set(:@current_step, 0)
       r.send(:render_unordered_list, block, 80, 5)
       assert_equal 1, term.writes.scan("\e_Ga=p").size
+    end
+  end
+
+  sub_test_case 'bullet.nested / font.nested: per-depth list styles' do
+    def render(method, font: {}, bullet: {})
+      term = BulletFakeTerm.new
+      theme = Przn::Theme.new(colors: {}, font: font, bullet: {text: '・'}.merge(bullet), background: {}, title: {})
+      block = {type: method == :render_ordered_list ? :ordered_list : :unordered_list, items: [{text: 'top', depth: 0}, {text: 'child', depth: 1}]}
+      Przn::Renderer.new(term, theme: theme).send(method, block, 80, 5)
+      term.writes
+    end
+
+    test 'a nested item takes its level\'s bullet and text style' do
+      out = render(
+        :render_unordered_list,
+        font: {size: 3, nested: {size: 2, family: 'Menlo', color: 'red'}},
+        bullet: {nested: {text: '– ', color: 'blue'}}
+      )
+      assert_includes out, "\e]66;s=3;・\a\e]66;s=3;top\a"
+      # indent: two cells at the parent's scale 3 = 6 columns = 3 cells at scale 2
+      assert_includes out, "\e[38;2;0;0;255m\e]66;s=2;   – \a\e[0m\e[38;2;255;0;0m\e]7772;multicell;s=2:f=Menlo;child\a\e[0m"
+    end
+
+    test 'without nested styles a nested item renders like the top level' do
+      out = render(:render_unordered_list, font: {size: 3})
+      assert_includes out, "\e]66;s=3;  ・\a\e]66;s=3;child\a"
+    end
+
+    test 'font.nested applies to ordered lists' do
+      out = render(:render_ordered_list, font: {size: 3, nested: {size: 2}})
+      assert_includes out, "\e]66;s=2;   2. \a\e]66;s=2;child\a"
     end
   end
 end

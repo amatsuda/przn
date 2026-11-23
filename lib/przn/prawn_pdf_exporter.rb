@@ -500,7 +500,7 @@ module Przn
       block[:items].each do |item|
         depth = item[:depth] || 0
         indent = depth * pt
-        prefix = [{text: bullet, size: pt, color: @fg_color}]
+        prefix = [{text: bullet(depth), size: pt, color: @fg_color}]
         formatted = prefix + build_formatted_text(item[:text], pt)
         h = render_formatted(pdf, formatted, at: [margin_x + indent, y], width: content_width - indent)
         y -= h + 6
@@ -738,8 +738,8 @@ module Przn
       box.height
     end
 
-    def bullet
-      @font_registered ? @theme.bullet[:text] : '-'
+    def bullet(depth = 0)
+      @font_registered ? @theme.bullet_at(depth)[:text] : '-'
     end
 
   end

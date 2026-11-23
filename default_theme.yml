@@ -9,6 +9,8 @@ font:                   # body text typography (paragraphs, lists, h2–h6, code
   family:               # font family (terminal: OSC 66 f=, requires Echoes)
   size:                 # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default 2 (small)
   color:                # named ANSI or 6-digit hex; falls back to the terminal's default fg when unset
+  nested:               # nested list items: family / size / color, and `nested:` again for the next depth;
+                        # unset keys inherit from the level above
 
 title:                  # h1 typography (slide titles); each attribute is independent of `font`
   family:               # font family (terminal: OSC 66 f=, requires Echoes)
@@ -20,6 +22,8 @@ bullet:                 # unordered-list marker; also h2–h6 heading prefix
   image:                # PNG drawn instead of the glyph, path relative to the deck; needs Kitty graphics, otherwise `text` is used
   size:                 # OSC 66 scale (1–7) for the bullet, or the image's height in rows; default = body text's scale
   color:                # named ANSI or 6-digit hex; falls back to body text color (font.color) when unset
+  nested:               # nested list items: text / image / size / color, and `nested:` again for the next depth;
+                        # unset keys inherit from the level above
 
 code:                   # fenced code block (and inline `<code>`) typography
   family:               # font family (terminal: OSC 66 f=, requires Echoes); falls back to font.family

@@ -149,6 +149,24 @@ module Przn
     end
     private_class_method :parse_layouts
 
+    # `bullet` as it applies to a list item `depth` levels in. Each
+    # `nested:` level overrides the one above it key by key, and items
+    # deeper than the last `nested:` keep that last level's style. A
+    # level that sets `text` without `image` stops inheriting the
+    # image, so a text marker can follow an image one.
+    def bullet_at(depth)
+      overrides = nested_overrides(@bullet, depth)
+      base = @bullet.reject { |key, _| key == :nested }
+      base.delete(:image) if overrides.key?(:text) && !overrides.key?(:image)
+      base.merge(overrides)
+    end
+
+    # What `font.nested` changes for a list item `depth` levels in:
+    # only the keys set somewhere along the chain, empty at depth 0.
+    def nested_font(depth)
+      nested_overrides(@font, depth)
+    end
+
     def initialize(config)
       @colors = config[:colors]
       @font = config[:font]
@@ -160,6 +178,21 @@ module Przn
       @transition = config[:transition] || {}
       @fragment = config[:fragment] || {}
       @layouts = config[:layouts] || {}
+    end
+
+    private
+
+    def nested_overrides(style, depth)
+      overrides = {}
+      depth.times do
+        style = style[:nested]
+        break unless style.is_a?(Hash)
+
+        level = style.reject { |key, value| key == :nested || value.nil? }
+        overrides.delete(:image) if level.key?(:text) && !level.key?(:image)
+        overrides.merge!(level)
+      end
+      overrides
     end
   end
 end
