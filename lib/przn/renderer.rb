@@ -136,16 +136,7 @@ module Przn
           end
         end
 
-        # Resolve the slide's effective layout name:
-        #   `# Title {layout=name}` on the slide wins.
-        #   Otherwise: slide 0 prefers `cover` (if the theme ships one),
-        #   every other slide falls through to `default`.
-        #   `{layout=none}` is an explicit per-slide opt-out — useful
-        #   when a custom default layout isn't right for one slide.
-        layout_name = slide.layout
-        layout_name ||= 'cover' if current == 0 && @theme.layouts['cover']
-        layout_name ||= 'default'
-        layout_name = nil if layout_name == 'none'
+        layout_name = effective_layout_name(slide, current)
         layout = layout_name && @theme.layouts[layout_name]
 
         if layout
@@ -1020,6 +1011,19 @@ module Przn
       ensure
         @terminal.write "\e]7772;cell-alpha;1\a"
       end
+    end
+
+    # Resolve the slide's effective layout name:
+    #   `# Title {layout=name}` on the slide wins.
+    #   Otherwise: slide 0 prefers `cover` (if the theme ships one),
+    #   every other slide falls through to `default`.
+    #   `{layout=none}` is an explicit per-slide opt-out — useful
+    #   when a custom default layout isn't right for one slide.
+    def effective_layout_name(slide, current)
+      name = slide.layout
+      name ||= 'cover' if current == 0 && @theme.layouts['cover']
+      name ||= 'default'
+      name == 'none' ? nil : name
     end
 
     # Emit Echoes' OSC 7772 to set a slide-specific solid color or gradient,
