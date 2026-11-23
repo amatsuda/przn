@@ -449,6 +449,20 @@ layouts:
 
 `x: center` on a slot is what makes h1 titles (and any other content routed into the slot) horizontally centered — there's no implicit "h1 always centers" magic. Per-block `<center>` / `{:.center}` directives and inline tags (`<size>`, `<font>`, `<color>`) still override the slot's defaults per-segment. The legacy `align: center` key on a slot is still accepted as a back-compat alias for `x: center`, so existing custom themes keep working until you migrate them.
 
+**Per-layout background.** Instead of the slot list alone, a layout can have two keys: `slots:` for the slot list and `background:` for a background of its own (same keys as the top-level `background:`). It replaces the theme's background on slides using the layout; a `<bg .../>` on the slide still wins. Leave `slots:` out to keep a built-in layout's slots.
+
+```yaml
+layouts:
+  section:
+    background:
+      image: images/section.png
+    slots:
+      - {name: title, x: center, y: 40%, width: 90%, height: 20%}
+  cover:
+    background:
+      color: "#1a1a2e"
+```
+
 **Built-in layouts** (shipped in `default_theme.yml`):
 
 - `default` — theme-wide fallback for slides without an `{layout=...}` IAL. Shipped identical to `title-content`: centered title band across the top, content below. Override in your own `theme.yml` to give every plain slide a different layout.

@@ -217,6 +217,28 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal %w[title content], theme.layouts['default'].map(&:name)
     end
 
+    test 'a layout written as a hash carries a background next to its slots' do
+      write_theme <<~YAML
+        layouts:
+          section:
+            background:
+              image: images/section.png
+            slots:
+              - {name: title, x: 1, y: 1, width: 100%, height: 5}
+          cover:
+            background:
+              color: "#1a1a2e"
+      YAML
+
+      theme = Przn::Theme.load(theme_path)
+      assert_equal %w[title], theme.layouts['section'].map(&:name)
+      assert_equal({image: 'images/section.png'}, theme.layout_backgrounds['section'])
+      # no `slots:` — the built-in slots stay
+      assert_equal @defaults.layouts['cover'].map(&:name), theme.layouts['cover'].map(&:name)
+      assert_equal({color: '#1a1a2e'}, theme.layout_backgrounds['cover'])
+      assert_nil theme.layout_backgrounds['default']
+    end
+
     test 'overriding a built-in layout replaces its slot list end-to-end' do
       write_theme <<~YAML
         layouts:

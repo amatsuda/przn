@@ -866,7 +866,7 @@ class RendererTest < Test::Unit::TestCase
       def cell_pixel_size; [10, 20]; end
     end
 
-    FakeTheme = Struct.new(:counter, :font, :background, :title, :bullet, :colors, :layouts)
+    FakeTheme = Struct.new(:counter, :font, :background, :title, :bullet, :colors, :layouts, :layout_backgrounds)
 
     RUNNER_DEFAULTS = {
       rabbit: "\e]7772;multicell;s=2:flip=h;🐇\a",
@@ -874,7 +874,7 @@ class RendererTest < Test::Unit::TestCase
     }.freeze
 
     def fake_theme(counter: {duration: '60s'})
-      FakeTheme.new(RUNNER_DEFAULTS.merge(counter), {}, {}, {}, {text: '・'}, {}, {})
+      FakeTheme.new(RUNNER_DEFAULTS.merge(counter), {}, {}, {}, {text: '・'}, {}, {}, {})
     end
 
     test 'anchors current slide number at column 1' do
@@ -2583,6 +2583,25 @@ class RendererTest < Test::Unit::TestCase
       payload = term.writes.join
       refute_match(/\e_Ga=t/, payload, "no upload expected: #{payload.inspect}")
       refute_match(/\e_Ga=p/, payload, "no placement expected: #{payload.inspect}")
+    end
+
+    test 'a layout background wins over the theme background, <bg/> wins over both' do
+      theme = Przn::Theme.new(
+        colors: {}, font: {}, bullet: {}, title: {},
+        background: {color: '#111111'},
+        layout_backgrounds: {'section' => {color: '#222222'}}
+      )
+      plain = Struct.new(:blocks, :layout, :attrs).new([], nil, {})
+      with_bg = Struct.new(:blocks, :layout, :attrs).new([{type: :bg, attrs: {color: '#333333'}}], nil, {})
+      {
+        [plain, 'default'] => '#111111',
+        [plain, 'section'] => '#222222',
+        [with_bg, 'section'] => '#333333'
+      }.each do |(slide, layout), color|
+        term = BgFakeTerm.new
+        Przn::Renderer.new(term, theme: theme).send(:apply_slide_background, slide, layout_name: layout)
+        assert_includes term.writes, "\e]7772;bg-color;#{color}\a"
+      end
     end
   end
 

@@ -104,6 +104,16 @@ fragment:
 #               bottom. Override / delete from your own theme to opt
 #               out — explicit `{layout=...}` on slide 0 still wins.
 # Other named layouts are opt-in via `# Title {layout=name}`.
+#
+# Instead of the slot list alone, a layout can have two keys: `slots:`
+# for the slot list and `background:` for a background of its own (same
+# keys as the top-level `background:`) that replaces the default
+# background on slides using the layout:
+#   section:
+#     background: {image: images/section.png}
+#     slots:
+#       - {name: title, x: center, y: 40%, width: 90%, height: 20%}
+# Leave `slots:` out to keep a built-in layout's slots.
 layouts:
   default:
     - {name: title,   x: center, y: 3,  width: 90%,  height: 6}

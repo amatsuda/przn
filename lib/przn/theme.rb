@@ -25,7 +25,7 @@ module Przn
     # per-segment.
     Slot = Struct.new(:name, :x, :y, :width, :height, :size, :family, :color)
 
-    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts, :transition, :fragment
+    attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts, :layout_backgrounds, :transition, :fragment
 
     def self.load(path)
       raise ArgumentError, "Theme file not found: #{path}" unless File.exist?(path)
@@ -61,7 +61,12 @@ module Przn
         # name `default` is special: when a slide has no `{layout=...}`
         # IAL the renderer looks it up here. Themes that don't define
         # `layouts.default` keep the legacy flow behavior.
-        layouts: defaults[:layouts].merge(overrides[:layouts] || {})
+        layouts: defaults[:layouts].merge(overrides[:layouts] || {}),
+        # Per-layout backgrounds follow their layout: redefining a
+        # layout's slots drops the background the defaults gave it.
+        layout_backgrounds: defaults[:layout_backgrounds]
+          .reject { |name, _| overrides[:layouts].key?(name) }
+          .merge(overrides[:layout_backgrounds])
       }
       new(merged)
     end
@@ -113,19 +118,23 @@ module Przn
         counter: (data[:counter] || {}).compact,
         transition: (data[:transition] || {}).compact,
         fragment: (data[:fragment] || {}).compact,
-        layouts: parse_layouts(data[:layouts])
+        layouts: parse_layouts(data[:layouts]),
+        layout_backgrounds: parse_layout_backgrounds(data[:layouts])
       }
     end
     private_class_method :load_yaml
 
     # Turn the raw `layouts:` YAML into a `{name => [Slot, ...]}` map.
-    # Each layout's value is just the ordered slot list (no enclosing
-    # `slots:` key in v1 since there's no other per-layout metadata
-    # — promoting to a hash later is a one-line shape change).
+    # A layout's value is either the ordered slot list itself, or a
+    # hash holding that list under `slots:` next to per-layout
+    # settings (`background:`, see parse_layout_backgrounds). A hash
+    # without `slots:` defines no slots, so a theme can give a
+    # built-in layout a background and keep its slots.
     def self.parse_layouts(raw)
       return {} unless raw.is_a?(Hash)
 
       raw.each_with_object({}) do |(name, slot_list), out|
+        slot_list = slot_list[:slots] if slot_list.is_a?(Hash)
         next unless slot_list.is_a?(Array)
         out[name.to_s] = slot_list.map { |s|
           h = s.transform_keys(&:to_sym)
@@ -148,6 +157,19 @@ module Przn
       end
     end
     private_class_method :parse_layouts
+
+    # The `background:` of each hash-form layout, as a
+    # `{name => attrs}` map with the same keys as the top-level
+    # `background:` section.
+    def self.parse_layout_backgrounds(raw)
+      return {} unless raw.is_a?(Hash)
+
+      raw.each_with_object({}) do |(name, layout), out|
+        next unless layout.is_a?(Hash) && layout[:background].is_a?(Hash)
+        out[name.to_s] = layout[:background].compact
+      end
+    end
+    private_class_method :parse_layout_backgrounds
 
     # `bullet` as it applies to a list item `depth` levels in. Each
     # `nested:` level overrides the one above it key by key, and items
@@ -187,6 +209,7 @@ module Przn
       @transition = config[:transition] || {}
       @fragment = config[:fragment] || {}
       @layouts = config[:layouts] || {}
+      @layout_backgrounds = config[:layout_backgrounds] || {}
     end
 
     private

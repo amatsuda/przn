@@ -98,7 +98,8 @@ module Przn
         # later ones, since kitty placements aren't tied to the cell
         # buffer that @terminal.clear empties.
         @terminal.write ImageUtil.kitty_delete_all_placements if ImageUtil.kitty_terminal?
-        apply_slide_background(slide)
+        layout_name = effective_layout_name(slide, current)
+        apply_slide_background(slide, layout_name: layout_name)
         w = @terminal.width
         h = @terminal.height
 
@@ -136,7 +137,6 @@ module Przn
           end
         end
 
-        layout_name = effective_layout_name(slide, current)
         layout = layout_name && @theme.layouts[layout_name]
 
         if layout
@@ -1028,11 +1028,12 @@ module Przn
 
     # Emit Echoes' OSC 7772 to set a slide-specific solid color or gradient,
     # or clear any previous override. A `<bg .../>` block on the slide wins;
-    # otherwise the theme's `bg:` section is used as the deck-wide default.
+    # then the `background:` of the slide's layout; otherwise the theme's
+    # `background:` section is used as the deck-wide default.
     # Other terminals ignore the OSC code, so this is a no-op outside Echoes.
-    def apply_slide_background(slide)
+    def apply_slide_background(slide, layout_name: nil)
       block = slide.blocks.find { |b| b[:type] == :bg }
-      attrs = block ? block[:attrs] : (@theme.background || {})
+      attrs = block ? block[:attrs] : (@theme.layout_backgrounds[layout_name] || @theme.background || {})
 
       @terminal.write "\e]7772;bg-clear\a"
       clear_background_image
