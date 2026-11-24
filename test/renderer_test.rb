@@ -2608,6 +2608,28 @@ class RendererTest < Test::Unit::TestCase
       Przn::Renderer.new(term, theme: theme).send(:apply_slide_background, plain, layout_name: 'plain')
       assert_equal ["\e]7772;bg-clear\a"], term.writes.grep(/\e\]7772;bg-/)
     end
+
+    test 'render applies the background of the layout the slide resolves to' do
+      slots = [Przn::Theme::Slot.new('title', 'center', 3, '90%', 6)]
+      theme = Przn::Theme.new(
+        colors: {}, font: {}, bullet: {text: '・'}, title: {},
+        background: {color: '#111111'},
+        layouts: {'default' => slots, 'cover' => slots, 'section' => slots},
+        layout_backgrounds: {'cover' => {color: '#222222'}, 'section' => {color: '#333333'}}
+      )
+      {
+        ["# t\n", 0] => '#222222', # slide 0 without a layout is `cover`
+        ["# t\n", 1] => '#111111', # `default` has no background of its own
+        ["# t {layout=section}\n", 1] => '#333333',
+        ["# t {layout=none}\n", 0] => '#111111'
+      }.each do |(markdown, current), color|
+        term = RunnerFakeTerm.new(w: 80, h: 30)
+        slide = Przn::Parser.parse(markdown).slides[0]
+        Przn::Renderer.new(term, theme: theme).render(slide, current: current, total: 2)
+        writes = term.ops.select { |op, *| op == :write }.map { |_, s| s }.join
+        assert_includes writes, "\e]7772;bg-color;#{color}\a", "#{markdown.inspect} at #{current}"
+      end
+    end
   end
 
   sub_test_case 'preload' do
