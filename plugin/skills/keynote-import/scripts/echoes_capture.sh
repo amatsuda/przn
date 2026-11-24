@@ -72,7 +72,8 @@ $deck_ruby "$scripts/capture_slides.rb" "$deck" "$out" 2> "$out/capture.log"
 touch "$out/done"
 RUNNER
 chmod +x "$runner"
-printf "shell '%s'\n" "$runner" > "$fake_home/.config/echoes/echoes.conf"
+# Echoes saves a capture only under its capture_directory
+printf "shell '%s'\ncapture_directory '%s'\n" "$runner" "$out" > "$fake_home/.config/echoes/echoes.conf"
 
 rm -f "$out/done"
 # shellcheck disable=SC2086
