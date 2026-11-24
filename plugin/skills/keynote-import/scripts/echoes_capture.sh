@@ -68,8 +68,7 @@ cat > "$runner" <<RUNNER
 #!/bin/sh
 export HOME="$HOME"
 cd "$(dirname "$deck")"
-$deck_ruby "$scripts/capture_slides.rb" "$deck" "$out" 2> "$out/capture.log"
-touch "$out/done"
+$deck_ruby "$scripts/capture_slides.rb" "$deck" "$out" 2> "$out/capture.log" && touch "$out/done"
 RUNNER
 chmod +x "$runner"
 # Echoes saves a capture only under its capture_directory
