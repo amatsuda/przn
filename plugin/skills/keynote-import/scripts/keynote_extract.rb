@@ -181,7 +181,9 @@ module KeynoteExtract
     end
 
     def print
-      system('unzip', '-o', '-q', @key_path, '-d', @out_dir, exception: true)
+      # ditto, not unzip: unzip stops at a prompt on a file name stored
+      # without the zip UTF-8 flag, as Keynote does for non-ASCII image names.
+      system('ditto', '-x', '-k', @key_path, @out_dir, exception: true)
       index = File.join(@out_dir, 'Index')
       decoded = Dir.children(index).grep(/\.iwa\z/).sort.to_h do |name|
         [name, Snappy.decode_iwa(File.binread(File.join(index, name)))]
