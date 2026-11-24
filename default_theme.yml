@@ -33,7 +33,8 @@ code:                   # fenced code block (and inline `<code>`) typography
   highlight:            # Rouge theme name for syntax highlighting (e.g. monokai, gruvbox, github.dark, base16.solarized.dark);
                         # unset = the built-in ANSI palette (picks up the terminal's colour theme — works on light or dark)
 
-# Default slide background, applied when a slide has no <bg .../> directive.
+# Default slide background, applied when a slide has no <bg .../> directive
+# and its layout has no `background:` of its own (see `layouts:` below).
 # `color` / `from` / `to` / `angle` use Echoes' OSC 7772 (no-op on other
 # terminals). `image` uses the Kitty Graphics Protocol (works on Kitty,
 # Echoes, Wezterm, Ghostty — PNG only) and wins over `color` / gradient
