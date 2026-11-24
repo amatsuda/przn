@@ -113,7 +113,8 @@ fragment:
 #     background: {image: images/section.png}
 #     slots:
 #       - {name: title, x: center, y: 40%, width: 90%, height: 20%}
-# Leave `slots:` out to keep a built-in layout's slots.
+# `background: {}` gives the layout no background at all. Leave `slots:`
+# out to keep a built-in layout's slots.
 layouts:
   default:
     - {name: title,   x: center, y: 3,  width: 90%,  height: 6}

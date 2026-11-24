@@ -2589,7 +2589,7 @@ class RendererTest < Test::Unit::TestCase
       theme = Przn::Theme.new(
         colors: {}, font: {}, bullet: {}, title: {},
         background: {color: '#111111'},
-        layout_backgrounds: {'section' => {color: '#222222'}}
+        layout_backgrounds: {'section' => {color: '#222222'}, 'plain' => {}}
       )
       plain = Struct.new(:blocks, :layout, :attrs).new([], nil, {})
       with_bg = Struct.new(:blocks, :layout, :attrs).new([{type: :bg, attrs: {color: '#333333'}}], nil, {})
@@ -2602,6 +2602,11 @@ class RendererTest < Test::Unit::TestCase
         Przn::Renderer.new(term, theme: theme).send(:apply_slide_background, slide, layout_name: layout)
         assert_includes term.writes, "\e]7772;bg-color;#{color}\a"
       end
+
+      # `background: {}` on a layout: no background, not the theme's
+      term = BgFakeTerm.new
+      Przn::Renderer.new(term, theme: theme).send(:apply_slide_background, plain, layout_name: 'plain')
+      assert_equal ["\e]7772;bg-clear\a"], term.writes.grep(/\e\]7772;bg-/)
     end
   end
 

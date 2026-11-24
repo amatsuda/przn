@@ -160,13 +160,16 @@ module Przn
 
     # The `background:` of each hash-form layout, as a
     # `{name => attrs}` map with the same keys as the top-level
-    # `background:` section.
+    # `background:` section. A `background:` that is not a hash counts
+    # as an empty one.
     def self.parse_layout_backgrounds(raw)
       return {} unless raw.is_a?(Hash)
 
       raw.each_with_object({}) do |(name, layout), out|
-        next unless layout.is_a?(Hash) && layout[:background].is_a?(Hash)
-        out[name.to_s] = layout[:background].compact
+        next unless layout.is_a?(Hash) && !layout[:background].nil?
+
+        background = layout[:background]
+        out[name.to_s] = background.is_a?(Hash) ? background.compact : {}
       end
     end
     private_class_method :parse_layout_backgrounds

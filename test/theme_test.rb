@@ -239,6 +239,22 @@ class ThemeTest < Test::Unit::TestCase
       assert_nil theme.layout_backgrounds['default']
     end
 
+    test 'an empty layout background is kept, an unset one is not' do
+      write_theme <<~YAML
+        layouts:
+          cover:
+            background: {}
+          default:
+            background:
+          two-column:
+            background: red
+      YAML
+
+      theme = Przn::Theme.load(theme_path)
+      # not a hash: an empty background, not the theme's
+      assert_equal({'cover' => {}, 'two-column' => {}}, theme.layout_backgrounds)
+    end
+
     test 'overriding a built-in layout replaces its slot list end-to-end' do
       write_theme <<~YAML
         layouts:
