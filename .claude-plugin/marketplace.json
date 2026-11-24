@@ -1,0 +1,15 @@
+{
+  "name": "przn",
+  "description": "Claude Code skills that ship with przn",
+  "owner": {
+    "name": "Akira Matsuda"
+  },
+  "plugins": [
+    {
+      "name": "przn",
+      "description": "Skills for przn, the terminal presentation tool: import a Keynote file as a przn theme.",
+      "source": "./plugin",
+      "homepage": "https://github.com/amatsuda/przn"
+    }
+  ]
+}
