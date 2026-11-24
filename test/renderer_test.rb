@@ -3994,6 +3994,17 @@ class RendererTest < Test::Unit::TestCase
       assert_match(/\e_Ga=p,i=1,c=2,r=1,C=1,q=2\e\\/, term.writes)
     end
 
+    test 'falls back to bullet.text when the PNG\'s size cannot be read' do
+      Tempfile.create(['truncated', '.png']) do |f|
+        f.binmode
+        f.write("\x89PNG\r\n\x1a\n".b)
+        f.flush
+        term = render({image: f.path}, :render_unordered_list, list('item'))
+        refute_includes term.writes, "\e_G"
+        assert_includes term.writes, '・'
+      end
+    end
+
     test 'bullet.nested.image replaces the marker for nested items only' do
       block = {type: :unordered_list, items: [{text: 'top', depth: 0}, {text: 'child', depth: 1}]}
       term = render({nested: {image: PNG}}, :render_unordered_list, block)

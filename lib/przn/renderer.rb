@@ -2766,7 +2766,8 @@ module Przn
     # its own trailing space.
     #
     # nil when the image can't be shown: no Kitty graphics, a missing
-    # file, or not a PNG. Callers fall back to `bullet.text`.
+    # file, not a PNG, or a PNG whose size can't be read. Callers fall
+    # back to `bullet.text`.
     def bullet_image(bullet: @theme.bullet, scale: body_scale)
       image = bullet[:image]
       return nil unless image && ImageUtil.kitty_terminal?
@@ -2775,6 +2776,8 @@ module Przn
       return nil unless File.file?(path) && ImageUtil.png?(path)
 
       img_w, img_h = ImageUtil.image_size(path)
+      return nil unless img_w && img_h && img_h > 0
+
       cell_w, cell_h = @terminal.cell_pixel_size
       rows = bullet[:size] || scale
       cols = [(rows * cell_h * img_w / img_h.to_f / cell_w).ceil, 1].max
