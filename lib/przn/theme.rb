@@ -149,6 +149,33 @@ module Przn
     end
     private_class_method :parse_layouts
 
+    # `bullet` as it applies to a list item `depth` levels in. Each
+    # `nested:` level overrides the one above it key by key, and items
+    # deeper than the last `nested:` keep that last level's style. A
+    # level that sets `text` without `image` stops inheriting the
+    # image, so a text marker can follow an image one.
+    def bullet_at(depth)
+      style_at(@bullet, depth) do |bullet, nested|
+        bullet.delete(:image) if nested[:text] && !nested[:image]
+      end
+    end
+
+    # The depth of the level that set the `bullet.size` in effect at
+    # `depth`: 0 for the top-level `bullet.size`, or when none is set.
+    def bullet_size_depth(depth)
+      style = @bullet
+      (1..depth).select { |d|
+        style = style[:nested] if style.is_a?(Hash)
+        style.is_a?(Hash) && style[:size]
+      }.last || 0
+    end
+
+    # `font` as it applies to a list item `depth` levels in, inherited
+    # through `nested:` the same way as `bullet_at`.
+    def font_at(depth)
+      style_at(@font, depth)
+    end
+
     def initialize(config)
       @colors = config[:colors]
       @font = config[:font]
@@ -160,6 +187,21 @@ module Przn
       @transition = config[:transition] || {}
       @fragment = config[:fragment] || {}
       @layouts = config[:layouts] || {}
+    end
+
+    private
+
+    # `style` with its first `depth` `nested:` levels merged in, each one
+    # into the level above it. Yields after each merge.
+    def style_at(style, depth)
+      depth.times do
+        nested = style[:nested]
+        break unless nested.is_a?(Hash)
+
+        style = style.merge(nested.compact)
+        yield style, nested if block_given?
+      end
+      style.reject { |key, _| key == :nested }
     end
   end
 end

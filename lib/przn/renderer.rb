@@ -1964,14 +1964,16 @@ module Przn
       else
         left = content_left(width)
         prefix = @theme.bullet[:text]
-        prefix_w = display_width(prefix)
+        image = bullet_image
+        prefix_w = image ? image[:width] : display_width(prefix)
         max_w = max_text_width(width, left, body_scale) - prefix_w
         segments = Parser.parse_inline(text)
         wrapped = wrap_segments(segments, max_w, body_scale)
 
         wrapped.each_with_index do |line_segs, li|
+          place_bullet_image(image, row, left) if image && li == 0
           term_move(row, left)
-          if li == 0
+          if li == 0 && !image
             @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, body_scale)}"
           else
             @terminal.write "#{KittyText.sized(' ' * prefix_w, s: body_scale)}#{render_segments_scaled(line_segs, body_scale)}"
@@ -2214,14 +2216,18 @@ module Przn
         item_step += 1 if gated && item[:wait]
         with_item_visibility(item_step) do
           depth = item[:depth] || 0
-          indent = '  ' * depth
-          prefix = "#{indent}#{@theme.bullet[:text]}"
-          prefix_w = display_width(prefix)
-          # Plain text renders at body_scale; lines containing a sized
+          bullet = list_bullet(depth)
+          # Plain text renders at the item's scale (body_scale unless
+          # `font.nested` says otherwise); lines containing a sized
           # span (e.g. `<size=5>BIG</size>`) advance the row by that
           # span's height per-line. Mixing `body` and `BIG` on the same
           # line keeps body at body size — only the BIG span grows.
-          base_scale = body_scale
+          base_scale = list_scale(depth)
+          style = list_text_style(depth)
+          image = bullet_image(bullet: bullet, scale: base_scale)
+          indent = list_indent(depth)
+          prefix = "#{indent}#{bullet[:text]}"
+          prefix_w = image ? display_width(indent) + image[:width] : display_width(prefix)
           max_w = max_text_width(width, left, base_scale) - prefix_w
 
           segments = Parser.parse_inline(item[:text])
@@ -2229,11 +2235,12 @@ module Przn
 
           wrapped.each_with_index do |line_segs, li|
             line_h = max_segment_scale(line_segs, base_scale)
+            place_bullet_image(image, row, left + display_width(indent) * base_scale, scale: base_scale) if image && li == 0
             term_move(row, left)
-            if li == 0
-              @terminal.write "#{render_bullet(prefix)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+            if li == 0 && !image
+              @terminal.write "#{render_bullet(prefix, bullet: bullet, scale: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h, **style)}"
             else
-              @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+              @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h, **style)}"
             end
             row += line_h
           end
@@ -2251,10 +2258,10 @@ module Przn
         item_step += 1 if gated && item[:wait]
         with_item_visibility(item_step) do
           depth = item[:depth] || 0
-          indent = '  ' * depth
-          prefix = "#{indent}#{i + 1}. "
+          base_scale = list_scale(depth)
+          style = list_text_style(depth)
+          prefix = "#{list_indent(depth)}#{i + 1}. "
           prefix_w = display_width(prefix)
-          base_scale = body_scale
           max_w = max_text_width(width, left, base_scale) - prefix_w
 
           segments = Parser.parse_inline(item[:text])
@@ -2264,9 +2271,9 @@ module Przn
             line_h = max_segment_scale(line_segs, base_scale)
             term_move(row, left)
             if li == 0
-              @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+              @terminal.write "#{KittyText.sized(prefix, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h, **style)}"
             else
-              @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h)}"
+              @terminal.write "#{KittyText.sized(' ' * prefix_w, s: base_scale)}#{render_segments_scaled(line_segs, base_scale, line_height: line_h, **style)}"
             end
             row += line_h
           end
@@ -2274,6 +2281,41 @@ module Przn
         end
       end
       row
+    end
+
+    # The bullet style of a list item `depth` levels in. A `bullet.size`
+    # is written against the text of the level that sets it, and may
+    # exceed it on purpose. A deeper level with smaller text inherits a
+    # size its lines have no room for, so there it is capped at the
+    # item's own scale.
+    def list_bullet(depth)
+      bullet = @theme.bullet_at(depth)
+      scale = list_scale(depth)
+      return bullet unless bullet[:size] && scale < list_scale(@theme.bullet_size_depth(depth))
+
+      bullet.merge(size: [bullet[:size], scale].min)
+    end
+
+    # Text scale of a list item `depth` levels in.
+    def list_scale(depth)
+      size = @theme.font_at(depth)[:size]
+      (size && Parser::SIZE_SCALES[size.to_s]) || DEFAULT_SCALE
+    end
+
+    # Family / color of a list item `depth` levels in, as the keywords
+    # render_segments_scaled takes. The slot's family / color win over
+    # the theme's, as they do for body text.
+    def list_text_style(depth)
+      font = @theme.font_at(depth)
+      { default_face: slot_family || font[:family], default_color: slot_color || font[:color] }
+    end
+
+    # Leading spaces for a list item, in cells of its own scale. Each
+    # level above it indents by two cells of that level's scale, so a
+    # smaller nested item still clears its parent's indent.
+    def list_indent(depth)
+      cols = (0...depth).sum { |d| 2 * list_scale(d) }
+      ' ' * (cols / list_scale(depth).to_f).ceil
     end
 
     # Run the block with @terminal swapped to a NullTerm if `item_step`
@@ -2694,17 +2736,74 @@ module Przn
     # glyph's cell footprint at body scale but draw a smaller dot vertically
     # centered. Plain `s=N` for a smaller bullet would top-align it inside
     # the row, which looks wrong against the larger body text.
-    def render_bullet(prefix)
-      size = @theme.bullet[:size]
+    #
+    # `bullet` / `scale` are the bullet style and text scale of the line it
+    # sits on; a nested list item passes its own level's.
+    def render_bullet(prefix, bullet: @theme.bullet, scale: body_scale)
+      size = bullet[:size]
       sized =
-        if size && size < body_scale
-          KittyText.sized(prefix, s: body_scale, n: size, d: body_scale, v: 2)
+        if size && size < scale
+          KittyText.sized(prefix, s: scale, n: size, d: scale, v: 2)
         else
-          KittyText.sized(prefix, s: size || body_scale)
+          KittyText.sized(prefix, s: size || scale)
         end
-      color = @theme.bullet[:color]
+      color = bullet[:color]
       return sized unless color && !color.to_s.empty?
       "#{color_code(color.to_s)}#{sized}#{ANSI[:reset]}"
+    end
+
+    # `bullet.image` as something the terminal can draw in place of the
+    # text bullet: the PNG's path, the cell box it fills (`bullet.size`
+    # rows tall, as wide as the image's aspect ratio needs), and `width`,
+    # the room the bullet takes in body-scale cells — the image plus one
+    # blank cell before the item text, the gap a text bullet carries in
+    # its own trailing space.
+    #
+    # nil when the image can't be shown: no Kitty graphics, a missing
+    # file, not a PNG, or a PNG whose size can't be read. Callers fall
+    # back to `bullet.text`.
+    #
+    # Called for every list and h2–h6 on every render, so the result is
+    # memoised like the other image data, per file version and geometry.
+    def bullet_image(bullet: @theme.bullet, scale: body_scale)
+      image = bullet[:image]
+      return nil unless image && ImageUtil.kitty_terminal?
+
+      path = resolve_image_path(image.to_s)
+      rows = bullet[:size] || scale
+      cell_size = @terminal.cell_pixel_size
+      key = [:bullet, path, image_mtime(path), rows, scale, cell_size]
+      return @image_cache[key] if @image_cache.key?(key)
+
+      @image_cache[key] = measure_bullet_image(path, rows, scale, cell_size)
+    end
+
+    def measure_bullet_image(path, rows, scale, cell_size)
+      return nil unless File.file?(path) && ImageUtil.png?(path)
+
+      img_w, img_h = ImageUtil.image_size(path)
+      return nil unless img_w && img_h && img_h > 0
+
+      cell_w, cell_h = cell_size
+      cols = [(rows * cell_h * img_w / img_h.to_f / cell_w).ceil, 1].max
+      {path: path, cols: cols, rows: rows, width: (cols / scale.to_f).ceil + 1}
+    end
+
+    # Place the bullet image with its top-left at (row, col). An image
+    # shorter than the body line is centered in it, like a text bullet
+    # smaller than the body scale: whole rows by moving the anchor cell,
+    # the leftover half row by a pixel offset.
+    def place_bullet_image(image, row, col, scale: body_scale)
+      # A hidden list item renders into a NullTerm. Uploading there would
+      # record the image as sent while the bytes went nowhere, and the
+      # item's later reveal would place an image the terminal never got.
+      return if @terminal.is_a?(NullTerm)
+
+      image_id = ensure_kitty_uploaded(image[:path])
+      _, cell_h = @terminal.cell_pixel_size
+      top = [(scale - image[:rows]) * cell_h / 2, 0].max
+      term_move(row + top / cell_h, col)
+      @terminal.write ImageUtil.kitty_place(image_id: image_id, cols: image[:cols], rows: image[:rows], y_off: top % cell_h)
     end
 
     # Render a <font face="..." size="..." color="..."> run. The face goes out

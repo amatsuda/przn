@@ -275,6 +275,65 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal 1, bullet[:size]
     end
 
+    test 'user file sets bullet.image, keeps default text' do
+      write_theme <<~YAML
+        bullet:
+          image: images/bullet.png
+      YAML
+
+      bullet = Przn::Theme.load(theme_path).bullet
+      assert_equal 'images/bullet.png', bullet[:image]
+      assert_equal '・', bullet[:text]
+    end
+
+    test 'nested levels inherit from the level above, the deepest one repeats' do
+      write_theme <<~YAML
+        font:
+          size: 3
+          nested:
+            size: 2
+            color: gray
+            nested:
+              color: red
+        bullet:
+          image: images/bullet.png
+          color: blue
+          nested:
+            text: "– "
+            nested:
+              size: 1
+      YAML
+
+      theme = Przn::Theme.load(theme_path)
+      assert_equal [3, nil], theme.font_at(0).values_at(:size, :color)
+      assert_equal [2, 'gray'], theme.font_at(1).values_at(:size, :color)
+      assert_equal [2, 'red'], theme.font_at(2).values_at(:size, :color)
+      assert_equal theme.font_at(2), theme.font_at(5)
+      assert_not_include theme.font_at(2), :nested
+
+      assert_equal({text: '・', image: 'images/bullet.png', color: 'blue'}, theme.bullet_at(0))
+      # a level that sets text drops the inherited image
+      assert_equal({text: '– ', color: 'blue'}, theme.bullet_at(1))
+      assert_equal({text: '– ', color: 'blue', size: 1}, theme.bullet_at(2))
+      assert_equal theme.bullet_at(2), theme.bullet_at(5)
+      # the top level sets no size; level 2 does, and deeper items reuse it
+      assert_equal [0, 0, 2, 2], [0, 1, 2, 5].map { |depth| theme.bullet_size_depth(depth) }
+    end
+
+    test 'a `nested:` that is not a mapping is ignored' do
+      ['', ' x', ' [a]', ' 3'].each do |nested|
+        write_theme <<~YAML
+          bullet:
+            color: blue
+            nested:#{nested}
+        YAML
+
+        theme = Przn::Theme.load(theme_path)
+        assert_equal theme.bullet_at(0), theme.bullet_at(1), "nested:#{nested}"
+        assert_equal 'blue', theme.bullet_at(1)[:color]
+      end
+    end
+
     test 'unspecified bullet falls back to all defaults' do
       write_theme <<~YAML
         colors:

@@ -708,6 +708,7 @@ font:                     # body text typography (paragraphs, lists, h2–h6, co
   family:                 # font family; Echoes only — OSC 66 f= extension
   size:                   # OSC 66 scale: numeric (1–7) or named (xx-small … xxxx-large); default 2 (small)
   color:                  # named ANSI or 6-digit hex; falls back to terminal default fg when unset
+  nested:                 # nested list items: family / size / color, and `nested:` again for the next depth
 
 title:                    # h1 typography (slide titles)
   family:                 # font family; Echoes only — OSC 66 f= extension
@@ -716,8 +717,10 @@ title:                    # h1 typography (slide titles)
 
 bullet:                   # unordered-list marker; also h2–h6 prefix
   text: "・"              # the glyph
-  size:                   # OSC 66 scale (1–7) for the bullet; default = body text's scale
+  image:                  # PNG drawn instead of the glyph, path relative to the deck
+  size:                   # OSC 66 scale (1–7) for the bullet, or the image's height in rows; default = body text's scale
   color:                  # named ANSI or 6-digit hex; falls back to body text color when unset
+  nested:                 # nested list items: text / image / size / color, and `nested:` again for the next depth
 
 code:                     # fenced code block (and inline `<code>`) typography
   family:                 # font family (Echoes only); falls back to font.family
@@ -744,7 +747,22 @@ Notes:
   - **`font.family`** _(Echoes only)_ — applied via OSC 66 `f=`; PDF: registered via fontconfig. Inline `<font face="...">` runs override it per-segment.
   - **`font.size`** — OSC 66 scale; controls the visual size of body text (numeric `1`–`7` or named `xx-small` … `xxxx-large`). Default `2` (small). Inline `<size=...>` runs override it per-segment.
   - **`font.color`** — deck-wide default text color. Inline `<color=...>` / `<font color="...">` runs still win per-segment.
-- **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color.
+- **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color. `bullet.image` (PNG, path relative to the deck) draws an image in place of the character, `bullet.size` rows tall. It needs the Kitty Graphics Protocol; otherwise `bullet.text` is used.
+- **`nested`** — `font.nested` and `bullet.nested` style nested list items, one `nested:` per depth. Unset keys inherit from the level above, and deeper items reuse the last level given. A level that sets `text` drops an inherited `image`. An inherited `bullet.size` is lowered to the item's text scale when that text is smaller than the text of the level that set the size; a `size` written at the item's own level is used as is. `--export prawn` uses only `bullet.nested.text`.
+
+  ```yaml
+  font:
+    size: 3
+    nested:
+      size: 2
+      color: gray
+  bullet:
+    text: "● "
+    nested:
+      text: "– "
+      nested:
+        text: "· "
+  ```
 - **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` _(Echoes only)_ does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is set and the h1 is centred (slot `x: center`), each line emits as one slot-spanning multicell with halign=2 so Echoes' proportional-font measurement centers the text pixel-precisely instead of using the cell-grid estimate; at a numeric slot `x:` the title is left-aligned at that column like any other block. h2–h6 stay body text.
 - **`code`** — fenced code block (and inline `<code>`) typography. `code.family` _(Echoes only)_ sets the OSC 66 `f=` face for code (falls back to `font.family` when unset, so a single body-font override usually styles code too); `code.size` is the OSC 66 scale (default = `font.size`); `code.color` is the foreground colour for **all** code text — fenced blocks and inline `<code>` alike — falling back to the body fg when unset; `code.bg` is the **fenced-block** background — accepts the same forms as `font.color` (CSS / ANSI named or 6-digit hex; default is dim gray, ANSI 256-color 236). Inline `<code>` segments in the **terminal** keep the historical gray-background styling for the bg; only fenced blocks read `code.bg`. `code.highlight` picks the syntax-highlight colour scheme: any Rouge theme name works — common picks are `monokai`, `gruvbox`, `github.dark`, `base16.solarized.dark`, `tulip`. Unset (the default) uses przn's built-in ANSI palette, which maps tokens to ANSI colour names and so picks up the user's terminal palette (handy on light terminals where absolute monokai-style hex would clash). Unknown / mistyped theme names silently fall through to the ANSI palette.
 - **`background`** _(Echoes only)_ — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
