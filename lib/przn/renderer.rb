@@ -2212,13 +2212,11 @@ module Przn
       # group's "no sub-steps in v1" rule and render every item.
       gated = @block_step && @block_step.key?(block)
       item_step = gated ? @block_step[block] : nil
-      images = Hash.new { |cache, depth| cache[depth] = bullet_image(bullet: list_bullet(depth), scale: list_scale(depth)) }
       block[:items].each do |item|
         item_step += 1 if gated && item[:wait]
         with_item_visibility(item_step) do
           depth = item[:depth] || 0
           bullet = list_bullet(depth)
-          image = images[depth]
           # Plain text renders at the item's scale (body_scale unless
           # `font.nested` says otherwise); lines containing a sized
           # span (e.g. `<size=5>BIG</size>`) advance the row by that
@@ -2226,6 +2224,7 @@ module Przn
           # line keeps body at body size — only the BIG span grows.
           base_scale = list_scale(depth)
           style = list_text_style(depth)
+          image = bullet_image(bullet: bullet, scale: base_scale)
           indent = list_indent(depth)
           prefix = "#{indent}#{bullet[:text]}"
           prefix_w = image ? display_width(indent) + image[:width] : display_width(prefix)
@@ -2768,18 +2767,29 @@ module Przn
     # nil when the image can't be shown: no Kitty graphics, a missing
     # file, not a PNG, or a PNG whose size can't be read. Callers fall
     # back to `bullet.text`.
+    #
+    # Called for every list and h2–h6 on every render, so the result is
+    # memoised like the other image data, per file version and geometry.
     def bullet_image(bullet: @theme.bullet, scale: body_scale)
       image = bullet[:image]
       return nil unless image && ImageUtil.kitty_terminal?
 
       path = resolve_image_path(image.to_s)
+      rows = bullet[:size] || scale
+      cell_size = @terminal.cell_pixel_size
+      key = [:bullet, path, image_mtime(path), rows, scale, cell_size]
+      return @image_cache[key] if @image_cache.key?(key)
+
+      @image_cache[key] = measure_bullet_image(path, rows, scale, cell_size)
+    end
+
+    def measure_bullet_image(path, rows, scale, cell_size)
       return nil unless File.file?(path) && ImageUtil.png?(path)
 
       img_w, img_h = ImageUtil.image_size(path)
       return nil unless img_w && img_h && img_h > 0
 
-      cell_w, cell_h = @terminal.cell_pixel_size
-      rows = bullet[:size] || scale
+      cell_w, cell_h = cell_size
       cols = [(rows * cell_h * img_w / img_h.to_f / cell_w).ceil, 1].max
       {path: path, cols: cols, rows: rows, width: (cols / scale.to_f).ceil + 1}
     end

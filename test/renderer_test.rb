@@ -4024,6 +4024,20 @@ class RendererTest < Test::Unit::TestCase
       r.send(:render_unordered_list, block, 80, 5)
       assert_equal 1, term.writes.scan("\e_Ga=p").size
     end
+
+    test 'the image is measured once per file version, not on every render' do
+      term = BulletFakeTerm.new
+      theme = Przn::Theme.new(colors: {}, font: {}, bullet: {text: '・', image: PNG}, background: {}, title: {})
+      r = Przn::Renderer.new(term, theme: theme)
+      calls = 0
+      orig = Przn::ImageUtil.method(:image_size)
+      Przn::ImageUtil.define_singleton_method(:image_size) { |path| calls += 1; orig.call(path) }
+      3.times { r.send(:render_unordered_list, list('item'), 80, 5) }
+      assert_equal 1, calls
+    ensure
+      Przn::ImageUtil.singleton_class.remove_method(:image_size)
+      Przn::ImageUtil.define_singleton_method(:image_size, orig)
+    end
   end
 
   sub_test_case 'bullet.nested / font.nested: per-depth list styles' do
