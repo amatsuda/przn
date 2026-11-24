@@ -2306,12 +2306,13 @@ module Przn
 
     # `font.nested`'s family / color for the level, as the keywords
     # render_segments_scaled takes. A key the level leaves unset is left
-    # out, so the usual slot / `font` fallback still applies.
+    # out, so the usual slot / `font` fallback still applies; a key it
+    # sets still yields to the slot's, the way `font` does.
     def list_text_style(depth)
       font = @theme.nested_font(depth)
       style = {}
-      style[:default_face] = font[:family] if font[:family]
-      style[:default_color] = font[:color] if font[:color]
+      style[:default_face] = slot_family || font[:family] if font[:family]
+      style[:default_color] = slot_color || font[:color] if font[:color]
       style
     end
 

@@ -4016,11 +4016,13 @@ class RendererTest < Test::Unit::TestCase
   end
 
   sub_test_case 'bullet.nested / font.nested: per-depth list styles' do
-    def render(method, font: {}, bullet: {})
+    def render(method, font: {}, bullet: {}, slot: nil)
       term = BulletFakeTerm.new
       theme = Przn::Theme.new(colors: {}, font: font, bullet: {text: '・'}.merge(bullet), background: {}, title: {})
       block = {type: method == :render_ordered_list ? :ordered_list : :unordered_list, items: [{text: 'top', depth: 0}, {text: 'child', depth: 1}]}
-      Przn::Renderer.new(term, theme: theme).send(method, block, 80, 5)
+      r = Przn::Renderer.new(term, theme: theme)
+      r.instance_variable_set(:@slot_style, slot)
+      r.send(method, block, 80, 5)
       term.writes
     end
 
@@ -4051,6 +4053,17 @@ class RendererTest < Test::Unit::TestCase
       out = render(:render_unordered_list, font: {size: 2, nested: {size: 1}}, bullet: {size: 3, nested: {size: 2}})
       assert_includes out, "\e]66;s=3;・\a\e]66;s=2;top\a"
       assert_includes out, "\e]66;s=2;    ・\a\e]66;s=1;child\a"
+    end
+
+    test 'the slot\'s color / family win over font.nested, as they do over font' do
+      out = render(
+        :render_unordered_list,
+        font: {color: 'red', nested: {color: 'blue', family: 'Menlo'}},
+        slot: {color: 'green', family: 'Courier'}
+      )
+      green = "\e[38;2;0;128;0m"
+      assert_includes out, "#{green}\e]7772;multicell;s=2:f=Courier;top\a"
+      assert_includes out, "#{green}\e]7772;multicell;s=2:f=Courier;child\a"
     end
 
     test 'font.nested applies to ordered lists' do
