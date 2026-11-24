@@ -2212,12 +2212,12 @@ module Przn
       # group's "no sub-steps in v1" rule and render every item.
       gated = @block_step && @block_step.key?(block)
       item_step = gated ? @block_step[block] : nil
-      images = Hash.new { |cache, depth| cache[depth] = bullet_image(bullet: @theme.bullet_at(depth), scale: list_scale(depth)) }
+      images = Hash.new { |cache, depth| cache[depth] = bullet_image(bullet: list_bullet(depth), scale: list_scale(depth)) }
       block[:items].each do |item|
         item_step += 1 if gated && item[:wait]
         with_item_visibility(item_step) do
           depth = item[:depth] || 0
-          bullet = @theme.bullet_at(depth)
+          bullet = list_bullet(depth)
           image = images[depth]
           # Plain text renders at the item's scale (body_scale unless
           # `font.nested` says otherwise); lines containing a sized
@@ -2282,6 +2282,19 @@ module Przn
         end
       end
       row
+    end
+
+    # The bullet style of a list item `depth` levels in. A `bullet.size`
+    # is written against the text of the level that sets it, and may
+    # exceed it on purpose. A deeper level with smaller text inherits a
+    # size its lines have no room for, so there it is capped at the
+    # item's own scale.
+    def list_bullet(depth)
+      bullet = @theme.bullet_at(depth)
+      scale = list_scale(depth)
+      return bullet unless bullet[:size] && scale < list_scale(@theme.bullet_size_depth(depth))
+
+      bullet.merge(size: [bullet[:size], scale].min)
     end
 
     # Text scale of a list item `depth` levels in: `font.nested`'s size

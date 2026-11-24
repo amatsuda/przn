@@ -315,6 +315,8 @@ class ThemeTest < Test::Unit::TestCase
       assert_equal({text: '– ', color: 'blue'}, theme.bullet_at(1))
       assert_equal({text: '– ', color: 'blue', size: 1}, theme.bullet_at(2))
       assert_equal theme.bullet_at(2), theme.bullet_at(5)
+      # the top level sets no size; level 2 does, and deeper items reuse it
+      assert_equal [0, 0, 2, 2], [0, 1, 2, 5].map { |depth| theme.bullet_size_depth(depth) }
     end
 
     test 'a `nested:` that is not a mapping is ignored' do

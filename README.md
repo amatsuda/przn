@@ -748,7 +748,7 @@ Notes:
   - **`font.size`** — OSC 66 scale; controls the visual size of body text (numeric `1`–`7` or named `xx-small` … `xxxx-large`). Default `2` (small). Inline `<size=...>` runs override it per-segment.
   - **`font.color`** — deck-wide default text color. Inline `<color=...>` / `<font color="...">` runs still win per-segment.
 - **`bullet`** — `bullet.text` is the character; `bullet.size` is the OSC 66 scale used to render it. When `bullet.size` is smaller than the body text scale, the bullet is rendered with fractional scaling and vertical centering so it still aligns with the body line. `bullet.color` sets a dedicated foreground color for the marker (named ANSI or 6-digit hex); when unset, the bullet inherits the body text color. `bullet.image` (PNG, path relative to the deck) draws an image in place of the character, `bullet.size` rows tall. It needs the Kitty Graphics Protocol; otherwise `bullet.text` is used.
-- **`nested`** — `font.nested` and `bullet.nested` style nested list items, one `nested:` per depth. Unset keys inherit from the level above, and deeper items reuse the last level given. A level that sets `text` drops an inherited `image`. `--export prawn` uses only `bullet.nested.text`.
+- **`nested`** — `font.nested` and `bullet.nested` style nested list items, one `nested:` per depth. Unset keys inherit from the level above, and deeper items reuse the last level given. A level that sets `text` drops an inherited `image`. An inherited `bullet.size` is lowered to the item's text scale when that text is smaller than the text of the level that set the size; a `size` written at the item's own level is used as is. `--export prawn` uses only `bullet.nested.text`.
 
   ```yaml
   font:

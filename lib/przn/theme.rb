@@ -161,6 +161,16 @@ module Przn
       base.merge(overrides)
     end
 
+    # The depth of the level that set the `bullet.size` in effect at
+    # `depth`: 0 for the top-level `bullet.size`, or when none is set.
+    def bullet_size_depth(depth)
+      style = @bullet
+      (1..depth).select { |d|
+        style = style[:nested] if style.is_a?(Hash)
+        style.is_a?(Hash) && style[:size]
+      }.last || 0
+    end
+
     # What `font.nested` changes for a list item `depth` levels in:
     # only the keys set somewhere along the chain, empty at depth 0.
     def nested_font(depth)

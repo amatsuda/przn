@@ -3985,6 +3985,15 @@ class RendererTest < Test::Unit::TestCase
       end
     end
 
+    test 'an image size inherited by smaller text is capped at the line\'s rows' do
+      block = {type: :unordered_list, items: [{text: 'top', depth: 0}, {text: 'child', depth: 1}]}
+      theme = Przn::Theme.new(colors: {}, font: {size: 2, nested: {size: 1}}, bullet: {text: '・', image: PNG, size: 2}, background: {}, title: {})
+      term = BulletFakeTerm.new
+      Przn::Renderer.new(term, theme: theme).send(:render_unordered_list, block, 80, 5)
+      assert_match(/\e_Ga=p,i=1,c=4,r=2,C=1,q=2\e\\/, term.writes)
+      assert_match(/\e_Ga=p,i=1,c=2,r=1,C=1,q=2\e\\/, term.writes)
+    end
+
     test 'bullet.nested.image replaces the marker for nested items only' do
       block = {type: :unordered_list, items: [{text: 'top', depth: 0}, {text: 'child', depth: 1}]}
       term = render({nested: {image: PNG}}, :render_unordered_list, block)
@@ -4029,6 +4038,19 @@ class RendererTest < Test::Unit::TestCase
     test 'without nested styles a nested item renders like the top level' do
       out = render(:render_unordered_list, font: {size: 3})
       assert_includes out, "\e]66;s=3;  ・\a\e]66;s=3;child\a"
+    end
+
+    test 'a bullet.size inherited by smaller text is capped at the nested item\'s scale' do
+      out = render(:render_unordered_list, font: {size: 2, nested: {size: 1}}, bullet: {size: 2})
+      assert_includes out, "\e]66;s=2;・\a\e]66;s=2;top\a"
+      # indent: two cells at the parent's scale 2 = 4 cells at scale 1
+      assert_includes out, "\e]66;s=1;    ・\a\e]66;s=1;child\a"
+    end
+
+    test 'a bullet.size set for its own level may exceed the text scale' do
+      out = render(:render_unordered_list, font: {size: 2, nested: {size: 1}}, bullet: {size: 3, nested: {size: 2}})
+      assert_includes out, "\e]66;s=3;・\a\e]66;s=2;top\a"
+      assert_includes out, "\e]66;s=2;    ・\a\e]66;s=1;child\a"
     end
 
     test 'font.nested applies to ordered lists' do
