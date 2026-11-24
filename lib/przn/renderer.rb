@@ -137,10 +137,10 @@ module Przn
           end
         end
 
-        layout = layout_name && @theme.layouts[layout_name]
+        slots = layout_name && @theme.layouts[layout_name]&.slots
 
-        if layout
-          render_layout(slide, layout, w, h)
+        if slots
+          render_layout(slide, slots, w, h)
         else
           # `{layout=none}` (or a theme stripped of `default`) — render
           # blocks top-down from row 2 with no slot routing.
@@ -1033,7 +1033,7 @@ module Przn
     # Other terminals ignore the OSC code, so this is a no-op outside Echoes.
     def apply_slide_background(slide, layout_name: nil)
       block = slide.blocks.find { |b| b[:type] == :bg }
-      attrs = block ? block[:attrs] : (@theme.layout_backgrounds[layout_name] || @theme.background || {})
+      attrs = block ? block[:attrs] : (@theme.layouts[layout_name]&.background || @theme.background || {})
 
       @terminal.write "\e]7772;bg-clear\a"
       clear_background_image

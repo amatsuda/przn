@@ -866,7 +866,7 @@ class RendererTest < Test::Unit::TestCase
       def cell_pixel_size; [10, 20]; end
     end
 
-    FakeTheme = Struct.new(:counter, :font, :background, :title, :bullet, :colors, :layouts, :layout_backgrounds)
+    FakeTheme = Struct.new(:counter, :font, :background, :title, :bullet, :colors, :layouts)
 
     RUNNER_DEFAULTS = {
       rabbit: "\e]7772;multicell;s=2:flip=h;🐇\a",
@@ -874,7 +874,7 @@ class RendererTest < Test::Unit::TestCase
     }.freeze
 
     def fake_theme(counter: {duration: '60s'})
-      FakeTheme.new(RUNNER_DEFAULTS.merge(counter), {}, {}, {}, {text: '・'}, {}, {}, {})
+      FakeTheme.new(RUNNER_DEFAULTS.merge(counter), {}, {}, {}, {text: '・'}, {}, {})
     end
 
     test 'anchors current slide number at column 1' do
@@ -1357,7 +1357,7 @@ class RendererTest < Test::Unit::TestCase
 
     test 'route_blocks_to_slots: h1 auto-fills title; left then right by <slot/>' do
       r = Przn::Renderer.new(nil, theme: Przn::Theme.default)
-      slots = Przn::Theme.default.layouts['two-column']
+      slots = Przn::Theme.default.layouts['two-column'].slots
       blocks = [
         {type: :heading, level: 1, content: 'T'},
         {type: :paragraph, content: 'left para'},
@@ -1373,7 +1373,7 @@ class RendererTest < Test::Unit::TestCase
 
     test '<slot name="X"/> jumps to that named slot' do
       r = Przn::Renderer.new(nil, theme: Przn::Theme.default)
-      slots = Przn::Theme.default.layouts['two-column']
+      slots = Przn::Theme.default.layouts['two-column'].slots
       blocks = [
         {type: :heading, level: 1, content: 'T'},
         {type: :slot, name: 'right'},
@@ -1446,9 +1446,9 @@ class RendererTest < Test::Unit::TestCase
     test 'slot family: cascades into render_segments_scaled :body default' do
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, 'Menlo', nil)
-      ]
+      ])
       ps = Przn::Parser.parse("a paragraph\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1465,9 +1465,9 @@ class RendererTest < Test::Unit::TestCase
     test 'slot color: cascades into body color for paragraphs' do
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('content', '1', '2', '100%', '100%', nil, nil, 'red')
-      ]
+      ])
       ps = Przn::Parser.parse("a paragraph\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1487,9 +1487,9 @@ class RendererTest < Test::Unit::TestCase
       # ends up centred against the slide centre (col 40).
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('title', 'center', '5', '30%', '10', nil, nil, nil)
-      ]
+      ])
       ps = Przn::Parser.parse("# Hi\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1513,9 +1513,9 @@ class RendererTest < Test::Unit::TestCase
       # vertical centre falls on the slide centre.
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('title', 'center', 'center', '100%', '100%', nil, nil, nil)
-      ]
+      ])
       ps = Przn::Parser.parse("# Hi\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1529,9 +1529,9 @@ class RendererTest < Test::Unit::TestCase
       # h1 at default scale 4 → 4 content rows. Bottom: y = 30 - 4 + 1 = 27.
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('title', 'center', 'bottom', '100%', '100%', nil, nil, nil)
-      ]
+      ])
       ps = Przn::Parser.parse("# Hi\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1544,9 +1544,9 @@ class RendererTest < Test::Unit::TestCase
     test 'slot y: top pins the slot to row 1' do
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('title', 'center', 'top', '100%', '100%', nil, nil, nil)
-      ]
+      ])
       ps = Przn::Parser.parse("# Hi\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1559,9 +1559,9 @@ class RendererTest < Test::Unit::TestCase
     test 'middle is accepted as a synonym of center on y too' do
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('title', 'center', 'middle', '100%', '100%', nil, nil, nil)
-      ]
+      ])
       ps = Przn::Parser.parse("# Hi\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -1616,9 +1616,9 @@ class RendererTest < Test::Unit::TestCase
       # content_h = 6. Centered: y = (30 - 6) / 2 + 1 = 13.
       theme = Przn::Theme.default
       original = theme.layouts['default']
-      theme.layouts['default'] = [
+      theme.layouts['default'] = Przn::Theme::Layout.new([
         Przn::Theme::Slot.new('body', 'center', 'center', '100%', '100%', nil, nil, nil)
-      ]
+      ])
       ps = Przn::Parser.parse("first line\n\nsecond line\n")
       term = LayoutFakeTerm.new(w: 80, h: 30)
       Przn::Renderer.new(term, theme: theme).render(ps.slides[0], current: 1, total: 2)
@@ -2589,7 +2589,10 @@ class RendererTest < Test::Unit::TestCase
       theme = Przn::Theme.new(
         colors: {}, font: {}, bullet: {}, title: {},
         background: {color: '#111111'},
-        layout_backgrounds: {'section' => {color: '#222222'}, 'plain' => {}}
+        layouts: {
+          'section' => Przn::Theme::Layout.new(nil, {color: '#222222'}),
+          'plain' => Przn::Theme::Layout.new(nil, {})
+        }
       )
       plain = Struct.new(:blocks, :layout, :attrs).new([], nil, {})
       with_bg = Struct.new(:blocks, :layout, :attrs).new([{type: :bg, attrs: {color: '#333333'}}], nil, {})
@@ -2614,8 +2617,11 @@ class RendererTest < Test::Unit::TestCase
       theme = Przn::Theme.new(
         colors: {}, font: {}, bullet: {text: '・'}, title: {},
         background: {color: '#111111'},
-        layouts: {'default' => slots, 'cover' => slots, 'section' => slots},
-        layout_backgrounds: {'cover' => {color: '#222222'}, 'section' => {color: '#333333'}}
+        layouts: {
+          'default' => Przn::Theme::Layout.new(slots),
+          'cover' => Przn::Theme::Layout.new(slots, {color: '#222222'}),
+          'section' => Przn::Theme::Layout.new(slots, {color: '#333333'})
+        }
       )
       {
         ["# t\n", 0] => '#222222', # slide 0 without a layout is `cover`

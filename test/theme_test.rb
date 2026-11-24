@@ -58,12 +58,12 @@ class ThemeTest < Test::Unit::TestCase
       layouts = Przn::Theme.default.layouts
       assert_equal %w[default cover title-only takahashi title-content two-column photo-caption].sort,
                    layouts.keys.sort
-      assert_equal %w[title left right], layouts['two-column'].map(&:name)
-      assert_equal '50%', layouts['two-column'].find { |s| s.name == 'right' }.x
+      assert_equal %w[title left right], layouts['two-column'].slots.map(&:name)
+      assert_equal '50%', layouts['two-column'].slots.find { |s| s.name == 'right' }.x
     end
 
     test 'shipped `takahashi` is a single very-large centered slot (高橋メソッド)' do
-      slots = Przn::Theme.default.layouts['takahashi']
+      slots = Przn::Theme.default.layouts['takahashi'].slots
       assert_equal 1, slots.size
       slot = slots[0]
       assert_equal 'title',      slot.name
@@ -74,12 +74,12 @@ class ThemeTest < Test::Unit::TestCase
 
     test 'shipped `default` mirrors `title-content` (centered title band + content below)' do
       defaults = Przn::Theme.default.layouts
-      assert_equal defaults['title-content'].map(&:to_a),
-                   defaults['default'].map(&:to_a)
+      assert_equal defaults['title-content'].slots.map(&:to_a),
+                   defaults['default'].slots.map(&:to_a)
     end
 
     test 'shipped `cover` has a centered title slot and a bottom subtitle slot' do
-      slots = Przn::Theme.default.layouts['cover']
+      slots = Przn::Theme.default.layouts['cover'].slots
       assert_equal %w[title subtitle], slots.map(&:name)
       assert_equal '35%', slots[0].y
       assert_equal '80%', slots[1].y
@@ -90,13 +90,13 @@ class ThemeTest < Test::Unit::TestCase
     test 'every built-in title slot opts into center alignment via x: center' do
       layouts = Przn::Theme.default.layouts
       %w[default cover title-only takahashi title-content two-column photo-caption].each do |name|
-        title = layouts[name].find { |s| s.name == 'title' }
+        title = layouts[name].slots.find { |s| s.name == 'title' }
         assert_equal 'center', title.x, "expected #{name}.title to have x: center"
       end
     end
 
     test '`default` content slot uses numeric x (flush-left, no keyword)' do
-      content = Przn::Theme.default.layouts['default'].find { |s| s.name == 'content' }
+      content = Przn::Theme.default.layouts['default'].slots.find { |s| s.name == 'content' }
       assert_equal '5', content.x, 'content slot should be at column 5, default left alignment'
     end
 
@@ -107,14 +107,14 @@ class ThemeTest < Test::Unit::TestCase
             - {name: title, x: 1, y: 1, width: 100%, height: 5, size: xxx-large, family: Menlo, color: red}
       YAML
 
-      slot = Przn::Theme.load(theme_path).layouts['fancy'][0]
+      slot = Przn::Theme.load(theme_path).layouts['fancy'].slots[0]
       assert_equal 'xxx-large', slot.size
       assert_equal 'Menlo',     slot.family
       assert_equal 'red',       slot.color
     end
 
     test 'shipped `cover.title` opts into a larger size (Keynote-style title slide)' do
-      title = Przn::Theme.default.layouts['cover'].find { |s| s.name == 'title' }
+      title = Przn::Theme.default.layouts['cover'].slots.find { |s| s.name == 'title' }
       assert_equal 'xxx-large', title.size
     end
   end
@@ -199,8 +199,8 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal %w[title body], theme.layouts['custom'].map(&:name)
-      slot = theme.layouts['custom'][1]
+      assert_equal %w[title body], theme.layouts['custom'].slots.map(&:name)
+      slot = theme.layouts['custom'].slots[1]
       assert_equal ['body', '1', '7', '100%', '80%'],
                    [slot.name, slot.x, slot.y, slot.width, slot.height]
     end
@@ -214,7 +214,7 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal %w[title content], theme.layouts['default'].map(&:name)
+      assert_equal %w[title content], theme.layouts['default'].slots.map(&:name)
     end
 
     test 'a layout written as a hash carries a background next to its slots' do
@@ -231,12 +231,12 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal %w[title], theme.layouts['section'].map(&:name)
-      assert_equal({image: 'images/section.png'}, theme.layout_backgrounds['section'])
+      assert_equal %w[title], theme.layouts['section'].slots.map(&:name)
+      assert_equal({image: 'images/section.png'}, theme.layouts['section'].background)
       # no `slots:` — the built-in slots stay
-      assert_equal @defaults.layouts['cover'].map(&:name), theme.layouts['cover'].map(&:name)
-      assert_equal({color: '#1a1a2e'}, theme.layout_backgrounds['cover'])
-      assert_nil theme.layout_backgrounds['default']
+      assert_equal @defaults.layouts['cover'].slots.map(&:name), theme.layouts['cover'].slots.map(&:name)
+      assert_equal({color: '#1a1a2e'}, theme.layouts['cover'].background)
+      assert_nil theme.layouts['default'].background
     end
 
     test 'an empty layout background is kept, an unset one is not' do
@@ -251,8 +251,11 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       theme = Przn::Theme.load(theme_path)
+      assert_equal({}, theme.layouts['cover'].background)
       # not a hash: an empty background, not the theme's
-      assert_equal({'cover' => {}, 'two-column' => {}}, theme.layout_backgrounds)
+      assert_equal({}, theme.layouts['two-column'].background)
+      assert_equal @defaults.layouts['cover'].slots, theme.layouts['cover'].slots
+      assert_nil theme.layouts['default'].background
     end
 
     test 'overriding a built-in layout replaces its slot list end-to-end' do
@@ -264,10 +267,10 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal %w[title only], theme.layouts['two-column'].map(&:name)
+      assert_equal %w[title only], theme.layouts['two-column'].slots.map(&:name)
       # Other built-ins remain untouched.
-      assert_equal @defaults.layouts['photo-caption'].map(&:name),
-                   theme.layouts['photo-caption'].map(&:name)
+      assert_equal @defaults.layouts['photo-caption'].slots.map(&:name),
+                   theme.layouts['photo-caption'].slots.map(&:name)
     end
   end
 
