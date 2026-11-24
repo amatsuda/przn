@@ -312,7 +312,7 @@ content layered on top of the image...
 
 - `color` / `from` / `to` / `angle` use [Echoes](https://github.com/amatsuda/echoes)' OSC 7772 extension; other terminals ignore the escape sequence.
 - `image` (PNG, path relative to the deck) uses the Kitty Graphics Protocol at `z: -1` so text and `<img>` content layer on top. Works on every kitty-graphics terminal (Kitty, Ghostty, Wezterm, Echoes…); silently no-ops elsewhere. `image` wins when set alongside `color` / `from` / `to`.
-- For a deck-wide default, set `background.image:` (or `color:` / gradient keys) in `theme.yml`.
+- For a deck-wide default, set `background.image:` (or `color:` / gradient keys) in `theme.yml`. A layout can have a `background:` of its own (see [Slide layouts](#slide-layouts)). A `<bg .../>` on the slide wins over the layout's, which wins over the theme's.
 
 The previous slide's background — color, gradient, and image placement — is cleared on every navigation, and on `przn` exit, so your shell isn't left tinted or covered.
 
@@ -448,6 +448,20 @@ layouts:
 ```
 
 `x: center` on a slot is what makes h1 titles (and any other content routed into the slot) horizontally centered — there's no implicit "h1 always centers" magic. Per-block `<center>` / `{:.center}` directives and inline tags (`<size>`, `<font>`, `<color>`) still override the slot's defaults per-segment. The legacy `align: center` key on a slot is still accepted as a back-compat alias for `x: center`, so existing custom themes keep working until you migrate them.
+
+**Per-layout background.** Instead of the slot list alone, a layout can have two keys: `slots:` for the slot list and `background:` for a background of its own (same keys as the top-level `background:`). It replaces the theme's background on slides using the layout; a `<bg .../>` on the slide still wins. `background: {}` gives the layout no background at all, not even the theme's. Leave `slots:` out to keep a built-in layout's slots.
+
+```yaml
+layouts:
+  section:
+    background:
+      image: images/section.png
+    slots:
+      - {name: title, x: center, y: 40%, width: 90%, height: 20%}
+  cover:
+    background:
+      color: "#1a1a2e"
+```
 
 **Built-in layouts** (shipped in `default_theme.yml`):
 
@@ -765,7 +779,7 @@ Notes:
   ```
 - **`title`** — h1 typography. Same three knobs as `font` (`family`, `size`, `color`) but each is independent: `title.family` _(Echoes only)_ does **not** inherit `font.family`, `title.color` does **not** inherit `font.color`. `title.size` defaults to x-large (OSC 66 `s=4`). When `title.family` is set and the h1 is centred (slot `x: center`), each line emits as one slot-spanning multicell with halign=2 so Echoes' proportional-font measurement centers the text pixel-precisely instead of using the cell-grid estimate; at a numeric slot `x:` the title is left-aligned at that column like any other block. h2–h6 stay body text.
 - **`code`** — fenced code block (and inline `<code>`) typography. `code.family` _(Echoes only)_ sets the OSC 66 `f=` face for code (falls back to `font.family` when unset, so a single body-font override usually styles code too); `code.size` is the OSC 66 scale (default = `font.size`); `code.color` is the foreground colour for **all** code text — fenced blocks and inline `<code>` alike — falling back to the body fg when unset; `code.bg` is the **fenced-block** background — accepts the same forms as `font.color` (CSS / ANSI named or 6-digit hex; default is dim gray, ANSI 256-color 236). Inline `<code>` segments in the **terminal** keep the historical gray-background styling for the bg; only fenced blocks read `code.bg`. `code.highlight` picks the syntax-highlight colour scheme: any Rouge theme name works — common picks are `monokai`, `gruvbox`, `github.dark`, `base16.solarized.dark`, `tulip`. Unset (the default) uses przn's built-in ANSI palette, which maps tokens to ANSI colour names and so picks up the user's terminal palette (handy on light terminals where absolute monokai-style hex would clash). Unknown / mistyped theme names silently fall through to the ANSI palette.
-- **`background`** _(Echoes only)_ — the deck-wide default background. A per-slide `<bg .../>` directive overrides it for that slide. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
+- **`background`** _(Echoes only)_ — the deck-wide default background. The `background:` of the slide's layout overrides it, and a per-slide `<bg .../>` directive overrides both. The Prawn fallback paints the PDF page in `background.color` when set; otherwise it leaves the page Prawn's default (white).
 - **`counter`** — bottom-of-screen slide counter (hide it on a single slide with `# Title {counter=hide}`). Without `counter.duration`, przn shows a plain `N / M` counter at the bottom-right. Set `counter.duration` to opt into the Rabbit-style runner bar: current slide # at the very left, total at the very right, 🐇 running between them tracking slide progress and 🐢 tracking elapsed time against the goal. Drag the 🐇 with the mouse to jump to another slide. `counter.color` (named ANSI or 6-digit hex) styles both the plain counter and the runner-bar anchor numbers; default is dim ANSI. `counter.rabbit` and `counter.turtle` are the **raw escape sequences** the renderer writes at the two runner positions — the default theme ships an Echoes-private OSC 7772 `;multicell` with `flip=h` so the emojis face rightward (towards the right anchor); terminals that don't speak OSC 7772 silently drop the sequence and no runner glyph appears. To stay portable, override these with a plain glyph or a standard OSC 66 multicell — at the cost of the flip on Echoes.
 
 ## License

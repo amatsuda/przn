@@ -98,7 +98,8 @@ module Przn
         # later ones, since kitty placements aren't tied to the cell
         # buffer that @terminal.clear empties.
         @terminal.write ImageUtil.kitty_delete_all_placements if ImageUtil.kitty_terminal?
-        apply_slide_background(slide)
+        layout_name = effective_layout_name(slide, current)
+        apply_slide_background(slide, layout_name: layout_name)
         w = @terminal.width
         h = @terminal.height
 
@@ -136,20 +137,10 @@ module Przn
           end
         end
 
-        # Resolve the slide's effective layout name:
-        #   `# Title {layout=name}` on the slide wins.
-        #   Otherwise: slide 0 prefers `cover` (if the theme ships one),
-        #   every other slide falls through to `default`.
-        #   `{layout=none}` is an explicit per-slide opt-out — useful
-        #   when a custom default layout isn't right for one slide.
-        layout_name = slide.layout
-        layout_name ||= 'cover' if current == 0 && @theme.layouts['cover']
-        layout_name ||= 'default'
-        layout_name = nil if layout_name == 'none'
-        layout = layout_name && @theme.layouts[layout_name]
+        slots = layout_name && @theme.layouts[layout_name]&.slots
 
-        if layout
-          render_layout(slide, layout, w, h)
+        if slots
+          render_layout(slide, slots, w, h)
         else
           # `{layout=none}` (or a theme stripped of `default`) — render
           # blocks top-down from row 2 with no slot routing.
@@ -1022,13 +1013,27 @@ module Przn
       end
     end
 
+    # Resolve the slide's effective layout name:
+    #   `# Title {layout=name}` on the slide wins.
+    #   Otherwise: slide 0 prefers `cover` (if the theme ships one),
+    #   every other slide falls through to `default`.
+    #   `{layout=none}` is an explicit per-slide opt-out — useful
+    #   when a custom default layout isn't right for one slide.
+    def effective_layout_name(slide, current)
+      name = slide.layout
+      name ||= 'cover' if current == 0 && @theme.layouts['cover']
+      name ||= 'default'
+      name == 'none' ? nil : name
+    end
+
     # Emit Echoes' OSC 7772 to set a slide-specific solid color or gradient,
     # or clear any previous override. A `<bg .../>` block on the slide wins;
-    # otherwise the theme's `bg:` section is used as the deck-wide default.
+    # then the `background:` of the slide's layout; otherwise the theme's
+    # `background:` section is used as the deck-wide default.
     # Other terminals ignore the OSC code, so this is a no-op outside Echoes.
-    def apply_slide_background(slide)
+    def apply_slide_background(slide, layout_name: nil)
       block = slide.blocks.find { |b| b[:type] == :bg }
-      attrs = block ? block[:attrs] : (@theme.background || {})
+      attrs = block ? block[:attrs] : (@theme.layouts[layout_name]&.background || @theme.background || {})
 
       @terminal.write "\e]7772;bg-clear\a"
       clear_background_image

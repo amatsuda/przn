@@ -33,7 +33,8 @@ code:                   # fenced code block (and inline `<code>`) typography
   highlight:            # Rouge theme name for syntax highlighting (e.g. monokai, gruvbox, github.dark, base16.solarized.dark);
                         # unset = the built-in ANSI palette (picks up the terminal's colour theme — works on light or dark)
 
-# Default slide background, applied when a slide has no <bg .../> directive.
+# Default slide background, applied when a slide has no <bg .../> directive
+# and its layout has no `background:` of its own (see `layouts:` below).
 # `color` / `from` / `to` / `angle` use Echoes' OSC 7772 (no-op on other
 # terminals). `image` uses the Kitty Graphics Protocol (works on Kitty,
 # Echoes, Wezterm, Ghostty — PNG only) and wins over `color` / gradient
@@ -104,6 +105,17 @@ fragment:
 #               bottom. Override / delete from your own theme to opt
 #               out — explicit `{layout=...}` on slide 0 still wins.
 # Other named layouts are opt-in via `# Title {layout=name}`.
+#
+# Instead of the slot list alone, a layout can have two keys: `slots:`
+# for the slot list and `background:` for a background of its own (same
+# keys as the top-level `background:`) that replaces the default
+# background on slides using the layout:
+#   section:
+#     background: {image: images/section.png}
+#     slots:
+#       - {name: title, x: center, y: 40%, width: 90%, height: 20%}
+# `background: {}` gives the layout no background at all. Leave `slots:`
+# out to keep a built-in layout's slots.
 layouts:
   default:
     - {name: title,   x: center, y: 3,  width: 90%,  height: 6}

@@ -25,6 +25,13 @@ module Przn
     # per-segment.
     Slot = Struct.new(:name, :x, :y, :width, :height, :size, :family, :color)
 
+    # A named layout: its ordered slot list, and optionally a
+    # background of its own with the same keys as the top-level
+    # `background:` section. `slots` is nil for a layout that only sets
+    # a background. `background` is nil when the layout sets none and
+    # uses the theme background; `{}` means no background at all.
+    Layout = Struct.new(:slots, :background)
+
     attr_reader :colors, :font, :bullet, :background, :title, :counter, :code, :layouts, :transition, :fragment
 
     def self.load(path)
@@ -57,11 +64,15 @@ module Przn
         # 300ms when the key is missing.
         fragment: defaults[:fragment].merge(overrides[:fragment] || {}),
         # Layouts: per-name replacement (no deep merge across slot lists —
-        # an override redefines that layout's slot list end-to-end). The
-        # name `default` is special: when a slide has no `{layout=...}`
-        # IAL the renderer looks it up here. Themes that don't define
-        # `layouts.default` keep the legacy flow behavior.
-        layouts: defaults[:layouts].merge(overrides[:layouts] || {})
+        # an override redefines that layout end-to-end, background
+        # included). The one exception is an override without `slots:`,
+        # which keeps the default layout's slots and sets only its
+        # background. The name `default` is special: when a slide has no
+        # `{layout=...}` IAL the renderer looks it up here. Themes that
+        # don't define `layouts.default` keep the legacy flow behavior.
+        layouts: defaults[:layouts].merge(overrides[:layouts] || {}) { |_, default, layout|
+          layout.slots ? layout : Layout.new(default.slots, layout.background)
+        }
       }
       new(merged)
     end
@@ -118,36 +129,43 @@ module Przn
     end
     private_class_method :load_yaml
 
-    # Turn the raw `layouts:` YAML into a `{name => [Slot, ...]}` map.
-    # Each layout's value is just the ordered slot list (no enclosing
-    # `slots:` key in v1 since there's no other per-layout metadata
-    # — promoting to a hash later is a one-line shape change).
+    # Turn the raw `layouts:` YAML into a `{name => Layout}` map.
+    # A layout's value is either the ordered slot list itself, or a
+    # hash holding that list under `slots:` next to a `background:`.
+    # A `background:` that is not a hash counts as an empty one.
     def self.parse_layouts(raw)
       return {} unless raw.is_a?(Hash)
 
-      raw.each_with_object({}) do |(name, slot_list), out|
-        next unless slot_list.is_a?(Array)
-        out[name.to_s] = slot_list.map { |s|
-          h = s.transform_keys(&:to_sym)
-          # Back-compat: a legacy `align: center` (etc.) on a slot
-          # used to be a separate knob from `x:`. The two were always
-          # used together in practice — every built-in layout that
-          # set `align:` paired it with an `x:` whose only job was
-          # to leave room for the centred content. The new shape
-          # collapses them into `x: <keyword>`, so an old `align:`
-          # value overrides any numeric `x:` written alongside it.
-          x = h[:align] ? h[:align].to_s : h[:x].to_s
-          Slot.new(
-            h[:name].to_s,
-            x, h[:y].to_s, h[:width].to_s, h[:height].to_s,
-            h[:size]&.to_s,
-            h[:family]&.to_s,
-            h[:color]&.to_s
-          )
-        }
+      raw.each_with_object({}) do |(name, value), out|
+        slot_list, background = value.is_a?(Hash) ? value.values_at(:slots, :background) : [value, nil]
+        background = (background.is_a?(Hash) ? background.compact : {}) unless background.nil?
+        slots = parse_slots(slot_list) if slot_list.is_a?(Array)
+        out[name.to_s] = Layout.new(slots, background) if slots || background
       end
     end
     private_class_method :parse_layouts
+
+    def self.parse_slots(slot_list)
+      slot_list.map { |s|
+        h = s.transform_keys(&:to_sym)
+        # Back-compat: a legacy `align: center` (etc.) on a slot
+        # used to be a separate knob from `x:`. The two were always
+        # used together in practice — every built-in layout that
+        # set `align:` paired it with an `x:` whose only job was
+        # to leave room for the centred content. The new shape
+        # collapses them into `x: <keyword>`, so an old `align:`
+        # value overrides any numeric `x:` written alongside it.
+        x = h[:align] ? h[:align].to_s : h[:x].to_s
+        Slot.new(
+          h[:name].to_s,
+          x, h[:y].to_s, h[:width].to_s, h[:height].to_s,
+          h[:size]&.to_s,
+          h[:family]&.to_s,
+          h[:color]&.to_s
+        )
+      }
+    end
+    private_class_method :parse_slots
 
     # `bullet` as it applies to a list item `depth` levels in. Each
     # `nested:` level overrides the one above it key by key, and items
