@@ -2296,23 +2296,18 @@ module Przn
       bullet.merge(size: [bullet[:size], scale].min)
     end
 
-    # Text scale of a list item `depth` levels in: `font.nested`'s size
-    # for that level, body_scale when it sets none.
+    # Text scale of a list item `depth` levels in.
     def list_scale(depth)
-      size = @theme.nested_font(depth)[:size]
-      (size && Parser::SIZE_SCALES[size.to_s]) || body_scale
+      size = @theme.font_at(depth)[:size]
+      (size && Parser::SIZE_SCALES[size.to_s]) || DEFAULT_SCALE
     end
 
-    # `font.nested`'s family / color for the level, as the keywords
-    # render_segments_scaled takes. A key the level leaves unset is left
-    # out, so the usual slot / `font` fallback still applies; a key it
-    # sets still yields to the slot's, the way `font` does.
+    # Family / color of a list item `depth` levels in, as the keywords
+    # render_segments_scaled takes. The slot's family / color win over
+    # the theme's, as they do for body text.
     def list_text_style(depth)
-      font = @theme.nested_font(depth)
-      style = {}
-      style[:default_face] = slot_family || font[:family] if font[:family]
-      style[:default_color] = slot_color || font[:color] if font[:color]
-      style
+      font = @theme.font_at(depth)
+      { default_face: slot_family || font[:family], default_color: slot_color || font[:color] }
     end
 
     # Leading spaces for a list item, in cells of its own scale. Each

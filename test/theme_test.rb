@@ -305,10 +305,11 @@ class ThemeTest < Test::Unit::TestCase
       YAML
 
       theme = Przn::Theme.load(theme_path)
-      assert_equal({}, theme.nested_font(0))
-      assert_equal({size: 2, color: 'gray'}, theme.nested_font(1))
-      assert_equal({size: 2, color: 'red'}, theme.nested_font(2))
-      assert_equal theme.nested_font(2), theme.nested_font(5)
+      assert_equal [3, nil], theme.font_at(0).values_at(:size, :color)
+      assert_equal [2, 'gray'], theme.font_at(1).values_at(:size, :color)
+      assert_equal [2, 'red'], theme.font_at(2).values_at(:size, :color)
+      assert_equal theme.font_at(2), theme.font_at(5)
+      assert_not_include theme.font_at(2), :nested
 
       assert_equal({text: '・', image: 'images/bullet.png', color: 'blue'}, theme.bullet_at(0))
       # a level that sets text drops the inherited image

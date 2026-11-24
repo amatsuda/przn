@@ -155,10 +155,9 @@ module Przn
     # level that sets `text` without `image` stops inheriting the
     # image, so a text marker can follow an image one.
     def bullet_at(depth)
-      overrides = nested_overrides(@bullet, depth)
-      base = @bullet.reject { |key, _| key == :nested }
-      base.delete(:image) if overrides.key?(:text) && !overrides.key?(:image)
-      base.merge(overrides)
+      style_at(@bullet, depth) do |bullet, nested|
+        bullet.delete(:image) if nested[:text] && !nested[:image]
+      end
     end
 
     # The depth of the level that set the `bullet.size` in effect at
@@ -171,10 +170,10 @@ module Przn
       }.last || 0
     end
 
-    # What `font.nested` changes for a list item `depth` levels in:
-    # only the keys set somewhere along the chain, empty at depth 0.
-    def nested_font(depth)
-      nested_overrides(@font, depth)
+    # `font` as it applies to a list item `depth` levels in, inherited
+    # through `nested:` the same way as `bullet_at`.
+    def font_at(depth)
+      style_at(@font, depth)
     end
 
     def initialize(config)
@@ -192,17 +191,17 @@ module Przn
 
     private
 
-    def nested_overrides(style, depth)
-      overrides = {}
+    # `style` with its first `depth` `nested:` levels merged in, each one
+    # into the level above it. Yields after each merge.
+    def style_at(style, depth)
       depth.times do
-        style = style[:nested]
-        break unless style.is_a?(Hash)
+        nested = style[:nested]
+        break unless nested.is_a?(Hash)
 
-        level = style.reject { |key, value| key == :nested || value.nil? }
-        overrides.delete(:image) if level.key?(:text) && !level.key?(:image)
-        overrides.merge!(level)
+        style = style.merge(nested.compact)
+        yield style, nested if block_given?
       end
-      overrides
+      style.reject { |key, _| key == :nested }
     end
   end
 end
