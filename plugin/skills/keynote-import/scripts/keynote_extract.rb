@@ -173,6 +173,7 @@ module KeynoteExtract
 
     SHAPE = 2011
     IMAGE = 3005
+    PLACEHOLDER = 7
     TEXT_STORAGE = 2001
 
     def initialize(key_path, out_dir)
@@ -205,9 +206,15 @@ module KeynoteExtract
       items = objects(data)
       storages = items.select { |_, kind, _| kind == TEXT_STORAGE }.to_h { |identifier, _, payload| [identifier, parse(payload)] }
       puts "== #{name}"
-      items.each do |_, kind, payload|
-        print_drawable(kind, parse(payload), storages) if [SHAPE, IMAGE].include?(kind)
-      end
+      drawables = items.select { |_, kind, _| [SHAPE, IMAGE].include?(kind) }
+      drawables.each { |_, kind, payload| print_drawable(kind, parse(payload), storages) }
+
+      # Placeholders are not read. Without shapes or images the slide would
+      # print as empty, so say that something was skipped.
+      placeholders = items.count { |_, kind, _| kind == PLACEHOLDER }
+      return unless drawables.empty? && placeholders.positive?
+
+      puts "  (#{placeholders} placeholder text boxes not extracted; the design may be on the master slide)"
     end
 
     def print_drawable(kind, top, storages)
